@@ -1,37 +1,56 @@
+; =============================================================================
+;  Project  : Custom BIOS / ROM
+;  File     : boot.asm
+;  Author   : frater
+;  Created  : 06 jan 2026
 ;
+;  License  : GNU General Public License v3.0 or later (GPL-3.0+)
 ;
+;  This program is free software: you can redistribute it and/or modify
+;  it under the terms of the GNU General Public License as published by
+;  the Free Software Foundation, either version 3 of the License, or
+;  (at your option) any later version.
 ;
+;  This program is distributed in the hope that it will be useful,
+;  but WITHOUT ANY WARRANTY; without even the implied warranty of
+;  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;  GNU General Public License for more details.
 ;
+;  You should have received a copy of the GNU General Public License
+;  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;
+; =============================================================================
+
 BITS			16
 org				0
 
+; ---------------------------------------------------------------------------
 ;
 ; configuration du bios
 ;
+; ---------------------------------------------------------------------------
 %define DEBUG_PORT		0xe9								; 0x402 ou 0xe9
 
-%define VIDEO_SEG    	0xB800        			; ou 0xB000
-%define VIDEO_ATTR   	0x07
 
 ; initial stack 
-%define STACK_SEG   	0x0030
-%define STACK_TOP    	0x0100        			; choix commun en RAM basse (pile descend)
+%define STACK_SEG   	0x0030							; compatible avec le BMM (Bios Memory Maps)
+%define STACK_TOP    	0x0100        			; choix commun en RAM basse (pile descendante)
 
 %define MEM_SEG_DEB		0x0800 						  ; 0x0800:0000 = 0x8000 (32KB) évite IVT/BDA + stack 7C00
 %define MEM_SEG_END   0xA000    					; 0xA000:0000 = 0xA0000 (début zone vidéo)
 %define MEM_SEG_STEP  0x0040    					; 1KB = 0x400 bytes = 0x40 paragraphs
 
+
+
+						jmp				reset								; ce jump n'est pas sensé être executer, il est présent uniquement pour le debug
+
 ; definition du BDA
 %include 		".\bda.asm"
-
-
-						jmp				reset
 
 %include 		".\drivers\debug.asm"
 %include		".\drivers\gfx_cgam.asm"
 %include		".\drivers\mouse_ps2.asm"
 
-err_novga		db 				'No VGA Card BIOS',0
 err_vganok	db				'VGA Not Initialized',0
 err_end			db				'code completed successfully',0
 
@@ -74,10 +93,10 @@ endless:		nop
 						jmp				endless
 						
 ; ---------------------------------------------------------------------------
-; Détection les ROM supplementaires
-; Teste la RAM de 0xC000 jusqu’à 0xE000, par pas de 2KB.
+; Test si le vecteur INT 10h à été modifié (par la ROM)
 ;
-; Si une ROM est détectée, le code de la ROM sera appelé.
+; Si le vecteur n'a pas été modifiée, on considère que la ROM video n'a pas
+; été chargée.
 ; ---------------------------------------------------------------------------	
 setup_check_vga:
 						; vérification de l'offset 0x0000:0x0040 qui DOIT etre différent de @default_isr
@@ -91,12 +110,11 @@ setup_check_vga:
 						; Comparer avec default_isr (offset) et CS (segment)
 						mov 			dx, default_isr 		; DX = offset default_isr (dans notre CS)
 						cmp 			bx, dx
-						jne 			.init_ok						; interrupt different
+						jne 			.init_ok						; vecteur different, bios initialisé
 						cmp 			cx, ax
 						jne 			.init_ok
 						
-						; no VGA init
-						mov				ax,cs
+						mov				ax,cs								; vecteur identique, sans doute pas d'initialisation
 						mov				ds,ax
 
 						mov				si, err_vganok
@@ -112,7 +130,6 @@ setup_check_vga:
 ; ---------------------------------------------------------------------------						
 setup_load_rom:						
 						mov 			bx, 0xC000
-						mov				al,'*'
 .scanloop:
 						mov 			ds, bx
 						cmp				word[0x0000],0xAA55	; ROM signature
@@ -133,20 +150,11 @@ setup_load_rom:
 						add				bx, 0x80						; add 2kb
 						cmp 			bx, 0xE000
 						jbe 			.scanloop
-						
-						cmp				al,'.'
-						je				.end
-						; no rom found :
-						mov				bx,cs
-						mov				ds,bx
-
-						mov				si, err_novga
-						call			debug_puts
 .end:						
 						ret
 
 ; ---------------------------------------------------------------------------
-; Détection RAM conventionnelle (8088, BIOS maison) — sans BIOS
+; Détection RAM conventionnelle 
 ; Teste la RAM de MEM_SEG_DEB jusqu’à 0xA000 (640KB), par pas de 1KB.
 ; Méthode: sauvegarde 1 mot, écrit 2 patterns, relit, restaure.
 ;
@@ -217,9 +225,6 @@ setup_ram:
 
 ; ---------------------------------------------------------------------------
 ; IVT install (8088, mode réel) - remplit les 256 vecteurs avec un handler IRET
-; Hypothèses:
-; - code en ROM (CS typiquement = 0xF000), handler réside dans ce même segment
-; - interruptions désactivées (CLI) pendant l'installation
 ; ---------------------------------------------------------------------------
 setup_ivt:
 						; installation de la table d'interrupts
