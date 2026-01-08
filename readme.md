@@ -48,6 +48,71 @@ The project is intentionally educational, experimental, and minimalist.
 
 ---
 
+### Requirements
+
+To build and run this project, the following tools and components are required:
+
+- **NASM (Netwide Assembler)**  
+  Used to assemble x86 real-mode assembly source files into a raw binary ROM image.
+
+- **QEMU**  
+  Used as the primary PC emulator for testing and debugging the custom BIOS.
+
+- **QEMU VGA BIOS**  
+  The standard QEMU VGA BIOS (`vgabios.bin`) is required to initialize the VGA hardware, allowing the custom BIOS to rely on a known and stable VGA implementation while focusing on its own core logic.
+
+---
+
+### Build and Run
+
+#### Compilation
+
+From the project root:
+
+```bash
+cd src
+nasm -f bin boot.asm -o ..\build\bios.bin
+```
+
+This produces a raw BIOS ROM image (bios.bin) suitable for direct execution by QEMU.
+
+#### Execution
+
+The QEMU VGA BIOS must be copied into a local rom/ directory.
+
+Default locations of `vgabios.bin`:
+
+Windows
+`C:\Program Files\qemu\share\vgabios.bin`
+
+Linux
+`/usr/share/qemu/vgabios.bin`
+
+You can use an video bios from the 86box's project:
+ 
+https://github.com/86Box/roms
+
+Copy it to: `rom/vgabios.bin`
+
+Then run QEMU with:
+
+```bash
+qemu-system-x86_64 \
+  -bios build/bios.bin \
+  -device loader,file=rom/vgabios.bin,addr=0xC0000,force-raw=on \
+  -device isa-debugcon,chardev=myconsole \
+  -chardev stdio,id=myconsole \
+  -k be \
+  -display sdl
+```
+
+This command:
+
+- Loads the custom BIOS as the system ROM
+- Injects the VGA BIOS at 0xC0000
+- Redirects debug output to the console
+- Displays graphics using SDL
+
 ### Non-Goals
 
 - Full IBM BIOS compatibility
@@ -103,6 +168,69 @@ Le projet est volontairement **éducatif, expérimental et minimaliste**.
   - Séparation claire entre cœur du BIOS et drivers matériels
 
 ---
+
+### Pré-requis
+
+Pour compiler et exécuter ce projet, les outils suivants sont nécessaires :
+
+- **NASM (Netwide Assembler)**
+Utilisé pour assembler le code x86 en mode réel et générer une image ROM binaire brute.
+
+- **QEMU**
+Utilisé comme émulateur PC principal pour tester et déboguer le BIOS personnalisé.
+
+- **BIOS VGA de QEMU**
+Le BIOS VGA standard de QEMU (vgabios.bin) est utilisé pour initialiser le matériel vidéo, ce qui permet au projet de se concentrer sur le développement du BIOS sans réimplémenter la logique VGA complète.
+
+### Compilation et exécution
+
+#### Compilation
+
+Depuis la racine du projet :
+
+```bash
+cd src
+nasm -f bin boot.asm -o ..\build\bios.bin
+```
+
+Cette commande génère une image BIOS brute (`bios.bin`) directement exécutable par QEMU.
+
+#### Exécution
+
+Le BIOS VGA de QEMU doit être copié dans un dossier local `rom/`.
+
+Emplacements par défaut de `vgabios.bin` :
+
+Windows
+`C:\Program Files\qemu\share\vgabios.bin`
+
+Linux
+`/usr/share/qemu/vgabios.bin`
+
+Vous pouvez aussi utiliser un bios video du projet de 86box 
+
+https://github.com/86Box/roms
+
+À copier vers : `rom/vgabios.bin`
+
+Puis lancer QEMU avec la commande suivante :
+
+```bash
+qemu-system-x86_64 \
+  -bios build/bios.bin \
+  -device loader,file=rom/vgabios.bin,addr=0xC0000,force-raw=on \
+  -device isa-debugcon,chardev=myconsole \
+  -chardev stdio,id=myconsole \
+  -k be \
+  -display sdl
+```
+
+Cette commande :
+
+- Charge le BIOS personnalisé comme ROM système
+- Injecte le BIOS VGA à l’adresse 0xC0000
+- Redirige les messages de debug vers la console
+- Affiche l’interface graphique via SDL
 
 ### Hors périmètre
 
