@@ -34,7 +34,6 @@
 %define CGA_ODD_BANK  0x2000
 %define BG16_SIZE     48
 
-
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ; 
@@ -42,7 +41,7 @@
 ; ------------------------------------------------------------
 gfx_init:
 						; init graphics mode
-						mov 			ah, 0x00     			; AH=00h set video mode
+						mov 			ah, 0x00     					; AH=00h set video mode
 						mov				al, GFX_MODE
 						int 			0x10
 
@@ -56,46 +55,47 @@ gfx_init:
 ; In:
 ;   CX = x (0..639)
 ;   DX = y (0..199)
-;   AL = color (0=black, !=0=white)
+;   BL = color (0=black, !=0=white)
 ;
 ; ------------------------------------------------------------
 gfx_putpixel:
-						push	    bx
+						push	    ax
 						push  	  di
 						push    	es
+						
+						mov				ax,	VIDEO_SEG
+						mov				es,ax
 
-						mov	     ax, VIDEO_SEG
-						mov 	    es, ax
+						; calcul de l'offset 'y': 
+						; si y est impaire, DI+=0x2000
+						
+						; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000						
+						mov 	    ax, dx
+						shr   	  ax, 1                 ; ax = y/2 
 
-						; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
-						mov 	    bx, dx
-						and   	  bx, 1                      ; BX = y&1
+						mov     	di, ax                ; di = y/2
+						shl 	    di, 4                 ; di = (y/2)*16
 
-						mov	  	  ax, dx
-						shr	    	ax, 1                      ; AX = y>>1
-						mov 	   	di, ax
-						mov 	    ax, di
-						mov   	  di, CGA_STRIDE
-						mul     	di                         ; DX:AX = (y>>1)*80
-						mov 	    di, ax
-
-						test  	  bx, 1
-						jz      	.bank_ok
+						shl   	  ax, 6                 ; ax = (y/2)*64
+						add     	di, ax                ; di = (y/2)*(16+64) = *80
+						
+						mov  		  ax, cx								; x
+						shr  		  ax, 3                 ; AX = x/8
+						add  		  di, ax						
+												
+						; ligne paire/impaire
+						test  	  dl, 1
+						jz      	.ligne_paire
 						add  		  di, CGA_ODD_BANK
-.bank_ok:
-						mov  		  ax, cx
-						shr  		  ax, 3                      ; AX = x>>3
-						add  		  di, ax
+.ligne_paire:
 
 						; masque bit = 0x80 >> (x&7)
-						mov     	bl, cl
-						and     	bl, 7                      ; BL = x&7
+						and     	cl, 7                 ; cl = x&7
 						mov     	ah, 080h
-						mov     	cl, bl
-						shr     	ah, cl                     ; AH = bitmask
+						shr     	ah, cl                ; AH = bitmask
 
 						; write
-						cmp  	   	al, 0
+						cmp  	   	bl, 0
 						je    	  .clear
 
 .set:
@@ -109,7 +109,7 @@ gfx_putpixel:
 .done:
 						pop 	    es
 						pop   	  di
-						pop     	bx
+						pop     	ax
 						ret
 
 ; ------------------------------------------------------------

@@ -1,5 +1,4 @@
 # Custom BIOS / ROM Project  
-## Projet BIOS / ROM personnalisé
 
 ---
 

@@ -32,12 +32,6 @@
 %define BDA_INFO_MEM_SIZE			0x0014							; Memory size in Kbytes
 %define BDA_INFO_MEM_SEG			BDA_INFO_MEM_SIZE+2	; highest Memory Segment
 
-
-%define BDA_MOUSE_BUFFER			0x0068							; dword
-%define	BDA_MOUSE_IDX					BDA_MOUSE_BUFFER+4	; byte
-%define	BDA_MOUSE_X						BDA_MOUSE_BUFFER+5	; word	
-%define	BDA_MOUSE_Y						BDA_MOUSE_BUFFER+7	; word
-
 ; video related information (compatible with VGA bios)
 %define BDA_VIDEO_CURR_MODE		0x0049
 %define BDA_VIDEO_COLUMNS			0x004A
@@ -51,4 +45,19 @@
 ; 40:62 	byte 	Active display page number
 ; 40:63 	word 	Base port address for active 6845 CRT controller 3B4h = mono, 3D4h = color
 ; 40:65 	byte 	6845 CRT mode control register value (port 3x8h) ; EGA/VGA values emulate those of the MDA/CGA
-; 40:66 	byte 	CGA current color palette mask setting (port 3d9h) ; EGA and VGA values emulate the CGA 
+; 40:66 	byte 	CGA current color palette mask setting (port 3d9h) ; EGA and VGA values emulate the CGA
+
+
+;
+; information relative à la souris
+;
+
+%define BDA_MOUSE_SEG					0x0050
+
+%define BDA_MOUSE_BUFFER			0x0000							; dword; buffer (jusqu'à 4 octets)
+%define	BDA_MOUSE_IDX					0x0004							; byte 0..3
+%define DBA_MOUSE_PACKETLEN		0x0005
+; 														0x0006
+%define BDA_MOUSE_STATUS			0x0007							; byte
+%define	BDA_MOUSE_X						0x0008							; word
+%define	BDA_MOUSE_Y						0x000A							; word

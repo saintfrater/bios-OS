@@ -25,14 +25,24 @@
 ;
 ; controleur de souris via le i8042 (PC Classique)
 ;
+%define BDA_SEGMENT          0x0040
 
-%define	PS2_PORT_BUFFER		0x60
-%define	PS2_PORT_CTRL			0x64
+%define PS2_PORT_BUFFER      0x60
+%define PS2_PORT_CTRL        0x64
 
-%define	MOUSE_CMD_RESET		0xff
-%define	MOUSE_CMD_DEFAULT	0xf6
-%define MOUSE_EN_STREAM		0xf4
-%define MOUSE_DIS_STREAM	0xf5
+%define MOUSE_CMD_RESET      0xFF
+%define MOUSE_CMD_DEFAULT    0xF6
+%define MOUSE_EN_STREAM      0xF4
+%define MOUSE_DIS_STREAM     0xF5
+%define MOUSE_GET_ID         0xF2
+%define MOUSE_SET_RATE       0xF3
+
+%define MOUSE_ACK            0xFA
+
+%define I8042_CMD_EN_AUX     0xA8
+%define I8042_CMD_RD_CBYTE   0x20
+%define I8042_CMD_WR_CBYTE   0x60
+%define I8042_CMD_WRITE_AUX  0xD4
 
 mouse_arrow:
 						dw 1001111111111111b    ; 0x9FFF
@@ -68,6 +78,10 @@ mouse_arrow:
 						dw 0000000110000000b    ; 0x0180
 						dw 0000000000000000b    ; 0x0000
 
+; ------------------------------------------------------------
+; initialise le i8042 keyboard and mouse (PS/2)
+;
+; ------------------------------------------------------------
 mouse_init:
 						; Activer le port souris
 						mov				ax, BDA_SEGMENT
@@ -76,43 +90,169 @@ mouse_init:
 						; effacer les variables du drivers
 						mov				[BDA_MOUSE_IDX],0
 						mov				dword [BDA_MOUSE_BUFFER],0
+						mov				byte [DBA_MOUSE_PACKETLEN],3
 						
-						mov 			al, 0xA8
-						out 			PS2_PORT_CTRL, al
+						call 			ps2_flush_output
 
-						; Lire le command byte
-						mov 			al, 0x20
-						out 			PS2_PORT_CTRL, al
-						in  			al, PS2_PORT_BUFFER
-
+						; Activer le port souris (AUX)
+						call 			ps2_wait_ready_write
+						mov  			al, I8042_CMD_EN_AUX
+						out  			PS2_PORT_CTRL, al
+						
+						; Lire command byte
+						call 			ps2_wait_ready_write
+						mov  			al, I8042_CMD_RD_CBYTE
+						out  			PS2_PORT_CTRL, al
+						call 			ps2_read						         ; AL = command byte
+						
 						; Activer IRQ12 (bit 1)
-						or  			al, 0x02
+						or   			al, 02h
+						mov  			ah, al
 
-						; Réécrire le command byte
-						mov 			ah, al
-						mov 			al, PS2_PORT_BUFFER
-						out 			PS2_PORT_CTRL, al
-						mov 			al, ah
-						out 			PS2_PORT_BUFFER, al
+						; Réécrire command byte  (commande 0x60 envoyée à 0x64)
+						call 			ps2_wait_ready_write
+						mov  			al, I8042_CMD_WR_CBYTE
+						out  			PS2_PORT_CTRL, al
+						call 			ps2_wait_ready_write
+						mov  			al, ah
+						out  			PS2_PORT_BUFFER, al
+
+						call 			ps2_flush_output
+
+						; --- RESET souris: FA, AA, ID
+						mov 			bl, MOUSE_CMD_RESET
+						call 			mouse_sendcmd
+						call 			ps2_read			         ; 0xAA attendu (self-test OK)
+						call 			ps2_read			         ; ID (souvent 0x00)
+
+						; Defaults: FA
+						mov			 	bl, MOUSE_CMD_DEFAULT
+						call 			mouse_sendcmd
+
+						; Enable streaming: FA
+						mov 			bl, MOUSE_EN_STREAM
+						call 			mouse_sendcmd
+
+						; (option) détecter 3/4 bytes via F3 200/100/80 + F2
+						; call mouse_detect_packet_len
+
+						; installer ISR IRQ12 (INT 74h)
+						; call mouse_install_isr
+
+						
+						
+						; installer le handler
 						ret
+						
+mouse_detect_packet_len:
+						mov byte [DBA_MOUSE_PACKETLEN], 3
 
-; envoyer une commande souris						
-mouse_sendcmd:
+						; F3 200
+						mov bl, MOUSE_SET_RATE
+						call mouse_sendcmd
+						mov bl, 200
+						call mouse_sendcmd
+
+						; F3 100
+						mov bl, MOUSE_SET_RATE
+						call mouse_sendcmd
+						mov bl, 100
+						call mouse_sendcmd
+
+						; F3 80
+						mov bl, MOUSE_SET_RATE
+						call mouse_sendcmd
+						mov bl, 80
+						call mouse_sendcmd
+
+						; F2 -> ID
+						mov bl, MOUSE_GET_ID
+						call mouse_sendcmd
+						call ps2_read					         ; AL = ID
+
+						cmp al, 03h
+						je  .is4
+						cmp al, 04h
+						je  .is4
+						ret
+.is4:
+						mov byte [DBA_MOUSE_PACKETLEN], 4
+						ret
+						
+; ------------------------------------------------------------
+; fonction de gestion du i8042
+;
+; ------------------------------------------------------------
+
+; attendre que le 8042 soit pret a recevoir de l'information
+ps2_wait_ready_write:
 .wait:
-						in  			al, PS2_PORT_CTRL
-						test 			al, 2
-						jnz 			.wait
-						mov 			al, 0xD4
-						out 			PS2_PORT_CTRL, al
+						in   			al, PS2_PORT_CTRL
+						test 			al, 02h              ; IBF
+						jnz  			.wait
+						ret			
 
-.wait2:
-						in  			al, PS2_PORT_CTRL
-						test 			al, 2
-						jnz 			.wait2
-						mov 			al, bl        ; BL = commande souris
-						out 			PS2_PORT_BUFFER, al
+; attendre que le 8042 soit pret a lire de l'information			
+ps2_wait_ready_read:
+.wait:			
+						in   			al, PS2_PORT_CTRL
+						test 			al, 01h              ; OBF
+						jz   			.wait
+						ret			
+			
+; lire de l'information depuis le 8042
+ps2_read:			
+						call 			ps2_wait_ready_read
+						in   			al, PS2_PORT_BUFFER
+						ret			
+
+; vide le buffer interne du 8042 (information(s) ignorée(s)) 
+ps2_flush_output:
+.flush:			
+						in   			al, PS2_PORT_CTRL
+						test 			al, 01h
+						jz   			.done
+						in   			al, PS2_PORT_BUFFER
+						jmp  			.flush
+.done:
 						ret
+						
 
+
+; ------------------------------------------------------------
+; envoye une commande souris
+;
+; BL = commande souris (ou data après une commande F3)
+; 
+; renvoi CF=0 si ACK, CF=1 sinon
+; ------------------------------------------------------------
+mouse_sendcmd:
+						call 			ps2_wait_ready_write
+
+						mov  			al, I8042_CMD_WRITE_AUX
+						out  			PS2_PORT_CTRL, al
+			
+						call 			ps2_wait_ready_write
+						mov  			al, bl
+						out  			PS2_PORT_BUFFER, al
+			
+						call 			ps2_wait_ready_read        ; AL = réponse
+						cmp  			al, MOUSE_ACK
+						jne  			.bad
+						clc
+						ret
+.bad:
+						stc
+						ret
+						
+; ------------------------------------------------------------
+; interrupt handler
+; 
+; buffer[0] = status
+; buffer[1] = déplacement x
+; buffer[2] = déplacement y (inversé)
+; 
+; ------------------------------------------------------------
 mouse_handler:
 					push 				ax
 					push 				bx
