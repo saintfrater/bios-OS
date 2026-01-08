@@ -1,0 +1,11 @@
+put your vgabios.bin here.
+
+it can be found on your computer:
+
+Windows
+`C:\Program Files\qemu\share\vgabios.bin`
+
+Linux
+`/usr/share/qemu/vgabios.bin`
+
+or in the project https://github.com/86Box/roms
