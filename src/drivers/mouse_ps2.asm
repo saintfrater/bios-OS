@@ -21,15 +21,13 @@
 ;
 ; =============================================================================
 
-
 ;
 ; controleur de souris via le i8042 (PC Classique)
 ;
-%define BDA_SEGMENT          0x0040
-
 %define PS2_PORT_BUFFER      0x60
 %define PS2_PORT_CTRL        0x64
 
+; commandes
 %define MOUSE_CMD_RESET      0xFF
 %define MOUSE_CMD_DEFAULT    0xF6
 %define MOUSE_EN_STREAM      0xF4
@@ -43,6 +41,9 @@
 %define I8042_CMD_RD_CBYTE   0x20
 %define I8042_CMD_WR_CBYTE   0x60
 %define I8042_CMD_WRITE_AUX  0xD4
+
+%define CURSOR_W               16
+%define CURSOR_H               16
 
 mouse_arrow:
 						dw 1001111111111111b    ; 0x9FFF
@@ -79,32 +80,53 @@ mouse_arrow:
 						dw 0000000000000000b    ; 0x0000
 
 ; ------------------------------------------------------------
-; initialise le i8042 keyboard and mouse (PS/2)
+; remise a zero des valeurs internes du "drivers"
 ;
 ; ------------------------------------------------------------
-mouse_init:
-						; Activer le port souris
-						mov				ax, BDA_SEGMENT
+mouse_reset:
+						mov				ax, BDA_MOUSE_SEG
 						mov				ds,ax
-						
+
 						; effacer les variables du drivers
 						mov				[BDA_MOUSE_IDX],0
 						mov				dword [BDA_MOUSE_BUFFER],0
 						mov				byte [DBA_MOUSE_PACKETLEN],3
-						
+
+						mov				byte [BDA_MOUSE_STATUS],0
+						mov				word [BDA_MOUSE_X],0					; vous pouvez aussi préciser le centre
+						mov				word [BDA_MOUSE_Y],0					; vous pouvez aussi préciser le centre
+
+						; experiemntal
+						mov				word [BDA_MOUSE_WHEEL],0
+						ret
+
+
+; ------------------------------------------------------------
+; initialise le i8042 keyboard and mouse (PS/2)
+;
+; on envoit les commandes RESET/DEFAULT/STREAM
+; ------------------------------------------------------------
+mouse_init:
+						push			ds
+						push			ax
+
+						; reset des valeurs internes
+						call			mouse_reset
+
+						; Activer le port souris
 						call 			ps2_flush_output
 
 						; Activer le port souris (AUX)
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_EN_AUX
 						out  			PS2_PORT_CTRL, al
-						
+
 						; Lire command byte
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_RD_CBYTE
 						out  			PS2_PORT_CTRL, al
 						call 			ps2_read						         ; AL = command byte
-						
+
 						; Activer IRQ12 (bit 1)
 						or   			al, 02h
 						mov  			ah, al
@@ -119,66 +141,82 @@ mouse_init:
 
 						call 			ps2_flush_output
 
-						; --- RESET souris: FA, AA, ID
+						; --- Reset
+						; réponse attendue : 0xAA, [ID]
 						mov 			bl, MOUSE_CMD_RESET
 						call 			mouse_sendcmd
 						call 			ps2_read			         ; 0xAA attendu (self-test OK)
 						call 			ps2_read			         ; ID (souvent 0x00)
 
-						; Defaults: FA
+						; --- Default
 						mov			 	bl, MOUSE_CMD_DEFAULT
 						call 			mouse_sendcmd
 
-						; Enable streaming: FA
+						; --- streaming
 						mov 			bl, MOUSE_EN_STREAM
 						call 			mouse_sendcmd
 
-						; (option) détecter 3/4 bytes via F3 200/100/80 + F2
-						; call mouse_detect_packet_len
+						; détecter le packet size (3/4 bytes)
+						call mouse_detect_packet_len
 
 						; installer ISR IRQ12 (INT 74h)
-						; call mouse_install_isr
+						cli
 
-						
-						
-						; installer le handler
+						mov				si, 0x74 * 4
+						xor				ax, ax
+						mov				ds, ax
+
+						mov				word [ds:si], mouse_handler
+						add				si, 2
+						mov				word [ds:si], BDA_SEGMENT
+
+						sti
+
+						pop				ax
+						pop				ds
 						ret
-						
+
+; ------------------------------------------------------------
+; detect la taille du "payload" de la souris.
+;
+; On envois les commandes 200/100/
+;
+; ------------------------------------------------------------
 mouse_detect_packet_len:
-						mov byte [DBA_MOUSE_PACKETLEN], 3
+						mov 			byte [DBA_MOUSE_PACKETLEN], 3
 
-						; F3 200
-						mov bl, MOUSE_SET_RATE
-						call mouse_sendcmd
-						mov bl, 200
-						call mouse_sendcmd
+						; SET_RATE + 200
+						mov 			bl, MOUSE_SET_RATE
+						call 			mouse_sendcmd
+						mov 			bl, 200
+						call 			mouse_sendcmd
 
-						; F3 100
-						mov bl, MOUSE_SET_RATE
-						call mouse_sendcmd
-						mov bl, 100
-						call mouse_sendcmd
+						; SET_RATE + 100
+						mov 			bl, MOUSE_SET_RATE
+						call 			mouse_sendcmd
+						mov 			bl, 100
+						call 			mouse_sendcmd
 
-						; F3 80
-						mov bl, MOUSE_SET_RATE
-						call mouse_sendcmd
-						mov bl, 80
-						call mouse_sendcmd
+						; SET_RATE + 80
+						mov 			bl, MOUSE_SET_RATE
+						call 			mouse_sendcmd
+						mov 			bl, 80
+						call 			mouse_sendcmd
 
-						; F2 -> ID
-						mov bl, MOUSE_GET_ID
-						call mouse_sendcmd
-						call ps2_read					         ; AL = ID
+						; Get ID
+						mov 			bl, MOUSE_GET_ID
+						call 			mouse_sendcmd
+						call 			ps2_read					         ; AL = ID
 
-						cmp al, 03h
-						je  .is4
-						cmp al, 04h
-						je  .is4
+						cmp 			al, 03h
+						je  			.is4
+						cmp 			al, 04h
+						je  			.is4
 						ret
 .is4:
-						mov byte [DBA_MOUSE_PACKETLEN], 4
+						mov 			byte [DBA_MOUSE_PACKETLEN], 4
 						ret
-						
+
 ; ------------------------------------------------------------
 ; fonction de gestion du i8042
 ;
@@ -190,25 +228,25 @@ ps2_wait_ready_write:
 						in   			al, PS2_PORT_CTRL
 						test 			al, 02h              ; IBF
 						jnz  			.wait
-						ret			
+						ret
 
-; attendre que le 8042 soit pret a lire de l'information			
+; attendre que le 8042 soit pret a lire de l'information
 ps2_wait_ready_read:
-.wait:			
+.wait:
 						in   			al, PS2_PORT_CTRL
 						test 			al, 01h              ; OBF
 						jz   			.wait
-						ret			
-			
+						ret
+
 ; lire de l'information depuis le 8042
-ps2_read:			
+ps2_read:
 						call 			ps2_wait_ready_read
 						in   			al, PS2_PORT_BUFFER
-						ret			
+						ret
 
-; vide le buffer interne du 8042 (information(s) ignorée(s)) 
+; vide le buffer interne du 8042 (information(s) ignorée(s))
 ps2_flush_output:
-.flush:			
+.flush:
 						in   			al, PS2_PORT_CTRL
 						test 			al, 01h
 						jz   			.done
@@ -216,14 +254,12 @@ ps2_flush_output:
 						jmp  			.flush
 .done:
 						ret
-						
-
 
 ; ------------------------------------------------------------
-; envoye une commande souris
+; envoye une commande souris et attends le ACK
 ;
 ; BL = commande souris (ou data après une commande F3)
-; 
+;
 ; renvoi CF=0 si ACK, CF=1 sinon
 ; ------------------------------------------------------------
 mouse_sendcmd:
@@ -231,11 +267,11 @@ mouse_sendcmd:
 
 						mov  			al, I8042_CMD_WRITE_AUX
 						out  			PS2_PORT_CTRL, al
-			
+
 						call 			ps2_wait_ready_write
 						mov  			al, bl
 						out  			PS2_PORT_BUFFER, al
-			
+
 						call 			ps2_wait_ready_read        ; AL = réponse
 						cmp  			al, MOUSE_ACK
 						jne  			.bad
@@ -244,48 +280,75 @@ mouse_sendcmd:
 .bad:
 						stc
 						ret
-						
+
 ; ------------------------------------------------------------
 ; interrupt handler
-; 
+;
 ; buffer[0] = status
 ; buffer[1] = déplacement x
 ; buffer[2] = déplacement y (inversé)
-; 
+; buffer[4] = molette (si PacketLen = 4)
+;
+; status byte :
+;    bit 0 = bouton gauche
+;    bit 1 = bouton droit
+;    bit 2 = bouton milieu
+;    bit 3 = toujours 1
+;    bit 4 = X sign
+;    bit 5 = Y sign
+;    bit 6 = X overflow
+;    bit 7 = Y overflow
 ; ------------------------------------------------------------
 mouse_handler:
-					push 				ax
-					push 				bx
-					
-					; use BDA segment
+					PUSH_ABCD
 					push				ds
-					mov					ax,BDA_SEGMENT
+
+					; use BDA segment
+					mov					ax,BDA_MOUSE_SEG
 					mov					ds,ax
-					xor					bx,bx
 
 					in  				al, PS2_PORT_BUFFER   ; lire octet souris
 					mov 				[BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
 					inc					[BDA_MOUSE_IDX]
-					
-					cmp 				[BDA_MOUSE_IDX], 3
+
+					mov 				al, [DBA_MOUSE_PACKETLEN]
+					cmp 				[BDA_MOUSE_IDX], al
 					jne 				.done
 
 					mov 				[BDA_MOUSE_IDX], 0
-					; decode buffer
+
+					; decode buffer manuallement
+					mov 				al, [BDA_MOUSE_BUFFER]
+					mov 				[BDA_MOUSE_STATUS], al
+
 					mov					al, [BDA_MOUSE_BUFFER+1]
 					cbw
 					add					[BDA_MOUSE_X], ax
-					
+
 					mov					al, [BDA_MOUSE_BUFFER+2]
 					cbw
 					sub					[BDA_MOUSE_Y], ax
+
+					; si packetlen = 4, gérer la molette; experimental
+					mov					al, [BDA_MOUSE_BUFFER+3]
+					cbw
+					sub					[BDA_MOUSE_WHEEL], ax
+
+					; restaurer l'ancien arrière plan du curseur
+					call				gfx_cursor_restorebg
+
+					; sauvegarder le nouvel arrière plan du curseur
+					mov					cx, [BDA_MOUSE_X]
+					mov					dx, [BDA_MOUSE_Y]
+					call				gfx_cursor_savebg
+
+					call				gfx_cursor_draw
 
 .done:
 					mov 				al, 0x20
 					out 				0xA0, al          ; EOI PIC esclave
 					out 				0x20, al          ; EOI PIC maître
-					
+
 					pop					ds
-					pop 				bx
-					pop 				ax
+					POP_ABCD
 					iret

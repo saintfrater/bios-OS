@@ -2,7 +2,6 @@
 ;  Project  : Custom BIOS / ROM
 ;  File     : boot.asm
 ;  Author   : frater
-;  Created  : 06 jan 2026
 ;
 ;  License  : GNU General Public License v3.0 or later (GPL-3.0+)
 ;
@@ -32,7 +31,7 @@ org				0
 %define DEBUG_PORT		0xe9								; 0x402 ou 0xe9
 
 
-; initial stack 
+; initial stack
 %define STACK_SEG   	0x0030							; compatible avec le BMM (Bios Memory Maps)
 %define STACK_TOP    	0x0100        			; choix commun en RAM basse (pile descendante)
 
@@ -45,12 +44,14 @@ org				0
 						jmp				reset								; ce jump n'est pas sensé être executer, il est présent uniquement pour le debug
 
 ; definition du BDA
-%include 		".\bda.asm"
+%include 		"./bda.asm"
 
-%include 		".\drivers\debug.asm"
-%include		".\drivers\gfx_cgam.asm"
-%include		".\drivers\mouse_ps2.asm"
-%include 		".\services\generic.asm"
+%include 		"./services/macros.asm"
+
+%include 		"./drivers/debug.asm"
+%include		"./drivers/gfx_cgam.asm"
+%include		"./drivers/mouse_ps2.asm"
+%include 		"./services/generic.asm"
 
 err_vganok	db				'VGA Not Initialized',0
 err_end			db				'code completed successfully',0
@@ -61,27 +62,29 @@ reset:
 						mov				ax, STACK_SEG
 						mov 			ss, ax
 						mov 			sp, STACK_TOP     	; haut du segment, mot-aligné
-						
+
 						; detection de la mémoire totale
-						call			setup_ram
+						call			ram_setup
 						; modification du stack en "haut" de la RAM
 						mov 			ax, dx
-						sub 			ax, 0x0400       ; réserver les 16 dernier KB 
+						sub 			ax, 0x0400       ; réserver les 16 dernier KB
 						mov 			ss, ax
 						mov 			sp, 0x1000       ; sommet de pile
-						
+
 						; installé une table d'interruption "dummy"
-						call 			setup_ivt
+						call 			ivt_setup
 						sti
 
 						; load other Rom
 						call 			setup_load_rom
-						
+
 						; on vérifie que le BIOS VGA a installer l'INT 10h
 						call			setup_check_vga
-						
+
+						; on active le mode graphique
 						call			gfx_init
-						
+
+; test a line
 						mov				cx,50
 .bcl:				; mov				dx,cx
 						mov				bl,0
@@ -91,16 +94,16 @@ reset:
 						inc				cx
 						cmp				cx,150
 						jle				.bcl
-						
+
 						call			mouse_init
-						
+
 						mov				ax,cs
 						mov				ds,ax
 
 						mov				si, err_end
 						call			debug_puts
-											
-endless:		hlt
+
+endless:		nop
 						jmp				endless
 
 ; ------------------------------------------------------------------
@@ -113,6 +116,6 @@ times 0xFFF0 - ($ - $$) db 0xFF
 ; ------------------------------------------------------------------
 reset_vector:
 						jmp far 	0xF000:reset
-; filling						
+; filling
 builddate 	db 				'06/01/2026',0
 

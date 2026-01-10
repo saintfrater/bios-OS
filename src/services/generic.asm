@@ -2,7 +2,6 @@
 ;  Project  : Custom BIOS / ROM
 ;  File     : generic.asm
 ;  Author   : frater
-;  Created  : 06 jan 2026
 ;
 ;  License  : GNU General Public License v3.0 or later (GPL-3.0+)
 ;
@@ -23,7 +22,7 @@
 
 ; ---------------------------------------------------------------------------
 ; Détection RAM conventionnelle 
-; Teste la RAM de MEM_SEG_DEB jusqu’à 0xA000 (640KB), par pas de 1KB.
+; Teste la RAM de MEM_SEG_DEB -> MEM_SEG_END (0xA000, 640KB), par pas de 1KB.
 ; Méthode: sauvegarde 1 mot, écrit 2 patterns, relit, restaure.
 ;
 ; Résultats:
@@ -33,9 +32,9 @@
 ; Précautions:
 ; - Ne testez PAS une zone où se trouve votre pile / variables.
 ; - Si votre pile est à 0000:7C00 (phys 0x7C00), commencez au moins à 0x0800.
-; - Ne testez pas au-delà de 0xA000 (début VGA/vidéo).
+; - Ne testez pas au-delà de MEM_SEG_END (0xA000: début VGA/vidéo).
 ; ---------------------------------------------------------------------------
-setup_ram:
+ram_setup:
 						xor 				ax, ax            ; AX = compteur KB trouvés
 						mov 				dx, MEM_SEG_DEB 	; DX = segment courant testé
 						mov 				cx, MEM_SEG_END   ; CX = segment fin (exclu)
@@ -155,7 +154,7 @@ setup_check_vga:
 ; ---------------------------------------------------------------------------
 ; IVT install (8088, mode réel) - remplit les 256 vecteurs avec un handler IRET
 ; ---------------------------------------------------------------------------
-setup_ivt:
+ivt_setup:
 						; installation de la table d'interrupts
 						xor 			ax, ax
 						mov 			es, ax             	; ES = 0000h -> base IVT
@@ -177,11 +176,11 @@ setup_ivt:
 ; ---------------------------------------------------------------------------
 ; IVT install (8088, mode réel) - installe un handler a une interrupt calculée
 ;
-; ax = int ide
+; ax = int id
 ; dx = segment handler
 ; bx = offset handler
 ; ---------------------------------------------------------------------------
-setup_setvector:
+ivt_setvector:
 						push			es
 						push			di
 					
@@ -192,9 +191,11 @@ setup_setvector:
 						mov 			es, ax             	; ES = 0000h -> base IVT
 
 						mov 			ax, bx							; offset du handler
+						cli
 						stosw     			              ; write offset (AX)  -> [ES:DI], DI += 2
 						xchg 			ax, dx  	          ; AX = segment, DX = offset
 						stosw          				        ; write segment (AX) -> [ES:DI], DI += 2
+						sti
 
 						pop				di
 						pop				es
