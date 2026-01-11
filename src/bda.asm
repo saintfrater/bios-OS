@@ -37,7 +37,7 @@
 %define BDA_VIDEO_OFS_PAGE		0x004E
 
 
-; 40:50 	8 words 	Cursor position of pages 1-8, high order byte=row low order byte=column; 
+; 40:50 	8 words 	Cursor position of pages 1-8, high order byte=row low order byte=column;
 ;                   changing this data isn't reflected immediately on the display
 ; 40:60 	byte     	Cursor ending (bottom) scan line (don't modify)
 ; 40:61 	byte 	    Cursor starting (top) scan line (don't modify)
@@ -63,10 +63,11 @@
 
 %define BDA_CURSOR_VISIBLE    0x000E              ; byte (0/1)
 %define BDA_CURSOR_OLDX       0x000F              ; word
-%define BDA_CURSOR_OLDY       0x0011              ; word 
+%define BDA_CURSOR_OLDY       0x0011              ; word
 %define BDA_CURSOR_NEWX       0x0013              ; word
-%define BDA_CURSOR_NEWY       0x0015              ; word 
+%define BDA_CURSOR_NEWY       0x0015              ; word
 %define BDA_CURSOR_BITOFF     0x0017              ; byte 0..7 bits d'offset  (x&7)
 %define BDA_CURSOR_BYTES      0x0019              ; byte 2 ou 3 bytes as source for cursor image
 %define BDA_CURSOR_SAVED      0x001A              ; flag if image saved
-%define BDA_CURSOR_BG         0x001B              ; 48 bytes max (3*16)
+%define BDA_CURSOR_PTR        0x001B              ; pointeur vers l'image du curseur
+%define BDA_CURSOR_BG         0x0020              ; 48 bytes max (3*16)

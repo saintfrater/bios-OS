@@ -23,19 +23,53 @@
 
 debug_puts:
 .next:
+						push 			dx
+						mov				dx, DEBUG_PORT
 						lodsb                    	; AL = *SI++
 						test 			al, al
 						jz   			.done
-						
-						mov				dx, DEBUG_PORT
-
 						out				dx, al
 						jmp  			.next
 .done:
+						pop 			dx
 						ret
-						
+
 debug_putc:
-.next:
+						push			dx
 						mov				dx, DEBUG_PORT
 						out				dx, al
-						ret						
+						pop 			dx
+						ret
+
+; AL = 0..15 -> print hex digit
+debug_puthex4:
+						and 			al, 0Fh
+						cmp 			al, 9
+						jbe 			.num
+						add 			al, 'A' - 10
+						jmp 			.pout
+.num:
+    				add 			al, '0'
+.pout:
+    				call debug_putc
+    				ret
+
+; AL = byte -> print 2 hex digits
+debug_puthex8:
+						push 			ax
+						mov 			ah, al
+						shr 			al, 4
+						call 			debug_puthex4
+						mov 			al, ah
+						call 			debug_puthex4
+						pop 			ax
+						ret
+
+; AX = word -> print 4 hex digits
+debug_puthex16:
+						push 			ax
+						mov 			al, ah
+						call 			debug_puthex8
+						pop 			ax
+						call 			debug_puthex8
+						ret

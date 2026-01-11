@@ -1,4 +1,4 @@
-# Custom BIOS / ROM Project  
+# Custom BIOS / ROM Project
 
 ---
 
@@ -51,13 +51,13 @@ The project is intentionally educational, experimental, and minimalist.
 
 To build and run this project, the following tools and components are required:
 
-- **NASM (Netwide Assembler)**  
+- **NASM (Netwide Assembler)**
   Used to assemble x86 real-mode assembly source files into a raw binary ROM image.
 
-- **QEMU**  
+- **QEMU**
   Used as the primary PC emulator for testing and debugging the custom BIOS.
 
-- **QEMU VGA BIOS**  
+- **QEMU VGA BIOS**
   The standard QEMU VGA BIOS (`vgabios.bin`) is required to initialize the VGA hardware, allowing the custom BIOS to rely on a known and stable VGA implementation while focusing on its own core logic.
 
 ---
@@ -88,17 +88,17 @@ Linux
 `/usr/share/qemu/vgabios.bin`
 
 You can use an video bios from the 86box's project:
- 
+
 https://github.com/86Box/roms
 
-Copy it to: `rom/vgabios.bin`
+Copy it to: `roms/vgabios.bin`
 
 Then run QEMU with:
 
 ```bash
-qemu-system-x86_64 \
+qemu-system-i386 \
   -bios build/bios.bin \
-  -device loader,file=rom/vgabios.bin,addr=0xC0000,force-raw=on \
+  -device loader,file=roms/vgabios.bin,addr=0xC0000,force-raw=on \
   -device isa-debugcon,chardev=myconsole \
   -chardev stdio,id=myconsole \
   -k be \
@@ -206,18 +206,18 @@ Windows
 Linux
 `/usr/share/qemu/vgabios.bin`
 
-Vous pouvez aussi utiliser un bios video du projet de 86box 
+Vous pouvez aussi utiliser un bios video du projet de 86box
 
 https://github.com/86Box/roms
 
-À copier vers : `rom/vgabios.bin`
+À copier vers : `roms/vgabios.bin`
 
 Puis lancer QEMU avec la commande suivante :
 
 ```bash
-qemu-system-x86_64 \
+qemu-system-i386 \
   -bios build/bios.bin \
-  -device loader,file=rom/vgabios.bin,addr=0xC0000,force-raw=on \
+  -device loader,file=roms/vgabios.bin,addr=0xC0000,force-raw=on \
   -device isa-debugcon,chardev=myconsole \
   -chardev stdio,id=myconsole \
   -k be \
@@ -244,7 +244,7 @@ Ce projet est avant tout un **laboratoire d’apprentissage et d’exploration**
 
 ### Status
 
-🚧 **Work in progress**  
+🚧 **Work in progress**
 Designed for experimentation, learning, and documentation.
 
 ---

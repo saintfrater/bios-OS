@@ -20,9 +20,7 @@
 ;
 ; =============================================================================
 
-BITS			16
-org				0
-
+bits			16
 ; ---------------------------------------------------------------------------
 ;
 ; configuration du bios
@@ -40,7 +38,8 @@ org				0
 %define MEM_SEG_STEP  0x0040    					; 1KB = 0x400 bytes = 0x40 paragraphs
 
 
-
+section 		.text
+bits				16
 						jmp				reset								; ce jump n'est pas sensé être executer, il est présent uniquement pour le debug
 
 ; definition du BDA
@@ -84,24 +83,26 @@ reset:
 						; on active le mode graphique
 						call			gfx_init
 
-; test a line
-						mov				cx,50
-.bcl:				; mov				dx,cx
-						mov				bl,0
-						push 			cx
-						call			gfx_putpixel
-						pop				cx
-						inc				cx
-						cmp				cx,150
-						jle				.bcl
-
+						call 			mouse_reset
 						call			mouse_init
 
-						mov				ax,cs
-						mov				ds,ax
 
-						mov				si, err_end
-						call			debug_puts
+; test a line
+;						mov				cx,50
+;.bcl:				; mov				dx,cx
+;						mov				bl,0
+;						push 			cx
+;						call			gfx_putpixel
+;						pop				cx
+;						inc				cx
+;						cmp				cx,150
+;						jle				.bcl
+;
+;						mov				ax,cs
+;						mov				ds,ax
+;
+;						mov				si, err_end
+;						call			debug_puts
 
 endless:		nop
 						jmp				endless
@@ -114,8 +115,14 @@ times 0xFFF0 - ($ - $$) db 0xFF
 ; ------------------------------------------------------------------
 ; RESET VECTOR (exécuté par le CPU)
 ; ------------------------------------------------------------------
+section 		.resetvect
+bits 				16
+global			reset_vector
+
 reset_vector:
-						jmp far 	0xF000:reset
-; filling
-builddate 	db 				'06/01/2026',0
+    				; code minimal au reset
+				    jmp 			0xF000:reset
+builddate 	db 				'06/01/2026'
+times 16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
+
 

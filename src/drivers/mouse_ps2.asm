@@ -88,18 +88,23 @@ mouse_reset:
 						mov				ds,ax
 
 						; effacer les variables du drivers
-						mov				[BDA_MOUSE_IDX],0
+						mov				byte [BDA_MOUSE_IDX],0
 						mov				dword [BDA_MOUSE_BUFFER],0
 						mov				byte [DBA_MOUSE_PACKETLEN],3
 
 						mov				byte [BDA_MOUSE_STATUS],0
-						mov				word [BDA_MOUSE_X],0					; vous pouvez aussi préciser le centre
-						mov				word [BDA_MOUSE_Y],0					; vous pouvez aussi préciser le centre
+						mov				word [BDA_MOUSE_X],320					; vous pouvez aussi préciser le centre
+						mov				word [BDA_MOUSE_Y],100					; vous pouvez aussi préciser le centre
 
 						; experiemntal
 						mov				word [BDA_MOUSE_WHEEL],0
-						ret
 
+						mov			 	byte [BDA_CURSOR_VISIBLE], 1
+						mov       word [BDA_CURSOR_OLDX], 0
+						mov       word [BDA_CURSOR_OLDY], 0
+
+						mov 			word [BDA_CURSOR_PTR], mouse_arrow
+						ret
 
 ; ------------------------------------------------------------
 ; initialise le i8042 keyboard and mouse (PS/2)
@@ -157,7 +162,7 @@ mouse_init:
 						call 			mouse_sendcmd
 
 						; détecter le packet size (3/4 bytes)
-						call mouse_detect_packet_len
+						call 			mouse_detect_packet_len
 
 						; installer ISR IRQ12 (INT 74h)
 						cli
@@ -300,22 +305,22 @@ mouse_sendcmd:
 ;    bit 7 = Y overflow
 ; ------------------------------------------------------------
 mouse_handler:
-					PUSH_ABCD
-					push				ds
+					; sauvegarder tout les registres
+					pusha
 
 					; use BDA segment
 					mov					ax,BDA_MOUSE_SEG
 					mov					ds,ax
 
 					in  				al, PS2_PORT_BUFFER   ; lire octet souris
-					mov 				[BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
-					inc					[BDA_MOUSE_IDX]
+					mov 				byte [BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
+					inc					byte [BDA_MOUSE_IDX]
 
 					mov 				al, [DBA_MOUSE_PACKETLEN]
 					cmp 				[BDA_MOUSE_IDX], al
 					jne 				.done
 
-					mov 				[BDA_MOUSE_IDX], 0
+					mov 				byte [BDA_MOUSE_IDX], 0
 
 					; decode buffer manuallement
 					mov 				al, [BDA_MOUSE_BUFFER]
@@ -332,14 +337,42 @@ mouse_handler:
 					; si packetlen = 4, gérer la molette; experimental
 					mov					al, [BDA_MOUSE_BUFFER+3]
 					cbw
-					sub					[BDA_MOUSE_WHEEL], ax
+					add					word [BDA_MOUSE_WHEEL], ax
 
+					; debug: afficher les valeurs
+					mov 				si, BDA_MOUSE_BUFFER
+					mov 				cx, 4
+.debug_loop:
+					mov 				al, [si]
+					call				debug_puthex8
+					mov 				al, ' '
+					call				debug_putc
+					inc 				si
+					loop 				.debug_loop
+
+					; clamp X
+					cmp 				word [BDA_MOUSE_X], 0
+					jge 				.x_ok_low
+					mov 				word [BDA_MOUSE_X], 0
+.x_ok_low:
+					cmp 				word [BDA_MOUSE_X], 639
+					jle					.x_ok_high
+					mov 				word [BDA_MOUSE_X], 639
+.x_ok_high:
+
+					; clamp Y
+					cmp 				word [BDA_MOUSE_Y], 0
+					jge 				.y_ok_low
+					mov 				word [BDA_MOUSE_Y], 0
+.y_ok_low:
+					cmp 				word [BDA_MOUSE_Y], 199
+					jle 				.y_ok_high
+					mov 				word [BDA_MOUSE_Y], 199
+.y_ok_high:
 					; restaurer l'ancien arrière plan du curseur
 					call				gfx_cursor_restorebg
 
 					; sauvegarder le nouvel arrière plan du curseur
-					mov					cx, [BDA_MOUSE_X]
-					mov					dx, [BDA_MOUSE_Y]
 					call				gfx_cursor_savebg
 
 					call				gfx_cursor_draw
@@ -349,6 +382,6 @@ mouse_handler:
 					out 				0xA0, al          ; EOI PIC esclave
 					out 				0x20, al          ; EOI PIC maître
 
-					pop					ds
-					POP_ABCD
+					; restaurer tous les registres
+					popa
 					iret

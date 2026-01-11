@@ -43,7 +43,7 @@ gfx_init:
 						mov				al, GFX_MODE
 						int 			0x10
 
-						mov		 		[BDA_CURSOR_SAVED],0	; flag image saved
+						mov		 		byte [BDA_CURSOR_SAVED],0	; flag image saved
 
 						; dessine un background "check-board"
 						call			gfx_background
@@ -159,7 +159,7 @@ gfx_background:
 gfx_cursor_calc_align:
         		mov     	al, cl
         		and     	al, 7                  ; offset = x&7
-        		mov     	[BDA_CURSOR_BITOFF], al
+        		mov     	byte [BDA_CURSOR_BITOFF], al
         		cmp     	al, 0
         		jne     	.unaligned
         		mov     	byte [BDA_CURSOR_BYTES], 2
@@ -167,156 +167,6 @@ gfx_cursor_calc_align:
 .unaligned:
         		mov     	byte [BDA_CURSOR_BYTES], 3
         		ret
-
-; ------------------------------------------------------------
-; Sauvegarde le background (24x16) sous le curseur (cx=X,dx=Y)
-;
-; utilise les variables du BDA pour stocker
-; ------------------------------------------------------------
-gfx_cursor_savebg:
-						pusha																	; sauvegarde registres
-
-						mov				ax, BDA_MOUSE_SEG
-						mov				ds, ax
-
-						mov		 		ax, VIDEO_SEG
-						mov		 		es, ax
-
-						cmp 			[BDA_CURSOR_SAVED], 0
-						jne 	  	.done												; déjà sauvé
-
-						mov		 		[BDA_CURSOR_SAVED], 1		  	; flag image saved
-
-						mov		 		[BDA_CURSOR_NEWX], cx				; sauvegarde la nouvelle position
-						mov		 		[BDA_CURSOR_NEWY], dx
-
-						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
-						mov 			dx,0x2000										; offset pour lignes impaire
-						cmp		 		di,dx
-						jl      	.no_odd_bank
-						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
-.no_odd_bank:
-
-						mov     	si, BDA_CURSOR_BG						; DS:SI = buffer de sauvegarde
-						mov     	bx, 8
-
-						and				cx,0x0007										; alignement X
-						jnz 			.row3
-
-.row3:			; sauve 3 bytes/ligne
-						mov		 		[BDA_CURSOR_BYTES], 3				; 3 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax, word [es:di]						; charge first word
-						mov     	word [ds:si], ax						; sauvegarde
-						mov		 		al, byte [es:di+2]					; charge 3ème byte
-						mov     	byte [ds:si+2], al
-						add		 		si, 3
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax, word [es:di]
-						mov     	word [ds:si], ax
-						mov		 		al, byte [es:di+2]
-						mov     	byte [ds:si+2], al
-						add		 		si, 3
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row3
-						jmp				.done
-
-.row2:			; sauve 2 bytes/ligne
-						mov		 		[BDA_CURSOR_BYTES], 2 			; par défaut
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax, word [es:di]						; charge first word
-						mov     	word [ds:si], ax						; sauvegarde
-						add		 		si, 2
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax, word [es:di]
-						mov     	word [ds:si], ax
-						add		 		si, 2
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row3
-.done:
-						popa
-						ret
-
-; ------------------------------------------------------------
-; restore le background (24x16)
-;
-; utilise les variables du BDA pour stocker
-; ------------------------------------------------------------
-gfx_cursor_restorebg:
-						pusha																	; sauvegarde registres
-
-						mov				ax, BDA_MOUSE_SEG
-						mov				ds, ax
-
-						mov		 		ax, VIDEO_SEG
-						mov		 		es, ax
-
-						cmp 			[BDA_CURSOR_SAVED], 0				; pas de background sauvé
-						je 		  	.done
-
-						mov		 		cx,[BDA_CURSOR_OLDX]				; restore de la position
-						mov		 		dx,[BDA_CURSOR_OLDY]
-						mov		 		[BDA_CURSOR_SAVED], 0		  	; le background a été restauré
-
-						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
-						mov 			dx,0x2000										; offset pour lignes impaire
-						cmp		 		di,dx
-						jl      	.no_odd_bank
-						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
-.no_odd_bank:
-						mov     	si, BDA_CURSOR_BG						; DS:SI = buffer de sauvegarde
-						mov     	bx, 8
-
-						cmp		 		[BDA_CURSOR_BYTES], 2				; si la sauvegarde est en 2 bytes/ligne
-						je 				.row2
-
-.row3:			; restore en 3 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						mov     	al,byte [ds:si+2]						; charge 3ème byte
-						mov		 		byte [es:di+2],al
-						add		 		si, 3
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						mov     	al,byte [ds:si+2]						; charge 3ème byte
-						mov		 		byte [es:di+2],al
-						add		 		si, 3
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row3
-						jmp				.done
-
-.row2:			; restore en 2 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						add		 		si, 2
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						add		 		si, 2
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row2
-.done:
-						popa
-						ret
 
 ; ------------------------------------------------------------
 ; Dessine un pixel, en [ES:DI] accès VRAM direct.
@@ -361,28 +211,28 @@ gfx_cursor_draw:
             mov       ax, VIDEO_SEG
             mov       es, ax
 
-            mov       cx, [BDA_CURSOR_NEWX]
-            mov       dx, [BDA_CURSOR_NEWY]
+						mov				ax, word [BDA_CURSOR_PTR]
+						mov				si, ax
+
+            mov       cx, word [BDA_CURSOR_NEWX]
+            mov       dx, word [BDA_CURSOR_NEWY]
 
             ; calcule offset et bytes/ligne (2 ou 3)
             call      gfx_cursor_calc_align
-            mov       bl, [BDA_CURSOR_BITOFF]     ; 0..7
+						mov       bl, byte [BDA_CURSOR_BITOFF]; 0..7
 
             ; calcule DI de départ (attention: gfx_calc_addr modifie CL)
             push      cx
             call      gfx_calc_addr               ; DI ok, AH ignoré
             pop       cx
-
             ; dxbank = +0x2000 si DI < 0x2000, sinon dxbank = -0x2000
             mov       bp, 02000h
             cmp       di, bp
             jl        .bank_ok
             neg       bp                           ; bp = -0x2000
 .bank_ok:
-
             ; on va dessiner 16 lignes: 8 paires (ligne dans bank courant + ligne dans autre bank)
-            mov       bx, 0                        ; row index (0..15)
-
+            mov       bh, 0                        ; row index (0..15)
             mov       dh, 8
 .pair:
             ; ----- ligne row (bank courant) -----
@@ -394,7 +244,7 @@ gfx_cursor_draw:
 
             ; ----- ligne row+1 (autre bank) -----
             add       di, bp
-            inc       bx
+            inc       bh
             push      di
             push      si
             call      .draw_line
@@ -405,7 +255,7 @@ gfx_cursor_draw:
             ; avancer de 2 lignes (dans le bank courant): +80 bytes
             add       di, CGA_STRIDE
 
-            inc       bx
+            inc       bh
             dec       dh
             jnz       .pair
 
@@ -426,7 +276,8 @@ gfx_cursor_draw:
            	push      di
 
            	; charger masks de la ligne: AND = [SI + row*2], XOR = [SI + 32 + row*2]
-           	mov       ax, bx
+						xor			  ax, ax
+           	mov       al, bh
            	shl       ax, 1                         ; row*2
 
 						push			si
@@ -550,3 +401,158 @@ gfx_cursor_draw:
             pop       cx
             pop       ax
             ret
+
+
+; ------------------------------------------------------------
+; Sauvegarde le background (24x16) sous le curseur
+;
+; utilise les variables du BDA pour stocker
+; ------------------------------------------------------------
+gfx_cursor_savebg:
+						pusha																	; sauvegarde registres
+
+						mov				ax, BDA_MOUSE_SEG
+						mov				ds, ax
+
+						mov		 		ax, VIDEO_SEG
+						mov		 		es, ax
+
+						cmp 			byte [BDA_CURSOR_SAVED], 0
+						jne 	  	.done												; déjà sauvé
+
+						mov				cx, [BDA_MOUSE_X]
+						mov				dx, [BDA_MOUSE_Y]
+
+						mov		 		byte [BDA_CURSOR_SAVED], 1	; flag image saved
+
+						mov		 		word [BDA_CURSOR_NEWX], cx	; sauvegarde la nouvelle position
+						mov		 		word [BDA_CURSOR_NEWY], dx
+
+						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
+						mov 			dx,0x2000										; offset pour lignes impaire
+						cmp		 		di,dx
+						jl      	.no_odd_bank
+						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
+.no_odd_bank:
+
+						mov     	si, BDA_CURSOR_BG						; DS:SI = buffer de sauvegarde
+						mov     	bx, 8
+
+						and				cx,0x0007										; alignement X
+						jnz 			.row3
+
+.row3:			; sauve 3 bytes/ligne
+						mov		 		byte [BDA_CURSOR_BYTES], 3	; 3 bytes/ligne
+						; ligne 'y', peut etre paire ou impaire
+						mov     	ax, word [es:di]						; charge first word
+						mov     	word [ds:si], ax						; sauvegarde
+						mov		 		al, byte [es:di+2]					; charge 3ème byte
+						mov     	byte [ds:si+2], al
+						add		 		si, 3
+
+						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
+						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
+						mov     	ax, word [es:di]
+						mov     	word [ds:si], ax
+						mov		 		al, byte [es:di+2]
+						mov     	byte [ds:si+2], al
+						add		 		si, 3
+						sub		 		di, dx
+						add 			di, CGA_STRIDE
+						dec     	bx
+						jnz     	.row3
+						jmp				.done
+
+.row2:			; sauve 2 bytes/ligne
+						mov		 		byte [BDA_CURSOR_BYTES], 2 	; par défaut
+						; ligne 'y', peut etre paire ou impaire
+						mov     	ax, word [es:di]						; charge first word
+						mov     	word [ds:si], ax						; sauvegarde
+						add		 		si, 2
+
+						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
+						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
+						mov     	ax, word [es:di]
+						mov     	word [ds:si], ax
+						add		 		si, 2
+						sub		 		di, dx
+						add 			di, CGA_STRIDE
+						dec     	bx
+						jnz     	.row3
+.done:
+						popa
+						ret
+
+; ------------------------------------------------------------
+; restore le background (24x16)
+;
+; utilise les variables du BDA pour stocker
+; ------------------------------------------------------------
+gfx_cursor_restorebg:
+						pusha																	; sauvegarde registres
+
+						mov				ax, BDA_MOUSE_SEG
+						mov				ds, ax
+
+						mov		 		ax, VIDEO_SEG
+						mov		 		es, ax
+
+						cmp 			byte [BDA_CURSOR_SAVED], 0	; pas de background sauvé
+						je 		  	.done
+
+						mov		 		cx,word [BDA_CURSOR_OLDX]		; restore de la position
+						mov		 		dx,word [BDA_CURSOR_OLDY]
+						mov		 		byte [BDA_CURSOR_SAVED], 0	; le background a été restauré
+
+						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
+						mov 			dx,0x2000										; offset pour lignes impaire
+						cmp		 		di,dx
+						jl      	.no_odd_bank
+						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
+.no_odd_bank:
+						mov     	si, BDA_CURSOR_BG						; DS:SI = buffer de sauvegarde
+						mov     	bx, 8
+
+						cmp		 		byte [BDA_CURSOR_BYTES], 2	; si la sauvegarde est en 2 bytes/ligne
+						je 				.row2
+
+.row3:			; restore en 3 bytes/ligne
+						; ligne 'y', peut etre paire ou impaire
+						mov     	ax,word [ds:si]							; recupère le 1er word
+						mov     	word [es:di],ax
+						mov     	al,byte [ds:si+2]						; charge 3ème byte
+						mov		 		byte [es:di+2],al
+						add		 		si, 3
+
+						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
+						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
+						mov     	ax,word [ds:si]							; recupère le 1er word
+						mov     	word [es:di],ax
+						mov     	al,byte [ds:si+2]						; charge 3ème byte
+						mov		 		byte [es:di+2],al
+						add		 		si, 3
+						sub		 		di, dx
+						add 			di, CGA_STRIDE
+						dec     	bx
+						jnz     	.row3
+						jmp				.done
+
+.row2:			; restore en 2 bytes/ligne
+						; ligne 'y', peut etre paire ou impaire
+						mov     	ax,word [ds:si]							; recupère le 1er word
+						mov     	word [es:di],ax
+						add		 		si, 2
+
+						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
+						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
+						mov     	ax,word [ds:si]							; recupère le 1er word
+						mov     	word [es:di],ax
+						add		 		si, 2
+						sub		 		di, dx
+						add 			di, CGA_STRIDE
+						dec     	bx
+						jnz     	.row2
+.done:
+						popa
+						ret
+
