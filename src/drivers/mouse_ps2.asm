@@ -21,12 +21,6 @@
 ;
 ; =============================================================================
 
-;
-; controleur de souris via le i8042 (PC Classique)
-;
-%define PS2_PORT_BUFFER      0x60
-%define PS2_PORT_CTRL        0x64
-
 ; commandes
 %define MOUSE_CMD_RESET      0xFF
 %define MOUSE_CMD_DEFAULT    0xF6
@@ -173,9 +167,25 @@ mouse_init:
 
 						mov				word [ds:si], mouse_handler
 						add				si, 2
-						mov				word [ds:si], BDA_SEGMENT
+						mov				ax, cs
+						mov				word [ds:si], cs
+
+; test: aussi installer sur 0x2C (si PIC remappé base 0x28)
+;mov  si, 0x2C*4
+;xor  ax, ax
+;mov  ds, ax
+;mov  word [ds:si], mouse_handler
+;add	 si, 2
+;mov  ax, cs
+;mov  word [ds:si], ax
+
 
 						sti
+
+mov dx, 0x00E9
+mov al, '!'
+out dx, al
+
 
 						pop				ax
 						pop				ds
@@ -274,10 +284,10 @@ mouse_sendcmd:
 						out  			PS2_PORT_CTRL, al
 
 						call 			ps2_wait_ready_write
-						mov  			al, bl
+ 						mov  			al, bl
 						out  			PS2_PORT_BUFFER, al
 
-						call 			ps2_wait_ready_read        ; AL = réponse
+						call 			ps2_read        					; AL = réponse
 						cmp  			al, MOUSE_ACK
 						jne  			.bad
 						clc
@@ -305,50 +315,69 @@ mouse_sendcmd:
 ;    bit 7 = Y overflow
 ; ------------------------------------------------------------
 mouse_handler:
+					pusha
+					push				ds
+
+				 	; vider le byte qui a déclenché IRQ12
+			    in   				al, PS2_PORT_BUFFER
+
+					mov 				dx, 0x00E9          ; debugcon
+    			mov  				al, '*'
+    			out  				dx, al              ; imprime directement
+
+					; EOI PIC (slave puis master)
+					mov  				al, 0x20
+					out  				0xA0, al
+					out  				0x20, al
+
+					pop					ds
+					popa
+					iret
+
+
+
+
+
 					; sauvegarder tout les registres
 					pusha
+					push				ds
 
 					; use BDA segment
 					mov					ax,BDA_MOUSE_SEG
 					mov					ds,ax
 
-					in  				al, PS2_PORT_BUFFER   ; lire octet souris
+					; lire un octet depuis le contrôleur
+					; et le stocker dans le buffer
+					in  				al, PS2_PORT_BUFFER   					; lire octet souris
 					mov 				byte [BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
 					inc					byte [BDA_MOUSE_IDX]
 
+					; vérifier si le packet est complet
 					mov 				al, [DBA_MOUSE_PACKETLEN]
-					cmp 				[BDA_MOUSE_IDX], al
+					cmp 				byte [BDA_MOUSE_IDX], al
 					jne 				.done
 
+					; packet complet, on decode les données
 					mov 				byte [BDA_MOUSE_IDX], 0
+					mov 				al,'*'			; pour debug
+					call				debug_putc
 
-					; decode buffer manuallement
-					mov 				al, [BDA_MOUSE_BUFFER]
+
+					mov 				al, [BDA_MOUSE_BUFFER]					; status
 					mov 				[BDA_MOUSE_STATUS], al
 
-					mov					al, [BDA_MOUSE_BUFFER+1]
+					mov					al, [BDA_MOUSE_BUFFER+1]				; delta X
 					cbw
 					add					[BDA_MOUSE_X], ax
 
-					mov					al, [BDA_MOUSE_BUFFER+2]
+					mov					al, [BDA_MOUSE_BUFFER+2]				; delta Y
 					cbw
 					sub					[BDA_MOUSE_Y], ax
 
 					; si packetlen = 4, gérer la molette; experimental
-					mov					al, [BDA_MOUSE_BUFFER+3]
+					mov					al, [BDA_MOUSE_BUFFER+3]				; delta Wheel
 					cbw
 					add					word [BDA_MOUSE_WHEEL], ax
-
-					; debug: afficher les valeurs
-					mov 				si, BDA_MOUSE_BUFFER
-					mov 				cx, 4
-.debug_loop:
-					mov 				al, [si]
-					call				debug_puthex8
-					mov 				al, ' '
-					call				debug_putc
-					inc 				si
-					loop 				.debug_loop
 
 					; clamp X
 					cmp 				word [BDA_MOUSE_X], 0
@@ -383,5 +412,6 @@ mouse_handler:
 					out 				0x20, al          ; EOI PIC maître
 
 					; restaurer tous les registres
+					pop					ds
 					popa
 					iret

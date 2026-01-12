@@ -1,3 +1,9 @@
 build/
 .vscode
 .vscode/tasks.json
+build-elf.bat
+build.bat
+build.sh
+run.bat
+.gdbinit
+.gdb_history

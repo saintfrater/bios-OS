@@ -36,15 +36,13 @@
 %define BDA_VIDEO_BUF_SIZE		0x004C
 %define BDA_VIDEO_OFS_PAGE		0x004E
 
+; keyboard related information
+%define BDA_KBD_HEAD          0x0080      ; byte
+%define BDA_KBD_TAIL          0x0081      ; byte
+%define BDA_KBD_FLAGS         0x0082      ; byte: bit0=shift, bit1=ctrl, bit2=alt, bit3=caps, bit4=ext(E0)
+%define BDA_KBD_BUF           0x0090      ; buffer circulaire (par ex 32 entrées *2 = 64 bytes)
 
-; 40:50 	8 words 	Cursor position of pages 1-8, high order byte=row low order byte=column;
-;                   changing this data isn't reflected immediately on the display
-; 40:60 	byte     	Cursor ending (bottom) scan line (don't modify)
-; 40:61 	byte 	    Cursor starting (top) scan line (don't modify)
-; 40:62 	byte 	    Active display page number
-; 40:63 	word 	    Base port address for active 6845 CRT controller 3B4h = mono, 3D4h = color
-; 40:65 	byte 	    6845 CRT mode control register value (port 3x8h) ; EGA/VGA values emulate those of the MDA/CGA
-; 40:66 	byte 	    CGA current color palette mask setting (port 3d9h) ; EGA and VGA values emulate the CGA
+%define KBD_BUF_MASK          0x1F        ; 32 entrées => index 0..31
 
 ;
 ; information relative à la souris
@@ -71,3 +69,19 @@
 %define BDA_CURSOR_SAVED      0x001A              ; flag if image saved
 %define BDA_CURSOR_PTR        0x001B              ; pointeur vers l'image du curseur
 %define BDA_CURSOR_BG         0x0020              ; 48 bytes max (3*16)
+
+
+
+; -----------------------------------------------------------------------------------
+; PC components I/O ports
+; -----------------------------------------------------------------------------------
+
+; controleur clavier/souris i8042 (AT-PS/2)
+%define PS2_PORT_BUFFER      0x60
+%define PS2_PORT_CTRL        0x64
+
+; PIC 8259 ports (Programmable Interrupt Controller)
+%define i8259_MASTER_CMD		0x20
+%define i8259_MASTER_DATA		0x21
+%define i8259_SLAVE_CMD		  0xA0
+%define i8259_SLAVE_DATA		0xA1

@@ -20,8 +20,10 @@
 ;
 ; =============================================================================
 
+
+
 ; ---------------------------------------------------------------------------
-; Détection RAM conventionnelle 
+; Détection RAM conventionnelle
 ; Teste la RAM de MEM_SEG_DEB -> MEM_SEG_END (0xA000, 640KB), par pas de 1KB.
 ; Méthode: sauvegarde 1 mot, écrit 2 patterns, relit, restaure.
 ;
@@ -80,36 +82,36 @@ ram_setup:
 						add 				ax, bx                ; AX = taille conventionnelle totale en KB (approx. 0..640)
 						; DX = segment du premier bloc NON valide (top)
 						; DX est déjà positionné (segment courant)
-						
+
 						; stocker l'information dans le BDA
 						mov 				bx, BDA_SEGMENT
 						mov 				ds, bx
-						mov 				[BDA_INFO_MEM_SIZE], ax 
+						mov 				[BDA_INFO_MEM_SIZE], ax
 						mov					[BDA_INFO_MEM_SEG],dx
-						
+
 						ret
-						
+
 ; ---------------------------------------------------------------------------
 ; Détection les ROM supplementaires
 ; Teste la RAM de 0xC000 jusqu’à 0xE000, par pas de 2KB.
 ;
 ; Si une ROM est détectée, le code de la ROM sera appelé.
-; ---------------------------------------------------------------------------						
-setup_load_rom:						
+; ---------------------------------------------------------------------------
+setup_load_rom:
 						mov 			bx, 0xC000
 .scanloop:
 						mov 			ds, bx
 						cmp				word[0x0000],0xAA55	; ROM signature
 						jne				.norom
-						
+
 						; Debug
 						mov				al,'.'
 						call 			debug_putc
-						
+
 						; appel le code (en 0x0003) de la ROM
 						push 			cs
 						push 			word .norom					; address de retour
-						
+
 						push			ds
 						push 			0x0003
 						retf													; call far ds:0x0003
@@ -117,7 +119,7 @@ setup_load_rom:
 						add				bx, 0x80						; add 2kb
 						cmp 			bx, 0xE000
 						jbe 			.scanloop
-.end:						
+.end:
 						ret
 
 ; ---------------------------------------------------------------------------
@@ -125,7 +127,7 @@ setup_load_rom:
 ;
 ; Si le vecteur n'a pas été modifiée, on considère que la ROM video n'a pas
 ; été chargée.
-; ---------------------------------------------------------------------------	
+; ---------------------------------------------------------------------------
 setup_check_vga:
 						; vérification de l'offset 0x0000:0x0040 qui DOIT etre différent de @default_isr
 						xor				ax,ax
@@ -134,22 +136,22 @@ setup_check_vga:
 						mov 			bx, [es:0x0040] 		; BX = offset INT10
 						mov 			cx, [es:0x0042] 		; CX = segment INT10
 						mov				ax, cs
-						
+
 						; Comparer avec default_isr (offset) et CS (segment)
 						mov 			dx, default_isr 		; DX = offset default_isr (dans notre CS)
 						cmp 			bx, dx
 						jne 			.init_ok						; vecteur different, bios initialisé
 						cmp 			cx, ax
 						jne 			.init_ok
-						
+
 						mov				ax,cs								; vecteur identique, sans doute pas d'initialisation
 						mov				ds,ax
 
 						mov				si, err_vganok
 						call			debug_puts
 .init_ok:
-						ret						
-						
+						ret
+
 
 ; ---------------------------------------------------------------------------
 ; IVT install (8088, mode réel) - remplit les 256 vecteurs avec un handler IRET
@@ -172,7 +174,7 @@ ivt_setup:
 						loop 			.fill
 						; fin de la table d'interrupt
 						ret
-						
+
 ; ---------------------------------------------------------------------------
 ; IVT install (8088, mode réel) - installe un handler a une interrupt calculée
 ;
@@ -183,10 +185,10 @@ ivt_setup:
 ivt_setvector:
 						push			es
 						push			di
-					
+
 						shl				ax,2								; ax=id *4
 						mov				di,ax
-						
+
 						xor				ax,ax
 						mov 			es, ax             	; ES = 0000h -> base IVT
 
@@ -199,7 +201,53 @@ ivt_setvector:
 
 						pop				di
 						pop				es
-						ret						
+						ret
+
+; ------------------------------------------------------------
+; Initialise les PIC 8259 (PC/AT):
+; - Master offset 0x08
+; - Slave  offset 0x70
+; - Cascade: IRQ2
+; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/8259
+; ------------------------------------------------------------
+pic_init:
+						push 			ax
+
+						; ICW1: init + ICW4
+						mov 			al, 0x11 							; 000010001b
+						out 			i8259_MASTER_CMD, al
+						out 			i8259_SLAVE_CMD, al
+
+						; ICW2: vector offsets
+						mov 			al, 0x08
+						out 			i8259_MASTER_DATA, al
+						mov 			al, 0x70
+						out 			i8259_SLAVE_DATA, al
+
+						; ICW3: wiring
+						mov 			al, 0x04       			 	; master: slave on IRQ2: 0100b
+						out 			i8259_MASTER_DATA, al
+						mov 			al, 0x02        			; slave: cascade identity 2
+						out 			i8259_SLAVE_DATA, al
+
+						; ICW4: 8086 mode
+						mov 			al, 0x01
+						out 			i8259_MASTER_DATA, al
+						out 			i8259_SLAVE_DATA, al
+
+						; Masques: unmask IRQ2 (master) et IRQ12 (slave)
+						in  			al, i8259_MASTER_DATA
+						and 			al, 0xFB        ; clear bit2
+						out 			i8259_MASTER_DATA, al
+
+						in  			al, i8259_SLAVE_DATA
+						and 			al, 0xEF        ; clear bit4
+						out 			i8259_SLAVE_DATA, al
+
+						pop 			ax
+						ret
+
+
 
 ; ---------------------------------------------------------------------------
 ; Handler par défaut: fait juste IRET

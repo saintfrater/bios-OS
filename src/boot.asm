@@ -50,6 +50,7 @@ bits				16
 %include 		"./drivers/debug.asm"
 %include		"./drivers/gfx_cgam.asm"
 %include		"./drivers/mouse_ps2.asm"
+%include 		"./drivers/keyboard_ps2.asm"
 %include 		"./services/generic.asm"
 
 err_vganok	db				'VGA Not Initialized',0
@@ -72,6 +73,9 @@ reset:
 
 						; installé une table d'interruption "dummy"
 						call 			ivt_setup
+
+						; initialisation des PIC 8259A
+						call 			pic_init
 						sti
 
 						; load other Rom
