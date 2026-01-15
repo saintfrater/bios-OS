@@ -73,3 +73,55 @@ debug_puthex16:
 						pop 			ax
 						call 			debug_puthex8
 						ret
+
+
+; --- screen text functions ---
+; AH = page
+; DH = row
+; DL = column
+scr_gotoxy:
+						mov 			ah, 02h
+						mov 			bh, 0			; page 0
+						int 			10h
+						ret
+
+scr_putc:
+						mov 			ah, 0x0E
+						int 			10h
+						ret
+
+; AL = 0..15 -> print hex digit
+scr_puthex4:
+						and 			al, 0Fh						; mask 4 bits low
+						cmp 			al, 9							; is it 0..9 ?
+						jbe 			.num							; yes
+						add 			al, 'A' - 10			; convert to 'A'..'F'
+						jmp 			.pout
+.num:
+    				add 			al, '0'						; convert to '0'..'9'
+.pout:
+    				mov 			ah, 0x0E
+						int 			10h
+    				ret
+
+; AL = byte -> print 2 hex digits
+scr_puthex8:
+						push 			ax
+						push 			bx
+						mov 			bl, al						; save al
+						shr 			al, 4							; 4 bits plus significatifs
+						call 			scr_puthex4
+						mov 			al, bl						; restore al
+						call 			scr_puthex4
+						pop 			bx
+						pop 			ax
+						ret
+
+; AX = word -> print 4 hex digits
+scr_puthex16:
+						push 			ax
+						mov 			al, ah
+						call 			scr_puthex8
+						pop 			ax
+						call 			scr_puthex8
+						ret

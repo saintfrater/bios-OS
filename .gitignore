@@ -1,9 +1,14 @@
 build/
 .vscode
 .vscode/tasks.json
+roms/qemu-vgabios.bin
+roms/vgabios.bin
 build-elf.bat
 build.bat
 build.sh
 run.bat
 .gdbinit
 .gdb_history
+link.ld
+.gitignore
+

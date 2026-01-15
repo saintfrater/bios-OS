@@ -28,7 +28,6 @@ bits			16
 ; ---------------------------------------------------------------------------
 %define DEBUG_PORT		0xe9								; 0x402 ou 0xe9
 
-
 ; initial stack
 %define STACK_SEG   	0x0030							; compatible avec le BMM (Bios Memory Maps)
 %define STACK_TOP    	0x0100        			; choix commun en RAM basse (pile descendante)
@@ -46,7 +45,6 @@ bits				16
 %include 		"./bda.asm"
 
 %include 		"./services/macros.asm"
-
 %include 		"./drivers/debug.asm"
 %include		"./drivers/gfx_cgam.asm"
 %include		"./drivers/mouse_ps2.asm"
@@ -54,7 +52,7 @@ bits				16
 %include 		"./services/generic.asm"
 
 err_vganok	db				'VGA Not Initialized',0
-err_end			db				'code completed successfully',0
+;err_end			db				'code completed successfully',0
 
 reset:
 						cli
@@ -71,6 +69,9 @@ reset:
 						mov 			ss, ax
 						mov 			sp, 0x1000       ; sommet de pile
 
+						; initialisation du BDA
+						call			bda_setup
+
 						; installé une table d'interruption "dummy"
 						call 			ivt_setup
 
@@ -78,37 +79,52 @@ reset:
 						call 			pic_init
 						sti
 
-						; load other Rom
+						; load Roms
 						call 			setup_load_rom
 
-						; on vérifie que le BIOS VGA a installer l'INT 10h
+						; on vérifie que le BIOS VGA a installé une INT 10h
 						call			setup_check_vga
 
 						; on active le mode graphique
-						call			gfx_init
+						; call			gfx_init
+
+						call 			kbd_init
 
 						call 			mouse_reset
 						call			mouse_init
 
 
-; test a line
-;						mov				cx,50
-;.bcl:				; mov				dx,cx
-;						mov				bl,0
-;						push 			cx
-;						call			gfx_putpixel
-;						pop				cx
-;						inc				cx
-;						cmp				cx,150
-;						jle				.bcl
-;
-;						mov				ax,cs
-;						mov				ds,ax
-;
-;						mov				si, err_end
-;						call			debug_puts
 
-endless:		nop
+						; on initialise le mode texte 80x25 par défaut DEBUG
+						mov				ax, 0x0003
+						int				10h
+
+endless:
+						mov				dx,0
+						call			scr_gotoxy
+
+						mov				ax,BDA_MOUSE_SEG
+						mov				ds,ax
+
+						mov				ax,0					; adresse début dump
+						mov				si,ax
+						mov				cx, 0x10
+.dump:
+						mov				al,[ds:si]
+						inc				si
+
+						push			ds
+						push			si
+
+						call			scr_puthex8
+						mov				al,' '
+						call			scr_putc
+
+						pop				si
+						pop				ds
+
+						loop			.dump
+
 						jmp				endless
 
 ; ------------------------------------------------------------------

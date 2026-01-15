@@ -70,8 +70,6 @@
 %define BDA_CURSOR_PTR        0x001B              ; pointeur vers l'image du curseur
 %define BDA_CURSOR_BG         0x0020              ; 48 bytes max (3*16)
 
-
-
 ; -----------------------------------------------------------------------------------
 ; PC components I/O ports
 ; -----------------------------------------------------------------------------------
@@ -85,3 +83,31 @@
 %define i8259_MASTER_DATA		0x21
 %define i8259_SLAVE_CMD		  0xA0
 %define i8259_SLAVE_DATA		0xA1
+
+; -----------------------------------------------------------------------------------
+;  bda_setup
+;  Initialise la BDA à zéro
+; -----------------------------------------------------------------------------------
+bda_setup:
+            pusha
+            push			ds
+
+            mov 			ax, BDA_SEGMENT
+            mov 			es, ax
+
+            mov 			ax, 0
+            mov 			cx,0xFF
+            xor 			di, di
+            rep       stosb                ; clear BDA area
+
+            mov 			ax, BDA_MOUSE_SEG
+            mov 			es, ax
+
+            mov 			ax, 0
+            mov 			cx,0xFF
+            xor 			di, di
+            rep       stosb                ; clear BDA area
+
+            pop 			ds
+            popa
+            ret

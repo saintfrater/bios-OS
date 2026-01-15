@@ -35,9 +35,9 @@ kbd_map_nomod:
             db        'q','w','e','r','t','y','u','i','o','p','[',']'
             db        13        ; 1C Enter
             db        0         ; 1D Ctrl
-            db        'a','s','d','f','g','h','j','k','l',';','\'', '`'
+            db        'a','s','d','f','g','h','j','k','l',';',0x27, 0x60
             db        0         ; 2A LShift
-            db        '\\','z','x','c','v','b','n','m',',','.','/'
+            db        0x5c,'z','x','c','v','b','n','m',',','.','/'
             db        0         ; 36 RShift
             db        '*'       ; 37 keypad *
             db        0         ; 38 Alt
@@ -213,6 +213,22 @@ kbd_buf_pop:
 ; Keyboard ISR (INT 09h)
 ; -----------------------------------------------------------
 kbd_isr:
+    pusha
+
+    in   al, 0x60            ; consomme scancode (obligatoire)
+
+    mov  dx, 0x00E9          ; debugcon
+    mov  al, '*'
+    out  dx, al
+
+    mov  al, 0x20            ; EOI master
+    out  0x20, al
+
+    popa
+    iret
+
+
+; kbd_isr:
             push      ds
             pusha
 

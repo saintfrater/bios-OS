@@ -170,16 +170,6 @@ mouse_init:
 						mov				ax, cs
 						mov				word [ds:si], cs
 
-; test: aussi installer sur 0x2C (si PIC remappé base 0x28)
-;mov  si, 0x2C*4
-;xor  ax, ax
-;mov  ds, ax
-;mov  word [ds:si], mouse_handler
-;add	 si, 2
-;mov  ax, cs
-;mov  word [ds:si], ax
-
-
 						sti
 
 mov dx, 0x00E9
@@ -321,7 +311,7 @@ mouse_handler:
 				 	; vider le byte qui a déclenché IRQ12
 			    in   				al, PS2_PORT_BUFFER
 
-					mov 				dx, 0x00E9          ; debugcon
+					mov 				dx, 0xE9        	  ; debugcon
     			mov  				al, '*'
     			out  				dx, al              ; imprime directement
 
