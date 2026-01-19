@@ -48,7 +48,7 @@
 ; information relative à la souris
 ;
 
-%define BDA_MOUSE_SEG					0x0050
+%define BDA_DATA_SEG					0x0050
 
 %define BDA_MOUSE_BUFFER			0x0000							; dword; buffer (jusqu'à 4 octets)
 %define	BDA_MOUSE_IDX					0x0004							; byte 0..3
@@ -104,6 +104,9 @@
 %define i8259_MASTER_INT    0x08
 %define i8259_SLAVE_INT     0x70
 
+%define IRQ_ENABLED         0x00
+%define IRQ_DISABLED        0x01
+
 ; -----------------------------------------------------------------------------------
 ;  bda_setup
 ;  Initialise la BDA à zéro
@@ -112,18 +115,10 @@ bda_setup:
             pusha
             push			ds
 
-            mov 			ax, BDA_SEGMENT
+            mov 			ax, BDA_DATA_SEG
             mov 			es, ax
 
-            mov 			ax, 0
-            mov 			cx,0xFF
-            xor 			di, di
-            rep       stosb                ; clear BDA area
-
-            mov 			ax, BDA_MOUSE_SEG
-            mov 			es, ax
-
-            mov 			ax, 0
+            mov 			ax, 0x5F
             mov 			cx,0xFF
             xor 			di, di
             rep       stosb                ; clear BDA area

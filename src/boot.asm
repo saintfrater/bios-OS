@@ -29,26 +29,19 @@ bits			16
 %define DEBUG_PORT		0xe9								; 0x402 ou 0xe9
 
 ; initial stack
-%define STACK_SEG   	0x0030							; compatible avec le BMM (Bios Memory Maps)
-%define STACK_TOP    	0x0100        			; choix commun en RAM basse (pile descendante)
-
-%define MEM_SEG_DEB		0x0800 						  ; 0x0800:0000 = 0x8000 (32KB) évite IVT/BDA + stack 7C00
-%define MEM_SEG_END   0xA000    					; 0xA000:0000 = 0xA0000 (début zone vidéo)
-%define MEM_SEG_STEP  0x0040    					; 1KB = 0x400 bytes = 0x40 paragraphs
-
+%define STACK_SEG   	0x1000							; segment de base
 
 section 		.text
 bits				16
-						jmp				reset								; ce jump n'est pas sensé être executer, il est présent uniquement pour le debug
 
 ; definition du BDA
 %include 		"./bda.asm"
 
-%include 		"./services/macros.asm"
+; %include 		"./services/macros.asm"
 %include 		"./drivers/debug.asm"
 %include		"./drivers/gfx_cgam.asm"
-;%include		"./drivers/mouse_ps2.asm"
-;%include 		"./drivers/keyboard_ps2.asm"
+%include		"./drivers/mouse_ps2.asm"
+%include 		"./drivers/keyboard_ps2.asm"
 %include 		"./services/generic.asm"
 
 err_vganok	db				'VGA Not Initialized',0
@@ -56,26 +49,28 @@ err_vganok	db				'VGA Not Initialized',0
 
 reset:
 						cli
+						cld
+
 						; il n'existe aucun 'stack' par défaut
 						mov				ax, STACK_SEG
 						mov 			ss, ax
-						mov 			sp, STACK_TOP     	; haut du segment, mot-aligné
-
-						; detection de la mémoire totale
-						call			ram_setup
-						sti
-
-						; modification du stack en "haut" de la RAM
-						mov 			ax, dx
-						sub 			ax, 0x0400       ; réserver les 16 dernier KB
-						mov 			ss, ax
-						mov 			sp, 0x1000       ; sommet de pile
-
-						; initialisation du BDA
-						call			bda_setup
+						mov 			sp, 0xFFFE     	; haut du segment (64ko de stack), mot-aligné
 
 						; installé une table d'interruption "dummy"
 						call 			ivt_setup
+
+						call			bda_setup
+
+						; test IRQ 0
+						mov				ax,cs
+						mov				dx,ax
+						mov				bx,test_isr
+						mov				ax,i8259_MASTER_INT
+
+						call			ivt_setvector
+
+						; initialisation des PIC 8259A
+						call 			pic_init
 
 						; load Roms
 						call 			setup_load_rom
@@ -87,18 +82,13 @@ reset:
 						mov				ax, 0x0003
 						int				10h
 
-						cli
-						; initialisation des PIC 8259A
-						call 			pic_init
-;						call 			kbd_init
+						; enable IRQ 0
+            mov       ah,IRQ_ENABLED
+            mov       al,0
+            call      pic_set_irq_mask
 
-						; test IRQ 0
-						mov				ax,cs
-						mov				dx,ax
-						mov				bx,test_isr
-						mov				ax,i8259_MASTER_INT
+						call 			kbd_init
 
-						call			ivt_setvector
 
 						sti
 
@@ -106,17 +96,10 @@ reset:
 						; call			gfx_init
 
 						;call 			mouse_reset
-						;call			mouse_init
+						call			mouse_init
 endless:
-						mov				ax,0x0050
+						mov				ax,BDA_DATA_SEG
 						mov				ds,ax
-
-;						in  			al, 0x64
-;						test 			al, 1          				; OBF
-;						jz  			.no
-;						in  			al, 0x60        			; scancode dans AL
-;						mov				byte [0x0001],al
-;.no:
 
 						mov				dx,0
 						call			scr_gotoxy
@@ -153,20 +136,21 @@ endless:
 ; Keyboard ISR (IRQ -> INT)
 ; -----------------------------------------------------------
 test_isr:
-            pusha
-            push        ds
+            push			  ax
+            push        fs
 
-            mov         ax,0x0050
-            mov         ds,ax
-            inc         byte [0x0005]
+            mov         ax,BDA_DATA_SEG
+            mov         fs,ax
+            inc         byte [fs:0x000F]
+
+						inc         byte [fs:0x0005]
 
             mov         al, PIC_EOI            ; EOI master
             out         i8259_MASTER_CMD, al
 
-            pop         ds
-            popa
+            pop         fs
+            pop					ax
             iret
-
 
 ; ------------------------------------------------------------------
 ; Padding jusqu'au reset vector
@@ -184,6 +168,6 @@ reset_vector:
     				; code minimal au reset
 				    jmp 			0xF000:reset
 builddate 	db 				'06/01/2026'
-times 16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
+						times 		16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
 
 

@@ -21,49 +21,20 @@
 ;
 ; =============================================================================
 
-kbc_wait_in_empty:
-            in        al, i8042_PS2_CTRL
-            test      al, 0x02          ; IBF
-            jnz       kbc_wait_in_empty
-            ret
-
-kbc_wait_out_full:
-            in        al, i8042_PS2_CTRL
-            test      al, 0x01          ; OBF
-            jz        kbc_wait_out_full
-            ret
-
-kbc_flush_output:
-            in        al, i8042_PS2_CTRL
-            test      al, 0x01          ; OBF ?
+kbd_flush:
+            in        al, 0x64              ; Lire le Status Register
+            test      al, 1                 ; Est-ce qu'il y a une donnée (Output Buffer Full) ?
             jz        .done
-            in        al, i8042_PS2_DATA; jette la donnée
-            jmp       kbc_flush_output
+            in        al, 0x60              ; Lire et ignorer la donnée
+            jmp       kbd_flush
 .done:
             ret
 
-
-kbc_read_cmdbyte:
-            call        kbc_wait_in_empty
-            mov         al, 0x20
-            out         i8042_PS2_CTRL, al
-            call        kbc_wait_out_full
-            in          al, i8042_PS2_DATA
-            ret
-
-kbc_write_cmdbyte:
-            ; entrée: AL = nouveau command byte
-            push        ax
-            call        kbc_wait_in_empty
-            mov         al, 0x60
-            out         i8042_PS2_CTRL, al
-            call        kbc_wait_in_empty
-            pop         ax
-            out         i8042_PS2_DATA, al
-            ret
 kbd_init:
             push      ds
             push      ax
+
+            call      kbd_flush
 
             ; gestion du buffer clavier
             mov       ax, BDA_SEGMENT
@@ -72,55 +43,19 @@ kbd_init:
             mov       byte [BDA_KBD_TAIL], 0
             mov       byte [BDA_KBD_FLAGS], 0
 
-            cli
+            mov       ax,cs
+            mov       dx,ax
+            mov       bx,kbd_isr
 
-;           call      kbc_wait_in_empty
-;           mov       al, 0x20
-;           out       i8042_PS2_CTRL, al
-;
-;           call      kbc_wait_out_full
-;           in        al, i8042_PS2_DATA             ; AL = command byte
-;
-;           or        al, 0x01                      ; bit0: enable IRQ1
-;           and       al, 0xEF                      ; bit4: 0 = keyboard enabled
-;
-;           mov       ah, al                        ; save new cmd byte
-;
-;           ; write command byte
-;           call      kbc_wait_in_empty
-;           mov       al, 0x60
-;           out       i8042_PS2_CTRL, al
-;
-;           call      kbc_wait_in_empty
-;           mov       al, ah
-;           out       i8042_PS2_DATA, al
-;
-;           ; unmask IRQ1 & IRQ2 (master bit 1 & 2 = 0) bit 1 = IRQ 1
-;           in        al, i8259_MASTER_DATA
-;           and       al, 0xF9                      ; 11111001b
-;           out       i8259_MASTER_DATA, al
-
-            ; setup Interrupt Table
-            ; installer IRQ1 : MASTER_OFFSET + 1
             mov       ax, i8259_MASTER_INT          ; base offset IRQ0
             inc       ax                            ; IRQ 1
-            shl       ax,2                          ; vect * 4
-            mov       si, ax
 
-            xor       ax, ax                        ; segment 0x0000
-            mov       ds, ax
-            mov       word [ds:si], kbd_isr
-            mov       ax, cs
-            mov       word [ds:si+2], ax
+            call      ivt_setvector
 
-            mov       si, 0x09*4
-            xor       ax, ax
-            mov       ds, ax
-            mov       word [ds:si], kbd_isr
-            mov       ax, cs
-            mov       word [ds:si+2], ax
-
-            sti
+            ; enable IRQ 1
+            mov       ah,IRQ_ENABLED
+            mov       al,1
+            call      pic_set_irq_mask
 
             pop       ax
             pop       ds
@@ -135,7 +70,7 @@ kbd_isr:
 
             in          al, 0x60               ; consomme scancode (obligatoire)
 
-            mov         ax,0x0050
+            mov         ax,BDA_DATA_SEG
             mov         ds,ax
             inc         byte [0x0000]
 

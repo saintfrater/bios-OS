@@ -91,7 +91,7 @@ gfx_calc_addr:
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
 gfx_putpixel:
-						PUSH_ABCD
+						pusha
 						push  	  di
 						push    	es
 
@@ -113,7 +113,7 @@ gfx_putpixel:
 .done:
 						pop 	    es
 						pop   	  di
-						POP_ABCD
+						popa
 						ret
 
 ; ------------------------------------------------------------
@@ -206,7 +206,7 @@ gfx_getpixel_fast:
 gfx_cursor_draw:
             pusha
 
-            mov       ax, BDA_MOUSE_SEG
+            mov       ax, BDA_DATA_SEG
             mov       ds, ax
             mov       ax, VIDEO_SEG
             mov       es, ax
@@ -411,7 +411,7 @@ gfx_cursor_draw:
 gfx_cursor_savebg:
 						pusha																	; sauvegarde registres
 
-						mov				ax, BDA_MOUSE_SEG
+						mov				ax, BDA_DATA_SEG
 						mov				ds, ax
 
 						mov		 		ax, VIDEO_SEG
@@ -491,7 +491,7 @@ gfx_cursor_savebg:
 gfx_cursor_restorebg:
 						pusha																	; sauvegarde registres
 
-						mov				ax, BDA_MOUSE_SEG
+						mov				ax, BDA_DATA_SEG
 						mov				ds, ax
 
 						mov		 		ax, VIDEO_SEG

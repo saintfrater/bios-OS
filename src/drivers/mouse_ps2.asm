@@ -34,7 +34,10 @@
 %define I8042_CMD_EN_AUX     0xA8
 %define I8042_CMD_RD_CBYTE   0x20
 %define I8042_CMD_WR_CBYTE   0x60
+%define I8042_CMD_DIS_KBD		 0xAD
+%define I8042_CMD_DIS_MOUSE	 0xA7
 %define I8042_CMD_WRITE_AUX  0xD4
+
 
 %define CURSOR_W               16
 %define CURSOR_H               16
@@ -78,7 +81,7 @@ mouse_arrow:
 ;
 ; ------------------------------------------------------------
 mouse_reset:
-						mov				ax, BDA_MOUSE_SEG
+						mov				ax, BDA_DATA_SEG
 						mov				ds,ax
 
 						; effacer les variables du drivers
@@ -112,8 +115,18 @@ mouse_init:
 						; reset des valeurs internes
 						call			mouse_reset
 
-						; Activer le port souris
-						call 			ps2_flush_output
+						cli
+
+						call 			ps2_wait_ready_write
+						mov 			al, I8042_CMD_DIS_KBD 		; Disable Keyboard
+    				out  			i8042_PS2_CTRL, al
+
+						call			ps2_wait_ready_write
+						mov  			al, I8042_CMD_DIS_MOUSE 	; Disable Mouse
+						out  			i8042_PS2_CTRL, al
+
+						; Vider tout ce qui traîne
+    				call ps2_flush_output
 
 						; Activer le port souris (AUX)
 						call 			ps2_wait_ready_write
@@ -124,6 +137,7 @@ mouse_init:
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_RD_CBYTE
 						out  			i8042_PS2_CTRL, al
+
 						call 			ps2_read						         ; AL = command byte
 
 						; Activer IRQ12 (bit 1)
@@ -159,24 +173,22 @@ mouse_init:
 						call 			mouse_detect_packet_len
 
 						; installer ISR IRQ12 (INT 74h)
-						cli
 
-						mov				si, 0x74 * 4
-						xor				ax, ax
-						mov				ds, ax
+						mov       ax,cs
+            mov       dx,ax
+            mov       bx, isr_mouse_handler
 
-						mov				word [ds:si], mouse_handler
-						add				si, 2
-						mov				ax, cs
-						mov				word [ds:si], cs
+            mov       ax, i8259_SLAVE_INT	          ; base offset IRQ8
+            add       ax,4                          ; IRQ 12
+
+            call      ivt_setvector
+
+            ; enable IRQ 1
+            mov       ah,IRQ_ENABLED
+            mov       al, 12
+            call      pic_set_irq_mask
 
 						sti
-
-mov dx, 0x00E9
-mov al, '!'
-out dx, al
-
-
 						pop				ax
 						pop				ds
 						ret
@@ -229,10 +241,15 @@ mouse_detect_packet_len:
 
 ; attendre que le 8042 soit pret a recevoir de l'information
 ps2_wait_ready_write:
+						push			cx
+						mov				cx, 1000
 .wait:
 						in   			al, i8042_PS2_CTRL
 						test 			al, 02h              ; IBF
-						jnz  			.wait
+						jz				.ok
+						loop  			.wait
+.ok:
+						pop				cx
 						ret
 
 ; attendre que le 8042 soit pret a lire de l'information
@@ -304,38 +321,19 @@ mouse_sendcmd:
 ;    bit 6 = X overflow
 ;    bit 7 = Y overflow
 ; ------------------------------------------------------------
-mouse_handler:
-					pusha
-					push				ds
-
-				 	; vider le byte qui a déclenché IRQ12
-			    in   				al, i8042_PS2_DATA
-
-					mov 				dx, 0xE9        	  ; debugcon
-    			mov  				al, '*'
-    			out  				dx, al              ; imprime directement
-
-					; EOI PIC (slave puis master)
-					mov  				al, 0x20
-					out  				0xA0, al
-					out  				0x20, al
-
-					pop					ds
-					popa
-					iret
-
+isr_mouse_handler:
 					; sauvegarder tout les registres
 					pusha
 					push				ds
 
 					; use BDA segment
-					mov					ax,BDA_MOUSE_SEG
+					mov					ax,BDA_DATA_SEG
 					mov					ds,ax
 
-					; lire un octet depuis le contrôleur
-					; et le stocker dans le buffer
+					; lire un octet depuis le contrôleur et le stocker dans le buffer
 					in  				al, i8042_PS2_DATA   					; lire octet souris
-					mov 				byte [BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
+					movzx 			bx, byte [BDA_MOUSE_IDX]
+					mov 				byte [BDA_MOUSE_BUFFER + bx], al
 					inc					byte [BDA_MOUSE_IDX]
 
 					; vérifier si le packet est complet
@@ -345,10 +343,6 @@ mouse_handler:
 
 					; packet complet, on decode les données
 					mov 				byte [BDA_MOUSE_IDX], 0
-					mov 				al,'*'			; pour debug
-					call				debug_putc
-
-
 					mov 				al, [BDA_MOUSE_BUFFER]					; status
 					mov 				[BDA_MOUSE_STATUS], al
 
@@ -385,17 +379,17 @@ mouse_handler:
 					mov 				word [BDA_MOUSE_Y], 199
 .y_ok_high:
 					; restaurer l'ancien arrière plan du curseur
-					call				gfx_cursor_restorebg
+					;call				gfx_cursor_restorebg
 
 					; sauvegarder le nouvel arrière plan du curseur
-					call				gfx_cursor_savebg
+					;call				gfx_cursor_savebg
 
-					call				gfx_cursor_draw
+					;call				gfx_cursor_draw
 
 .done:
 					mov 				al, 0x20
-					out 				0xA0, al          ; EOI PIC esclave
-					out 				0x20, al          ; EOI PIC maître
+					out 				i8259_SLAVE_CMD, al      ; EOI PIC esclave
+					out 				i8259_MASTER_CMD, al     ; EOI PIC maître
 
 					; restaurer tous les registres
 					pop					ds
