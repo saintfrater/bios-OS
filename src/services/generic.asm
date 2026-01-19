@@ -203,51 +203,64 @@ ivt_setvector:
 						pop				es
 						ret
 
-; ------------------------------------------------------------
+io_wait:
+						xor				al,al
+						out				0x80,al
+						ret
+
+; ---------------------------------------------------------------------------
 ; Initialise les PIC 8259 (PC/AT):
 ; - Master offset 0x08
 ; - Slave  offset 0x70
 ; - Cascade: IRQ2
 ; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/8259
-; ------------------------------------------------------------
+; ---------------------------------------------------------------------------
 pic_init:
 						push 			ax
-
-						; ICW1: init + ICW4
-						mov 			al, 0x11 							; 000010001b
+						; starts the initialization sequence (in cascade mode)
+						mov 			al, ICW1_INIT | ICW1_ICW4
 						out 			i8259_MASTER_CMD, al
+						call			io_wait
+
+						mov 			al, ICW1_INIT | ICW1_ICW4
 						out 			i8259_SLAVE_CMD, al
+						call			io_wait
 
-						; ICW2: vector offsets
-						mov 			al, 0x08
-						out 			i8259_MASTER_DATA, al
-						mov 			al, 0x70
-						out 			i8259_SLAVE_DATA, al
 
-						; ICW3: wiring
-						mov 			al, 0x04       			 	; master: slave on IRQ2: 0100b
-						out 			i8259_MASTER_DATA, al
-						mov 			al, 0x02        			; slave: cascade identity 2
-						out 			i8259_SLAVE_DATA, al
+						mov 			al, i8259_MASTER_INT
+						out 			i8259_MASTER_DATA, al				; ICW2: Master PIC vector offset
+						call			io_wait
+						mov 			al, i8259_SLAVE_INT
+						out 			i8259_SLAVE_DATA, al				; ICW2: Slave PIC vector offset
+						call			io_wait
+
+						; Master: cascade (IRQ2 => 1 << IRQ2  = 0x04)
+						mov 			al, 0x04       			 				; master: slave on IRQ2: 0100b
+						out 			i8259_MASTER_DATA, al				; ICW3: tell Master PIC that there is a slave PIC at IRQ2
+						call			io_wait
+
+						; Slave: numéro de ligne sur master (2)
+						mov 			al, 0x02        						; slave: cascade identity 2
+						out 			i8259_SLAVE_DATA, al				; ICW3: tell Slave PIC its cascade identity (0000 0010)
+						call			io_wait
 
 						; ICW4: 8086 mode
-						mov 			al, 0x01
+						mov 			al, ICW4_8086
 						out 			i8259_MASTER_DATA, al
+						call			io_wait
+
+						mov 			al, ICW4_8086
 						out 			i8259_SLAVE_DATA, al
+						call			io_wait
 
-						; Masques: unmask IRQ2 (master) et IRQ12 (slave)
-						in  			al, i8259_MASTER_DATA
-						and 			al, 0xFB        ; clear bit2
+
+						; Unmask both PICs.
+						xor				al,al
 						out 			i8259_MASTER_DATA, al
-
-						in  			al, i8259_SLAVE_DATA
-						and 			al, 0xEF        ; clear bit4
 						out 			i8259_SLAVE_DATA, al
 
 						pop 			ax
 						ret
-
-
 
 ; ---------------------------------------------------------------------------
 ; Handler par défaut: fait juste IRET
@@ -255,3 +268,4 @@ pic_init:
 ; ---------------------------------------------------------------------------
 default_isr:
 						iret
+

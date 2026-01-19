@@ -47,8 +47,8 @@ bits				16
 %include 		"./services/macros.asm"
 %include 		"./drivers/debug.asm"
 %include		"./drivers/gfx_cgam.asm"
-%include		"./drivers/mouse_ps2.asm"
-%include 		"./drivers/keyboard_ps2.asm"
+;%include		"./drivers/mouse_ps2.asm"
+;%include 		"./drivers/keyboard_ps2.asm"
 %include 		"./services/generic.asm"
 
 err_vganok	db				'VGA Not Initialized',0
@@ -63,6 +63,8 @@ reset:
 
 						; detection de la mémoire totale
 						call			ram_setup
+						sti
+
 						; modification du stack en "haut" de la RAM
 						mov 			ax, dx
 						sub 			ax, 0x0400       ; réserver les 16 dernier KB
@@ -75,41 +77,60 @@ reset:
 						; installé une table d'interruption "dummy"
 						call 			ivt_setup
 
-						; initialisation des PIC 8259A
-						call 			pic_init
-						sti
-
 						; load Roms
 						call 			setup_load_rom
 
 						; on vérifie que le BIOS VGA a installé une INT 10h
 						call			setup_check_vga
 
-						; on active le mode graphique
-						; call			gfx_init
-
-						call 			kbd_init
-
-						call 			mouse_reset
-						call			mouse_init
-
-
-
 						; on initialise le mode texte 80x25 par défaut DEBUG
 						mov				ax, 0x0003
 						int				10h
 
+						cli
+						; initialisation des PIC 8259A
+						call 			pic_init
+;						call 			kbd_init
+
+						; test IRQ 0
+						mov				ax,cs
+						mov				dx,ax
+						mov				bx,test_isr
+						mov				ax,i8259_MASTER_INT
+
+						call			ivt_setvector
+
+						sti
+
+						; on active le mode graphique
+						; call			gfx_init
+
+						;call 			mouse_reset
+						;call			mouse_init
 endless:
+						mov				ax,0x0050
+						mov				ds,ax
+
+;						in  			al, 0x64
+;						test 			al, 1          				; OBF
+;						jz  			.no
+;						in  			al, 0x60        			; scancode dans AL
+;						mov				byte [0x0001],al
+;.no:
+
 						mov				dx,0
 						call			scr_gotoxy
 
-						mov				ax,BDA_MOUSE_SEG
-						mov				ds,ax
-
 						mov				ax,0					; adresse début dump
 						mov				si,ax
-						mov				cx, 0x10
+						mov				cx, 0x20
 .dump:
+						test 			cx,0x000F
+						jnz				.sameline
+						inc				dh
+						xor				dl,dl
+						call			scr_gotoxy
+.sameline:
 						mov				al,[ds:si]
 						inc				si
 
@@ -126,6 +147,26 @@ endless:
 						loop			.dump
 
 						jmp				endless
+
+
+; -----------------------------------------------------------
+; Keyboard ISR (IRQ -> INT)
+; -----------------------------------------------------------
+test_isr:
+            pusha
+            push        ds
+
+            mov         ax,0x0050
+            mov         ds,ax
+            inc         byte [0x0005]
+
+            mov         al, PIC_EOI            ; EOI master
+            out         i8259_MASTER_CMD, al
+
+            pop         ds
+            popa
+            iret
+
 
 ; ------------------------------------------------------------------
 ; Padding jusqu'au reset vector

@@ -118,12 +118,12 @@ mouse_init:
 						; Activer le port souris (AUX)
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_EN_AUX
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 
 						; Lire command byte
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_RD_CBYTE
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 						call 			ps2_read						         ; AL = command byte
 
 						; Activer IRQ12 (bit 1)
@@ -133,10 +133,10 @@ mouse_init:
 						; Réécrire command byte  (commande 0x60 envoyée à 0x64)
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_WR_CBYTE
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 						call 			ps2_wait_ready_write
 						mov  			al, ah
-						out  			PS2_PORT_BUFFER, al
+						out  			i8042_PS2_DATA, al
 
 						call 			ps2_flush_output
 
@@ -230,7 +230,7 @@ mouse_detect_packet_len:
 ; attendre que le 8042 soit pret a recevoir de l'information
 ps2_wait_ready_write:
 .wait:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 02h              ; IBF
 						jnz  			.wait
 						ret
@@ -238,7 +238,7 @@ ps2_wait_ready_write:
 ; attendre que le 8042 soit pret a lire de l'information
 ps2_wait_ready_read:
 .wait:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 01h              ; OBF
 						jz   			.wait
 						ret
@@ -246,16 +246,16 @@ ps2_wait_ready_read:
 ; lire de l'information depuis le 8042
 ps2_read:
 						call 			ps2_wait_ready_read
-						in   			al, PS2_PORT_BUFFER
+						in   			al, i8042_PS2_DATA
 						ret
 
 ; vide le buffer interne du 8042 (information(s) ignorée(s))
 ps2_flush_output:
 .flush:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 01h
 						jz   			.done
-						in   			al, PS2_PORT_BUFFER
+						in   			al, i8042_PS2_DATA
 						jmp  			.flush
 .done:
 						ret
@@ -271,11 +271,11 @@ mouse_sendcmd:
 						call 			ps2_wait_ready_write
 
 						mov  			al, I8042_CMD_WRITE_AUX
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 
 						call 			ps2_wait_ready_write
  						mov  			al, bl
-						out  			PS2_PORT_BUFFER, al
+						out  			i8042_PS2_DATA, al
 
 						call 			ps2_read        					; AL = réponse
 						cmp  			al, MOUSE_ACK
@@ -309,7 +309,7 @@ mouse_handler:
 					push				ds
 
 				 	; vider le byte qui a déclenché IRQ12
-			    in   				al, PS2_PORT_BUFFER
+			    in   				al, i8042_PS2_DATA
 
 					mov 				dx, 0xE9        	  ; debugcon
     			mov  				al, '*'
@@ -324,10 +324,6 @@ mouse_handler:
 					popa
 					iret
 
-
-
-
-
 					; sauvegarder tout les registres
 					pusha
 					push				ds
@@ -338,7 +334,7 @@ mouse_handler:
 
 					; lire un octet depuis le contrôleur
 					; et le stocker dans le buffer
-					in  				al, PS2_PORT_BUFFER   					; lire octet souris
+					in  				al, i8042_PS2_DATA   					; lire octet souris
 					mov 				byte [BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
 					inc					byte [BDA_MOUSE_IDX]
 
