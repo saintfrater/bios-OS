@@ -137,18 +137,16 @@ endless:
 ; -----------------------------------------------------------
 test_isr:
             push			  ax
-            push        fs
 
-            mov         ax,BDA_DATA_SEG
-            mov         fs,ax
-            inc         byte [fs:0x000F]
-
-						inc         byte [fs:0x0005]
+            ; push        fs
+            ;mov         ax,BDA_DATA_SEG
+            ;mov         fs,ax
+						;inc         byte [fs:0x0005]
 
             mov         al, PIC_EOI            ; EOI master
             out         i8259_MASTER_CMD, al
-
-            pop         fs
+            ; pop         fs
+						
             pop					ax
             iret
 

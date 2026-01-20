@@ -82,25 +82,27 @@ mouse_arrow:
 ; ------------------------------------------------------------
 mouse_reset:
 						mov				ax, BDA_DATA_SEG
-						mov				ds,ax
+						mov				fs,ax
 
 						; effacer les variables du drivers
-						mov				byte [BDA_MOUSE_IDX],0
-						mov				dword [BDA_MOUSE_BUFFER],0
-						mov				byte [DBA_MOUSE_PACKETLEN],3
+						mov				byte  [fs:BDA_MOUSE + mouse.idx],0
+						mov				dword [fs:BDA_MOUSE + mouse.buffer],0
+						mov				byte  [fs:BDA_MOUSE + mouse.packetlen],3
 
-						mov				byte [BDA_MOUSE_STATUS],0
-						mov				word [BDA_MOUSE_X],320					; vous pouvez aussi préciser le centre
-						mov				word [BDA_MOUSE_Y],100					; vous pouvez aussi préciser le centre
+						mov				byte [fs:BDA_MOUSE + mouse.status],0
+						mov				word [fs:BDA_MOUSE + mouse.x],320					; vous pouvez aussi préciser le centre
+						mov				word [fs:BDA_MOUSE + mouse.y],100					; vous pouvez aussi préciser le centre
 
 						; experiemntal
-						mov				word [BDA_MOUSE_WHEEL],0
+						mov				word [fs:BDA_MOUSE + mouse.wheel],0
 
-						mov			 	byte [BDA_CURSOR_VISIBLE], 1
-						mov       word [BDA_CURSOR_OLDX], 0
-						mov       word [BDA_CURSOR_OLDY], 0
+						mov			 	byte [fs:BDA_MOUSE + mouse.cur_visible], 1
+						mov       word [fs:BDA_MOUSE + mouse.cur_oldx], 0
+						mov       word [fs:BDA_MOUSE + mouse.cur_oldy], 0
 
-						mov 			word [BDA_CURSOR_PTR], mouse_arrow
+						mov 			ax, cs
+						mov 			word [fs:BDA_MOUSE + mouse.cur_seg], ax
+						mov 			word [fs:BDA_MOUSE + mouse.cur_ofs], mouse_arrow
 						ret
 
 ; ------------------------------------------------------------
@@ -200,7 +202,10 @@ mouse_init:
 ;
 ; ------------------------------------------------------------
 mouse_detect_packet_len:
-						mov 			byte [DBA_MOUSE_PACKETLEN], 3
+						mov				ax, BDA_DATA_SEG
+						mov				fs,ax
+
+						mov 			byte [fs:BDA_MOUSE + mouse.packetlen], 3
 
 						; SET_RATE + 200
 						mov 			bl, MOUSE_SET_RATE
@@ -231,7 +236,7 @@ mouse_detect_packet_len:
 						je  			.is4
 						ret
 .is4:
-						mov 			byte [DBA_MOUSE_PACKETLEN], 4
+						mov 			byte [fs:BDA_MOUSE + mouse.packetlen], 4
 						ret
 
 ; ------------------------------------------------------------
@@ -332,51 +337,51 @@ isr_mouse_handler:
 
 					; lire un octet depuis le contrôleur et le stocker dans le buffer
 					in  				al, i8042_PS2_DATA   					; lire octet souris
-					movzx 			bx, byte [BDA_MOUSE_IDX]
-					mov 				byte [BDA_MOUSE_BUFFER + bx], al
-					inc					byte [BDA_MOUSE_IDX]
+					movzx 			bx, byte [BDA_MOUSE + mouse.idx]
+					mov 				byte [BDA_MOUSE + mouse.buffer + bx], al
+					inc					byte [BDA_MOUSE + mouse.idx]
 
 					; vérifier si le packet est complet
-					mov 				al, [DBA_MOUSE_PACKETLEN]
-					cmp 				byte [BDA_MOUSE_IDX], al
+					mov 				al, [BDA_MOUSE + mouse.packetlen]
+					cmp 				byte [BDA_MOUSE + mouse.idx], al
 					jne 				.done
 
 					; packet complet, on decode les données
-					mov 				byte [BDA_MOUSE_IDX], 0
-					mov 				al, [BDA_MOUSE_BUFFER]					; status
-					mov 				[BDA_MOUSE_STATUS], al
+					mov 				byte [BDA_MOUSE + mouse.idx], 0
+					mov 				al, [BDA_MOUSE + mouse.buffer]					; status
+					mov 				[BDA_MOUSE + mouse.status], al
 
-					mov					al, [BDA_MOUSE_BUFFER+1]				; delta X
+					mov					al, [BDA_MOUSE + mouse.buffer+1]				; delta X
 					cbw
-					add					[BDA_MOUSE_X], ax
+					add					[BDA_MOUSE + mouse.x], ax
 
-					mov					al, [BDA_MOUSE_BUFFER+2]				; delta Y
+					mov					al, [BDA_MOUSE + mouse.buffer+2]				; delta Y
 					cbw
-					sub					[BDA_MOUSE_Y], ax
+					sub					[BDA_MOUSE + mouse.y], ax
 
 					; si packetlen = 4, gérer la molette; experimental
-					mov					al, [BDA_MOUSE_BUFFER+3]				; delta Wheel
+					mov					al, [BDA_MOUSE + mouse.buffer+3]				; delta Wheel
 					cbw
-					add					word [BDA_MOUSE_WHEEL], ax
+					add					word [BDA_MOUSE + mouse.wheel], ax
 
 					; clamp X
-					cmp 				word [BDA_MOUSE_X], 0
+					cmp 				word [BDA_MOUSE + mouse.x], 0
 					jge 				.x_ok_low
-					mov 				word [BDA_MOUSE_X], 0
+					mov 				word [BDA_MOUSE + mouse.x], 0
 .x_ok_low:
-					cmp 				word [BDA_MOUSE_X], 639
+					cmp 				word [BDA_MOUSE + mouse.x], 639
 					jle					.x_ok_high
-					mov 				word [BDA_MOUSE_X], 639
+					mov 				word [BDA_MOUSE + mouse.x], 639
 .x_ok_high:
 
 					; clamp Y
-					cmp 				word [BDA_MOUSE_Y], 0
+					cmp 				word [BDA_MOUSE + mouse.y], 0
 					jge 				.y_ok_low
-					mov 				word [BDA_MOUSE_Y], 0
+					mov 				word [BDA_MOUSE + mouse.y], 0
 .y_ok_low:
-					cmp 				word [BDA_MOUSE_Y], 199
+					cmp 				word [BDA_MOUSE + mouse.y], 199
 					jle 				.y_ok_high
-					mov 				word [BDA_MOUSE_Y], 199
+					mov 				word [BDA_MOUSE + mouse.y], 199
 .y_ok_high:
 					; restaurer l'ancien arrière plan du curseur
 					;call				gfx_cursor_restorebg
