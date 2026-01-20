@@ -79,8 +79,8 @@ reset:
 						call			setup_check_vga
 
 						; on initialise le mode texte 80x25 par défaut DEBUG
-						mov				ax, 0x0003
-						int				10h
+						;mov				ax, 0x0003
+						;int				10h
 
 						; enable IRQ 0
             mov       ah,IRQ_ENABLED
