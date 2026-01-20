@@ -384,12 +384,12 @@ isr_mouse_handler:
 					mov 				word [BDA_MOUSE + mouse.y], 199
 .y_ok_high:
 					; restaurer l'ancien arrière plan du curseur
-					;call				gfx_cursor_restorebg
+					call				gfx_cursor_restorebg
 
 					; sauvegarder le nouvel arrière plan du curseur
-					;call				gfx_cursor_savebg
+					call				gfx_cursor_savebg
 
-					;call				gfx_cursor_draw
+					call				gfx_cursor_draw
 
 .done:
 					mov 				al, 0x20

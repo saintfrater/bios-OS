@@ -33,6 +33,34 @@
 %define CGA_ODD_BANK  0x2000
 
 ; ------------------------------------------------------------
+; TABLE DE SAUT (VECTEURS API)
+; Cette table doit être située au début du driver pour être
+; accessible par la GUI à des offsets fixes.
+; ------------------------------------------------------------
+gfx_api_table:
+    jmp gfx_init            ; Offset +0: Initialisation
+    jmp gfx_putpixel        ; Offset +3: Dessin pixel
+    jmp gfx_getpixel        ; Offset +6: Lecture pixel
+    jmp gfx_fill_rect       ; Offset +9: Remplissage rectangle (Nouveau)
+    jmp gfx_invert_rect     ; Offset +12: Inversion (Nouveau pour Menus)
+    jmp gfx_draw_hline      ; Offset +15: Ligne horizontale rapide (Nouveau)
+
+; ------------------------------------------------------------
+; COMMENTAIRE SUR LA MÉTHODE D'APPEL
+;
+; Pour appeler une fonction du driver depuis votre GUI :
+; 1. Définissez l'adresse de base du driver (ex: GFX_DRIVER_BASE)
+; 2. Utilisez un call indirect via l'offset de la table.
+;
+; Exemple en ASM pour remplir un rectangle :
+;    call [GFX_DRIVER_BASE + 9]  ; Appelle gfx_fill_rect
+;
+; Cette méthode isole totalement votre bibliothèque GUI du driver.
+; Si vous changez le code du driver, tant que la table au début
+; ne change pas d'ordre, la GUI n'a pas besoin d'être recompilée.
+; ------------------------------------------------------------
+
+; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ;
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
@@ -88,10 +116,35 @@ gfx_calc_addr:
 ;
 ;   CX = x (0..639)
 ;   DX = y (0..199)
+;   ES = Target Segment (usually VIDEO_SEG)
+;   BL = color (0=black, !=0=white)
+; ------------------------------------------------------------
+gfx_local_putpixel:
+						call   		gfx_calc_addr
+
+						; write
+						cmp  	   	bl, 0
+						je    	  .clear
+.set:
+						or   		  byte [es:di], ah
+						jmp       .done
+
+.clear:
+						not       ah
+						and       byte [es:di], ah
+
+.done:
+						ret
+
+; ------------------------------------------------------------
+; Dessine un pixel, accès VRAM direct.
+;
+;   CX = x (0..639)
+;   DX = y (0..199)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
 gfx_putpixel:
-						pusha
+						push			ax
 						push  	  di
 						push    	es
 
@@ -113,7 +166,7 @@ gfx_putpixel:
 .done:
 						pop 	    es
 						pop   	  di
-						popa
+						pop				ax
 						ret
 
 ; ------------------------------------------------------------
@@ -121,7 +174,6 @@ gfx_putpixel:
 ; Out: AL=0/1
 ; ------------------------------------------------------------
 gfx_getpixel:
-						push    	ax
 						push    	di
 						push    	es
 
@@ -132,7 +184,6 @@ gfx_getpixel:
 
 						pop     	es
 						pop     	di
-						pop     	ax
 						ret
 
 ; ------------------------------------------------------------
@@ -510,7 +561,7 @@ gfx_cursor_restorebg:
 						jl      	.no_odd_bank
 						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
 .no_odd_bank:
-						
+
 						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
 						mov     	si, ax																; DS:SI = buffer de sauvegarde
 						mov     	bx, 8
