@@ -9,6 +9,5 @@ build.sh
 run.bat
 .gdbinit
 .gdb_history
-link.ld
 .gitignore
-
+*.ld

@@ -48,41 +48,69 @@
 ; information relative à la souris
 ;
 
-%define BDA_MOUSE_SEG					0x0050
+%define BDA_DATA_SEG					0x0050
+%define BDA_MOUSE             0x0000
 
-%define BDA_MOUSE_BUFFER			0x0000							; dword; buffer (jusqu'à 4 octets)
-%define	BDA_MOUSE_IDX					0x0004							; byte 0..3
-%define DBA_MOUSE_PACKETLEN		0x0005
-%define DBA_CURSOR_MASK				0x0006              ; byte pixels mask (bit per pixel)
-%define BDA_MOUSE_STATUS			0x0007							; byte
-%define	BDA_MOUSE_X						0x0008							; word
-%define	BDA_MOUSE_Y						0x000A							; word
-%define	BDA_MOUSE_WHEEL				0x000C							; word
+struc  mouse
+        .buffer       resb  4         ; i8042 input buffer
+        .idx          resb  1         ; index in the buffer
+        .packetlen    resb  1         ; max buffer len (3 ou 4)
 
-%define BDA_CURSOR_VISIBLE    0x000E              ; byte (0/1)
-%define BDA_CURSOR_OLDX       0x000F              ; word
-%define BDA_CURSOR_OLDY       0x0011              ; word
-%define BDA_CURSOR_NEWX       0x0013              ; word
-%define BDA_CURSOR_NEWY       0x0015              ; word
-%define BDA_CURSOR_BITOFF     0x0017              ; byte 0..7 bits d'offset  (x&7)
-%define BDA_CURSOR_BYTES      0x0019              ; byte 2 ou 3 bytes as source for cursor image
-%define BDA_CURSOR_SAVED      0x001A              ; flag if image saved
-%define BDA_CURSOR_PTR        0x001B              ; pointeur vers l'image du curseur
-%define BDA_CURSOR_BG         0x0020              ; 48 bytes max (3*16)
+        .status       resb  1         ; mouse status (button etc)
+        .wheel        resb  1         ; if a packet size is 4; experimental
+        .x            resw  1         ; 
+        .y            resw  1
+        ; cursor management
+        .cur_oldx     resw  1
+        .cur_oldy     resw  1
+        .cur_newx     resw  1
+        .cur_newy     resw  1
+        .cur_visible  resb  1
+        .cur_seg      resw  1         ; segment / offset of the pointer
+        .cur_ofs      resw  1
+        .cur_mask     resb  1         ; pixels mask (bit per pixel)
+        .cur_bit_ofs  resb  1         ; 0..7 bits d'offset (x&7)
+        .cur_bytes    resb  1         ; byte 2 ou 3 bytes as source for cursor image
+        .bkg_saved    resb  1         ; background saved 
+        .bkg_buffer   resb  48        ; buffer for saved background
+endstruc
 
 ; -----------------------------------------------------------------------------------
 ; PC components I/O ports
 ; -----------------------------------------------------------------------------------
 
 ; controleur clavier/souris i8042 (AT-PS/2)
-%define PS2_PORT_BUFFER      0x60
-%define PS2_PORT_CTRL        0x64
+%define i8042_PS2_DATA      0x60
+%define i8042_PS2_CTRL      0x64
 
 ; PIC 8259 ports (Programmable Interrupt Controller)
+; PIC 1 : Master
 %define i8259_MASTER_CMD		0x20
 %define i8259_MASTER_DATA		0x21
+; PIC 2 : Slave
 %define i8259_SLAVE_CMD		  0xA0
 %define i8259_SLAVE_DATA		0xA1
+
+; i8259 Commands
+%define ICW1_ICW4           0x01      ; Indicates that ICW4 will be present
+%define ICW1_SINGLE	        0x02	    ; Single (cascade) mode
+%define ICW1_INTERVAL4      0x04      ; Call address interval 4 (8)
+%define ICW1_LEVEL          0x08      ; Level triggered (edge) mode
+%define ICW1_INIT           0x10      ; Initialization - required!
+
+%define ICW4_8086           0x01      ; 8086/88 (MCS-80/85) mode
+%define ICW4_AUTO	          0x02		  ; Auto (normal) EOI
+%define ICW4_BUF_SLAVE	    0x08		  ; Buffered mode/slave
+%define ICW4_BUF_MASTER	    0x0C		  ; Buffered mode/master
+%define ICW4_SFNM	          0x10		  ; Special fully nested (not)
+%define PIC_EOI             0x20
+
+; Remap : IRQ0..7 -> 0x08..0x0F, IRQ8..15 -> 0x70..0x77
+%define i8259_MASTER_INT    0x08
+%define i8259_SLAVE_INT     0x70
+
+%define IRQ_ENABLED         0x00
+%define IRQ_DISABLED        0x01
 
 ; -----------------------------------------------------------------------------------
 ;  bda_setup
@@ -92,18 +120,10 @@ bda_setup:
             pusha
             push			ds
 
-            mov 			ax, BDA_SEGMENT
+            mov 			ax, BDA_DATA_SEG
             mov 			es, ax
 
-            mov 			ax, 0
-            mov 			cx,0xFF
-            xor 			di, di
-            rep       stosb                ; clear BDA area
-
-            mov 			ax, BDA_MOUSE_SEG
-            mov 			es, ax
-
-            mov 			ax, 0
+            mov 			ax, 0x5F
             mov 			cx,0xFF
             xor 			di, di
             rep       stosb                ; clear BDA area

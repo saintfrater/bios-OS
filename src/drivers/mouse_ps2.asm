@@ -34,7 +34,10 @@
 %define I8042_CMD_EN_AUX     0xA8
 %define I8042_CMD_RD_CBYTE   0x20
 %define I8042_CMD_WR_CBYTE   0x60
+%define I8042_CMD_DIS_KBD		 0xAD
+%define I8042_CMD_DIS_MOUSE	 0xA7
 %define I8042_CMD_WRITE_AUX  0xD4
+
 
 %define CURSOR_W               16
 %define CURSOR_H               16
@@ -78,26 +81,28 @@ mouse_arrow:
 ;
 ; ------------------------------------------------------------
 mouse_reset:
-						mov				ax, BDA_MOUSE_SEG
-						mov				ds,ax
+						mov				ax, BDA_DATA_SEG
+						mov				fs,ax
 
 						; effacer les variables du drivers
-						mov				byte [BDA_MOUSE_IDX],0
-						mov				dword [BDA_MOUSE_BUFFER],0
-						mov				byte [DBA_MOUSE_PACKETLEN],3
+						mov				byte  [fs:BDA_MOUSE + mouse.idx],0
+						mov				dword [fs:BDA_MOUSE + mouse.buffer],0
+						mov				byte  [fs:BDA_MOUSE + mouse.packetlen],3
 
-						mov				byte [BDA_MOUSE_STATUS],0
-						mov				word [BDA_MOUSE_X],320					; vous pouvez aussi préciser le centre
-						mov				word [BDA_MOUSE_Y],100					; vous pouvez aussi préciser le centre
+						mov				byte [fs:BDA_MOUSE + mouse.status],0
+						mov				word [fs:BDA_MOUSE + mouse.x],320					; vous pouvez aussi préciser le centre
+						mov				word [fs:BDA_MOUSE + mouse.y],100					; vous pouvez aussi préciser le centre
 
 						; experiemntal
-						mov				word [BDA_MOUSE_WHEEL],0
+						mov				word [fs:BDA_MOUSE + mouse.wheel],0
 
-						mov			 	byte [BDA_CURSOR_VISIBLE], 1
-						mov       word [BDA_CURSOR_OLDX], 0
-						mov       word [BDA_CURSOR_OLDY], 0
+						mov			 	byte [fs:BDA_MOUSE + mouse.cur_visible], 1
+						mov       word [fs:BDA_MOUSE + mouse.cur_oldx], 0
+						mov       word [fs:BDA_MOUSE + mouse.cur_oldy], 0
 
-						mov 			word [BDA_CURSOR_PTR], mouse_arrow
+						mov 			ax, cs
+						mov 			word [fs:BDA_MOUSE + mouse.cur_seg], ax
+						mov 			word [fs:BDA_MOUSE + mouse.cur_ofs], mouse_arrow
 						ret
 
 ; ------------------------------------------------------------
@@ -112,18 +117,29 @@ mouse_init:
 						; reset des valeurs internes
 						call			mouse_reset
 
-						; Activer le port souris
-						call 			ps2_flush_output
+						cli
+
+						call 			ps2_wait_ready_write
+						mov 			al, I8042_CMD_DIS_KBD 		; Disable Keyboard
+    				out  			i8042_PS2_CTRL, al
+
+						call			ps2_wait_ready_write
+						mov  			al, I8042_CMD_DIS_MOUSE 	; Disable Mouse
+						out  			i8042_PS2_CTRL, al
+
+						; Vider tout ce qui traîne
+    				call ps2_flush_output
 
 						; Activer le port souris (AUX)
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_EN_AUX
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 
 						; Lire command byte
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_RD_CBYTE
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
+
 						call 			ps2_read						         ; AL = command byte
 
 						; Activer IRQ12 (bit 1)
@@ -133,10 +149,10 @@ mouse_init:
 						; Réécrire command byte  (commande 0x60 envoyée à 0x64)
 						call 			ps2_wait_ready_write
 						mov  			al, I8042_CMD_WR_CBYTE
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 						call 			ps2_wait_ready_write
 						mov  			al, ah
-						out  			PS2_PORT_BUFFER, al
+						out  			i8042_PS2_DATA, al
 
 						call 			ps2_flush_output
 
@@ -159,24 +175,22 @@ mouse_init:
 						call 			mouse_detect_packet_len
 
 						; installer ISR IRQ12 (INT 74h)
-						cli
 
-						mov				si, 0x74 * 4
-						xor				ax, ax
-						mov				ds, ax
+						mov       ax,cs
+            mov       dx,ax
+            mov       bx, isr_mouse_handler
 
-						mov				word [ds:si], mouse_handler
-						add				si, 2
-						mov				ax, cs
-						mov				word [ds:si], cs
+            mov       ax, i8259_SLAVE_INT	          ; base offset IRQ8
+            add       ax,4                          ; IRQ 12
+
+            call      ivt_setvector
+
+            ; enable IRQ 1
+            mov       ah,IRQ_ENABLED
+            mov       al, 12
+            call      pic_set_irq_mask
 
 						sti
-
-mov dx, 0x00E9
-mov al, '!'
-out dx, al
-
-
 						pop				ax
 						pop				ds
 						ret
@@ -188,7 +202,10 @@ out dx, al
 ;
 ; ------------------------------------------------------------
 mouse_detect_packet_len:
-						mov 			byte [DBA_MOUSE_PACKETLEN], 3
+						mov				ax, BDA_DATA_SEG
+						mov				fs,ax
+
+						mov 			byte [fs:BDA_MOUSE + mouse.packetlen], 3
 
 						; SET_RATE + 200
 						mov 			bl, MOUSE_SET_RATE
@@ -219,7 +236,7 @@ mouse_detect_packet_len:
 						je  			.is4
 						ret
 .is4:
-						mov 			byte [DBA_MOUSE_PACKETLEN], 4
+						mov 			byte [fs:BDA_MOUSE + mouse.packetlen], 4
 						ret
 
 ; ------------------------------------------------------------
@@ -229,16 +246,21 @@ mouse_detect_packet_len:
 
 ; attendre que le 8042 soit pret a recevoir de l'information
 ps2_wait_ready_write:
+						push			cx
+						mov				cx, 1000
 .wait:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 02h              ; IBF
-						jnz  			.wait
+						jz				.ok
+						loop  			.wait
+.ok:
+						pop				cx
 						ret
 
 ; attendre que le 8042 soit pret a lire de l'information
 ps2_wait_ready_read:
 .wait:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 01h              ; OBF
 						jz   			.wait
 						ret
@@ -246,16 +268,16 @@ ps2_wait_ready_read:
 ; lire de l'information depuis le 8042
 ps2_read:
 						call 			ps2_wait_ready_read
-						in   			al, PS2_PORT_BUFFER
+						in   			al, i8042_PS2_DATA
 						ret
 
 ; vide le buffer interne du 8042 (information(s) ignorée(s))
 ps2_flush_output:
 .flush:
-						in   			al, PS2_PORT_CTRL
+						in   			al, i8042_PS2_CTRL
 						test 			al, 01h
 						jz   			.done
-						in   			al, PS2_PORT_BUFFER
+						in   			al, i8042_PS2_DATA
 						jmp  			.flush
 .done:
 						ret
@@ -271,11 +293,11 @@ mouse_sendcmd:
 						call 			ps2_wait_ready_write
 
 						mov  			al, I8042_CMD_WRITE_AUX
-						out  			PS2_PORT_CTRL, al
+						out  			i8042_PS2_CTRL, al
 
 						call 			ps2_wait_ready_write
  						mov  			al, bl
-						out  			PS2_PORT_BUFFER, al
+						out  			i8042_PS2_DATA, al
 
 						call 			ps2_read        					; AL = réponse
 						cmp  			al, MOUSE_ACK
@@ -304,102 +326,75 @@ mouse_sendcmd:
 ;    bit 6 = X overflow
 ;    bit 7 = Y overflow
 ; ------------------------------------------------------------
-mouse_handler:
-					pusha
-					push				ds
-
-				 	; vider le byte qui a déclenché IRQ12
-			    in   				al, PS2_PORT_BUFFER
-
-					mov 				dx, 0xE9        	  ; debugcon
-    			mov  				al, '*'
-    			out  				dx, al              ; imprime directement
-
-					; EOI PIC (slave puis master)
-					mov  				al, 0x20
-					out  				0xA0, al
-					out  				0x20, al
-
-					pop					ds
-					popa
-					iret
-
-
-
-
-
+isr_mouse_handler:
 					; sauvegarder tout les registres
 					pusha
 					push				ds
 
 					; use BDA segment
-					mov					ax,BDA_MOUSE_SEG
+					mov					ax,BDA_DATA_SEG
 					mov					ds,ax
 
-					; lire un octet depuis le contrôleur
-					; et le stocker dans le buffer
-					in  				al, PS2_PORT_BUFFER   					; lire octet souris
-					mov 				byte [BDA_MOUSE_BUFFER + BDA_MOUSE_IDX], al
-					inc					byte [BDA_MOUSE_IDX]
+					; lire un octet depuis le contrôleur et le stocker dans le buffer
+					in  				al, i8042_PS2_DATA   					; lire octet souris
+					movzx 			bx, byte [BDA_MOUSE + mouse.idx]
+					mov 				byte [BDA_MOUSE + mouse.buffer + bx], al
+					inc					byte [BDA_MOUSE + mouse.idx]
 
 					; vérifier si le packet est complet
-					mov 				al, [DBA_MOUSE_PACKETLEN]
-					cmp 				byte [BDA_MOUSE_IDX], al
+					mov 				al, [BDA_MOUSE + mouse.packetlen]
+					cmp 				byte [BDA_MOUSE + mouse.idx], al
 					jne 				.done
 
 					; packet complet, on decode les données
-					mov 				byte [BDA_MOUSE_IDX], 0
-					mov 				al,'*'			; pour debug
-					call				debug_putc
+					mov 				byte [BDA_MOUSE + mouse.idx], 0
+					mov 				al, [BDA_MOUSE + mouse.buffer]					; status
+					mov 				[BDA_MOUSE + mouse.status], al
 
-
-					mov 				al, [BDA_MOUSE_BUFFER]					; status
-					mov 				[BDA_MOUSE_STATUS], al
-
-					mov					al, [BDA_MOUSE_BUFFER+1]				; delta X
+					mov					al, [BDA_MOUSE + mouse.buffer+1]				; delta X
 					cbw
-					add					[BDA_MOUSE_X], ax
+					add					[BDA_MOUSE + mouse.x], ax
 
-					mov					al, [BDA_MOUSE_BUFFER+2]				; delta Y
+					mov					al, [BDA_MOUSE + mouse.buffer+2]				; delta Y
 					cbw
-					sub					[BDA_MOUSE_Y], ax
+					sub					[BDA_MOUSE + mouse.y], ax
 
 					; si packetlen = 4, gérer la molette; experimental
-					mov					al, [BDA_MOUSE_BUFFER+3]				; delta Wheel
+					mov					al, [BDA_MOUSE + mouse.buffer+3]				; delta Wheel
 					cbw
-					add					word [BDA_MOUSE_WHEEL], ax
+					add					word [BDA_MOUSE + mouse.wheel], ax
 
 					; clamp X
-					cmp 				word [BDA_MOUSE_X], 0
+					cmp 				word [BDA_MOUSE + mouse.x], 0
 					jge 				.x_ok_low
-					mov 				word [BDA_MOUSE_X], 0
+					mov 				word [BDA_MOUSE + mouse.x], 0
 .x_ok_low:
-					cmp 				word [BDA_MOUSE_X], 639
+					cmp 				word [BDA_MOUSE + mouse.x], 639
 					jle					.x_ok_high
-					mov 				word [BDA_MOUSE_X], 639
+					mov 				word [BDA_MOUSE + mouse.x], 639
 .x_ok_high:
 
 					; clamp Y
-					cmp 				word [BDA_MOUSE_Y], 0
+					cmp 				word [BDA_MOUSE + mouse.y], 0
 					jge 				.y_ok_low
-					mov 				word [BDA_MOUSE_Y], 0
+					mov 				word [BDA_MOUSE + mouse.y], 0
 .y_ok_low:
-					cmp 				word [BDA_MOUSE_Y], 199
+					cmp 				word [BDA_MOUSE + mouse.y], 199
 					jle 				.y_ok_high
-					mov 				word [BDA_MOUSE_Y], 199
+					mov 				word [BDA_MOUSE + mouse.y], 199
 .y_ok_high:
 					; restaurer l'ancien arrière plan du curseur
-					call				gfx_cursor_restorebg
+					;call				gfx_cursor_restorebg
 
 					; sauvegarder le nouvel arrière plan du curseur
-					call				gfx_cursor_savebg
+					;call				gfx_cursor_savebg
 
-					call				gfx_cursor_draw
+					;call				gfx_cursor_draw
 
 .done:
 					mov 				al, 0x20
-					out 				0xA0, al          ; EOI PIC esclave
-					out 				0x20, al          ; EOI PIC maître
+					out 				i8259_SLAVE_CMD, al      ; EOI PIC esclave
+					out 				i8259_MASTER_CMD, al     ; EOI PIC maître
 
 					; restaurer tous les registres
 					pop					ds
