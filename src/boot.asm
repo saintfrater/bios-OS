@@ -88,12 +88,10 @@ reset:
             call      pic_set_irq_mask
 
 						call 			kbd_init
-
-
 						sti
 
 						; on active le mode graphique
-						; call			gfx_init
+						call			gfx_init
 
 						;call 			mouse_reset
 						call			mouse_init
@@ -146,7 +144,7 @@ test_isr:
             mov         al, PIC_EOI            ; EOI master
             out         i8259_MASTER_CMD, al
             ; pop         fs
-						
+
             pop					ax
             iret
 
