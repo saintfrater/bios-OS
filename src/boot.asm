@@ -102,21 +102,48 @@ endless:
 						mov				ax,BDA_DATA_SEG
 						mov				ds,ax
 
-;						mov 			ax, [BDA_MOUSE + mouse.x]
-;						add 			ax, 80
-;						cmp 			ax,640
-;						jb				.moveok
-;
-;						mov 			ax,0
-;.moveok:
-;						mov 			 [BDA_MOUSE + mouse.x],ax
-;
-;						call 			gfx_cursor_move		
+						mov				dx,0x300
+						call			scr_gotoxy
 
+						mov				al, byte [BDA_TIMER]
+						call			scr_puthex8
+
+						cmp				byte [BDA_TIMER],5
+						ja				.skip2
+
+						mov 			ax, [BDA_MOUSE + mouse.x]
+						add 			ax, 25
+						cmp 			ax,640
+						jb				.moveok
+;
+						mov 			ax,0
+.moveok:
+						mov 			 [BDA_MOUSE + mouse.x],ax
+;
+						call 			gfx_cursor_move
+
+						cmp 			byte [BDA_MOUSE + mouse.buffer+1], 0
+						jge				.skip
+
+						mov				dx,0x400
+						call			scr_gotoxy
+
+						mov				al, byte [BDA_MOUSE + mouse.buffer+1]
+						call			scr_puthex8
+.skip:
+						cmp 			byte [BDA_MOUSE + mouse.buffer+2], 0
+						jge				.skip2
+
+						mov				dx,0x404
+						call			scr_gotoxy
+
+						mov				al, byte [BDA_MOUSE + mouse.buffer+2]
+						call			scr_puthex8
+.skip2:
 						mov				dx,0
 						call			scr_gotoxy
 
-						mov				ax,0					; adresse début dump
+						mov				ax,[BDA_MOUSE]									; adresse début dump
 						mov				si,ax
 						mov				cx, 0x20
 .dump:
@@ -150,14 +177,14 @@ endless:
 test_isr:
             push			  ax
 
-            ; push        fs
-            ;mov         ax,BDA_DATA_SEG
-            ;mov         fs,ax
-						;inc         byte [fs:0x0005]
+            push        fs
+            mov         ax,BDA_DATA_SEG
+            mov         fs,ax
+						inc         byte [fs:BDA_TIMER]
 
             mov         al, PIC_EOI            ; EOI master
             out         i8259_MASTER_CMD, al
-            ; pop         fs
+            pop         fs
 
             pop					ax
             iret

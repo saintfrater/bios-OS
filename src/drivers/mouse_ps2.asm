@@ -63,6 +63,7 @@ mouse_reset:
 						mov			 	byte [fs:BDA_MOUSE + mouse.cur_visible], 1
 						mov       word [fs:BDA_MOUSE + mouse.cur_x], 0
 						mov       word [fs:BDA_MOUSE + mouse.cur_y], 0
+						mov 			byte [fs:BDA_MOUSE + mouse.cur_drawing], 0
 
 						mov 			ax, cs
 						mov 			word [fs:BDA_MOUSE + mouse.cur_seg], ax
@@ -301,6 +302,7 @@ isr_mouse_handler:
 
 					; lire un octet depuis le contrôleur et le stocker dans le buffer
 					in  				al, i8042_PS2_DATA   					; lire octet souris
+
 					movzx 			bx, byte [BDA_MOUSE + mouse.idx]
 					mov 				byte [BDA_MOUSE + mouse.buffer + bx], al
 					inc					byte [BDA_MOUSE + mouse.idx]
@@ -308,20 +310,29 @@ isr_mouse_handler:
 					; vérifier si le packet est complet
 					mov 				al, [BDA_MOUSE + mouse.packetlen]
 					cmp 				byte [BDA_MOUSE + mouse.idx], al
-					jne 				.done
+					jb 					.done
 
 					; packet complet, on decode les données
 					mov 				byte [BDA_MOUSE + mouse.idx], 0
-					mov 				al, [BDA_MOUSE + mouse.buffer]					; status
-					mov 				[BDA_MOUSE + mouse.status], al
+					mov 				bl, [BDA_MOUSE + mouse.buffer]					; status
+					mov 				[BDA_MOUSE + mouse.status], bl
 
 					xor					ax,ax
-					mov  				al, byte [BDA_MOUSE + mouse.buffer+1]				; delta X
+					mov  				al, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
+					test				bl,00010000b														; signe X
+					jz					.x_pos
+					or 					al, 0xF0
+.x_pos:
 					cbw
 					add					[BDA_MOUSE + mouse.x], ax
 
+
 					xor					ax,ax
-					mov 				al, byte [BDA_MOUSE + mouse.buffer+2]				; delta Y
+					mov 				al, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
+					test				bl,00100000b														; signe Y
+					jz					.y_pos
+					or 					al, 0xF0
+.y_pos:
 					cbw
 					sub					[BDA_MOUSE + mouse.y], ax
 
@@ -349,14 +360,8 @@ isr_mouse_handler:
 					jle 				.y_ok_high
 					mov 				word [BDA_MOUSE + mouse.y], 199
 .y_ok_high:
-					; restaurer l'ancien arrière plan du curseur
-					call				gfx_cursor_restorebg
 
-					; sauvegarder le nouvel arrière plan du curseur
-					call				gfx_cursor_savebg
-
-					call				gfx_cursor_draw
-
+					;call 				gfx_cursor_move
 .done:
 					mov 				al, 0x20
 					out 				i8259_SLAVE_CMD, al      ; EOI PIC esclave

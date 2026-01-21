@@ -252,10 +252,15 @@ gfx_getpixel_fast:
 gfx_cursor_move:
 						pusha
 						push 			ds
+						push 			es
 
 						; move Data Segment
 						mov				ax, BDA_DATA_SEG
 						mov				ds, ax
+
+						cmp				byte [BDA_MOUSE + mouse.cur_drawing],0
+						jne				.done
+						mov 			byte [BDA_MOUSE + mouse.cur_drawing],1
 
 						mov		 		ax, VIDEO_SEG
 						mov		 		es, ax
@@ -265,31 +270,38 @@ gfx_cursor_move:
 						call			gfx_cursor_savebg
 
 						call 			gfx_cursor_draw
-
+						mov 			byte [BDA_MOUSE + mouse.cur_drawing],0
+.done:
+						pop 			es
 						pop 			ds
-
 						popa
 						ret
 
 ; ------------------------------------------------------------
-; Dessine le curseur 16x16 AND/XOR à [BDA_CURSOR_NEWX],[BDA_CURSOR_NEWY]
+; Dessine le curseur 16x16 AND/XOR à [mouse.x,mouse.y]
 ;
-; CS:SI = base du sprite (AND[16] suivi de XOR[16] à +32 bytes)
-; Uses: BDA_CURSOR_BITOFF/BDA_CURSOR_BYTES (via gfx_cursor_calc_align)
+; sprite (AND[16] suivi de XOR[16] à +32 bytes)
 ; ------------------------------------------------------------
 gfx_cursor_draw:
             ; pusha
 
             mov       ax, BDA_DATA_SEG
             mov       ds, ax
+
             mov       ax, VIDEO_SEG
             mov       es, ax
 
 						mov				ax, word [BDA_MOUSE + mouse.cur_ofs]
 						mov				si, ax
 
+						mov 			ax, word [BDA_MOUSE + mouse.cur_seg]
+						mov 			gs, ax
+
             mov       cx, word [BDA_MOUSE + mouse.x]
             mov       dx, word [BDA_MOUSE + mouse.y]
+
+						mov		 		word [BDA_MOUSE + mouse.cur_x], cx		; sauvegarde la nouvelle position
+						mov		 		word [BDA_MOUSE + mouse.cur_y], dx
 
             ; calcule offset et bytes/ligne (2 ou 3)
             call      gfx_cursor_calc_align
@@ -310,20 +322,20 @@ gfx_cursor_draw:
             mov       dh, 8
 .pair:
             ; ----- ligne row (bank courant) -----
-            push      di
-            push      si
+;            push      di
+;            push      si
             call      .draw_line                   ; utilise DI, row=BX
-            pop       si
-            pop       di
+;            pop       si
+;            pop       di
 
             ; ----- ligne row+1 (autre bank) -----
             add       di, bp
             inc       bh
-            push      di
-            push      si
+;            push      di
+;            push      si
             call      .draw_line
-            pop       si
-            pop       di
+;            pop       si
+;            pop       di
             sub       di, bp
 
             ; avancer de 2 lignes (dans le bank courant): +80 bytes
@@ -340,31 +352,30 @@ gfx_cursor_draw:
 ; .draw_line: applique AND/XOR sur une ligne de 16 pixels à ES:DI
 ; row index dans BX (0..15)
 ; offset dans BL (0..7)
-; sprite base CS:SI
+; sprite base GS:SI
 ; ------------------------------------------------------------
 .draw_line:
            	push      ax
            	push      cx
            	push      dx
-           	push      bp
            	push      di
 
            	; charger masks de la ligne: AND = [SI + row*2], XOR = [SI + 32 + row*2]
 						xor			  ax, ax
            	mov       al, bh
-           	shl       ax, 1                         ; row*2
+           	shl       ax, 1                     ; row*2
 
 						push			si
 					 	add       si, ax
-           	mov       cx, [cs:si]              ; AND mask
+           	mov       cx, [gs:si]              	; AND mask
 						add			  si, 32
-           	mov       dx, [cs:si]     			    ; XOR mask
+           	mov       dx, [gs:si]     			    ; XOR mask
 						pop			  si
 
 							; lire bytes source
-           	mov       al, [es:di]                    ; b0
+           	mov       al, [es:di]               ; b0
 						inc			 	di
-           	mov       ah, [es:di]                  ; b1
+           	mov       ah, [es:di]               ; b1
 						dec			 	di
            	; w0 = (b0<<8)|b1 dans AX déjà
 
@@ -373,9 +384,9 @@ gfx_cursor_draw:
 
            	; unaligned: besoin b2 et w1 = (b1<<8)|b2
 						add			 	di, 2
-           	mov       dl, [es:di] 	                 ; b2
+           	mov       dl, [es:di] 	            ; b2
 						sub			 	di, 2
-           	mov       dh, ah                         ; b1
+           	mov       dh, ah                    ; b1
            	; DX = w1 (b1<<8)|b2
 
            	; seg = (w0<<off) | (w1>>(8-off))
@@ -470,12 +481,10 @@ gfx_cursor_draw:
             mov       [es:di], al 	                  ; low
 .done:
             pop       di
-            pop       bp
             pop       dx
             pop       cx
             pop       ax
             ret
-
 
 ; ------------------------------------------------------------
 ; Sauvegarde le background (24x16) sous le curseur
@@ -488,19 +497,17 @@ gfx_cursor_savebg:
 
 						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 1	; image saved
 
-						mov				cx, [BDA_MOUSE + mouse.x]							; 
+						mov				cx, [BDA_MOUSE + mouse.x]							;
 						mov				dx, [BDA_MOUSE + mouse.y]
-
-						mov		 		word [BDA_MOUSE + mouse.cur_x], cx		; sauvegarde la nouvelle position
-						mov		 		word [BDA_MOUSE + mouse.cur_y], dx
 
 						call    	gfx_calc_addr   		        					; ES:DI = byteaddr pour (X,Y)
 						mov 			dx,0x2000															; offset pour lignes impaire
 						cmp		 		di,dx
 						jl      	.no_odd_bank
 						neg		 		dx																		; Y est déja une ligne impaire, on retire l'offset
+
 .no_odd_bank:
-						mov       ax, di																; préserver l'address de départ 
+						mov       ax, di																; préserver l'address de départ
 						mov       word [BDA_MOUSE + mouse.cur_addr_start],ax
 						mov			  word [BDA_MOUSE + mouse.cur_bank_add], dx
 
@@ -546,7 +553,7 @@ gfx_cursor_restorebg:
 						mov 			ax, word [BDA_MOUSE + mouse.cur_addr_start]
 						mov				di,ax
 						mov				dx, word [BDA_MOUSE + mouse.cur_bank_add]
-						
+
 						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
 						mov     	si, ax																	; DS:SI = buffer de sauvegarde
 						mov     	bx, 8																		; 16 lignes, mais nous traitons "en une fois" les paire/impaires
