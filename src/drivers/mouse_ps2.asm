@@ -361,7 +361,7 @@ isr_mouse_handler:
 					mov 				word [BDA_MOUSE + mouse.y], 199
 .y_ok_high:
 
-					call 				gfx_cursor_move
+					; call 				gfx_cursor_move
 .done:
 					mov 				al, 0x20
 					out 				i8259_SLAVE_CMD, al      ; EOI PIC esclave

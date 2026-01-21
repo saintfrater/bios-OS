@@ -93,20 +93,20 @@ reset:
 						; on active le mode graphique
 						call			gfx_init
 
-						; call 			mouse_reset
-						call			mouse_init
+						call 			mouse_reset
+						; call			mouse_init
 
-						; call 			gfx_cursor_move
+						call 			gfx_cursor_move
 
 endless:
 						mov				ax,BDA_DATA_SEG
 						mov				ds,ax
 
-						mov				dx,0x300
-						call			scr_gotoxy
+						;mov				dx,0x300
+						;call			scr_gotoxy
 
-						mov				al, byte [BDA_TIMER]
-						call			scr_puthex8
+						;mov				al, byte [BDA_TIMER]
+						;call			scr_puthex8
 
 						cmp				byte [BDA_TIMER],5
 						ja				.skip2
@@ -120,51 +120,53 @@ endless:
 .moveok:
 						mov 			 [BDA_MOUSE + mouse.x],ax
 ;
-						; call 			gfx_cursor_move
+						call 			gfx_cursor_move
 
 						cmp 			byte [BDA_MOUSE + mouse.buffer+1], 0
 						jge				.skip
 
-						mov				dx,0x400
-						call			scr_gotoxy
+						;mov				dx,0x400
+						;call			scr_gotoxy
 
-						mov				al, byte [BDA_MOUSE + mouse.buffer+1]
-						call			scr_puthex8
+						;mov				al, byte [BDA_MOUSE + mouse.buffer+1]
+						;call			scr_puthex8
 .skip:
-						cmp 			byte [BDA_MOUSE + mouse.buffer+2], 0
-						jge				.skip2
+						;cmp 			byte [BDA_MOUSE + mouse.buffer+2], 0
+						;jge				.skip2
 
-						mov				dx,0x404
-						call			scr_gotoxy
+						;mov				dx,0x404
+						;call			scr_gotoxy
 
-						mov				al, byte [BDA_MOUSE + mouse.buffer+2]
-						call			scr_puthex8
+						;mov				al, byte [BDA_MOUSE + mouse.buffer+2]
+						;call			scr_puthex8
 .skip2:
-						mov				dx,0
-						call			scr_gotoxy
+						;mov				dx,0
+						;call			scr_gotoxy
 
-						mov				ax,[BDA_MOUSE]									; adresse début dump
-						mov				si,ax
+						;mov				ax,[BDA_MOUSE]									; adresse début dump
+						;mov				si,ax
 						mov				cx, 0x20
 .dump:
-						test 			cx,0x000F
-						jnz				.sameline
-						inc				dh
-						xor				dl,dl
-						call			scr_gotoxy
-.sameline:
-						mov				al,[ds:si]
-						inc				si
+;						test 			cx,0x000F
+;						jnz				.sameline
+;						inc				dh
+;						xor				dl,dl
+;						call			scr_gotoxy
+;.sameline:
+;						mov				al,[ds:si]
+;						inc				si
 
-						push			ds
-						push			si
+;						push			ds
+;						push			si
 
-						call			scr_puthex8
-						mov				al,' '
-						call			scr_putc
+;						call			scr_puthex8
+;						mov				al,' '
+;						call			scr_putc
 
-						pop				si
-						pop				ds
+;						pop				si
+;						pop				ds
+
+						nop
 
 						loop			.dump
 

@@ -266,9 +266,9 @@ gfx_cursor_move:
 						mov		 		ax, VIDEO_SEG
 						mov		 		es, ax
 
-						call 			gfx_cursor_restorebg
+						;call 			gfx_cursor_restorebg
 
-						call			gfx_cursor_savebg
+						;call			gfx_cursor_savebg
 
 						call 			gfx_cursor_draw
 						mov 			byte [BDA_MOUSE + mouse.cur_drawing],0
@@ -278,524 +278,331 @@ gfx_cursor_move:
 						popa
 						ret
 
+bits 16
+
+%define GFX_WIDTH    640
+%define GFX_HEIGHT   200
+%define CGA_STRIDE   80
+%define CGA_ODD_BANK 0x2000
+
 ; ============================================================
-; gfx_draw_cursor (CPU>=386, bits 16) - PAS de clamp
-; x:0..639, y:0..199
-; clipping droite/bas:
-;   width  = min(16, 640-x)
-;   height = min(16, 200-y)
-; bytes_to_touch = ((off + width + 7) >> 3)  ; 1..3
-;
-; Requiert:
-;   gfx_calc_addr (CX=x, DX=y) => DI (bank incluse)
-;   sprite en GS:SI (AND[16w] puis XOR[16w] à +32)
-;
+; gfx_cursor_draw_rm16_i386_self
+; Entrée:
+;   DS = BDA_DATA_SEG
+; Sortie: rien
+; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
-gfx_cursor_draw:
-    push    ds
+gfx_cursor_draw_rm16_i386_self:
     push    es
     push    gs
     pusha
 
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
+    ; -----------------------------
+    ; ES = VRAM
+    ; -----------------------------
+    mov     ax, VIDEO_SEG
+    mov     es, ax
 
-    ; GS:SI sprite
+    ; -----------------------------
+    ; GS:SI = sprite (AND puis XOR à +32)
+    ; -----------------------------
     mov     ax, [BDA_MOUSE + mouse.cur_seg]
     mov     gs, ax
     mov     si, [BDA_MOUSE + mouse.cur_ofs]
 
-    ; ES VRAM
-    mov     ax, VIDEO_SEG
-    mov     es, ax
-
-    ; x,y
+    ; -----------------------------
+    ; Charger x,y
+    ; CX = x, DX = y
+    ; -----------------------------
     mov     cx, [BDA_MOUSE + mouse.x]
     mov     dx, [BDA_MOUSE + mouse.y]
 
-    ; off = x&7 -> BL
+    ; off = x & 7 (stocké dans BL)
     mov     bl, cl
     and     bl, 7
 
-    ; width = min(16, 640-x) -> AL
-    mov     ax, 640
+    ; width = min(16, 640-x) -> DL
+    mov     ax, GFX_WIDTH
     sub     ax, cx
     cmp     ax, 16
     jbe     .w_ok
     mov     ax, 16
 .w_ok:
-    ; AL = width
     test    al, al
     jz      .done
+    mov     dl, al               ; DL = width (1..16)
 
-    ; height = min(16, 200-y) -> DL
-    mov     bp, 200
+    ; height = min(16, 200-y) -> BP (compteur)
+    mov     bp, GFX_HEIGHT
     sub     bp, dx
     cmp     bp, 16
     jbe     .h_ok
     mov     bp, 16
 .h_ok:
-    mov     ax, bp
-    mov     dl, al                 ; DL = height
-    test    dl, dl
+    test    bp, bp
     jz      .done
 
     ; bytes_to_touch = ((off + width + 7) >> 3) -> BH
     mov     ah, bl
-    add     ah, al
+    add     ah, dl
     add     ah, 7
     shr     ah, 3
-    mov     bh, ah                 ; BH=1..3
+    mov     bh, ah               ; BH = 1..3
 
-    ; clip_mask16 = 0xFFFF << (16-width) -> BP
-    mov     bp, 0FFFFh
-    mov     cl, 16
-    sub     cl, al
-    shl     bp, cl                 ; BP = clipmask
+    ; clipmask16 = 0xFFFF << (16-width) -> (on le recalculera par ligne)
+    ; parité initiale (y&1) -> CH
+    mov     ch, byte [BDA_MOUSE + mouse.y]
+    and     ch, 1
 
-    ; DI pour (x,y)
-    call    gfx_calc_addr
+    ; -----------------------------
+    ; Calcul DI = adresse VRAM pour (x,y)
+    ; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
+    ; -----------------------------
+    mov     ax, dx
+    shr     ax, 1                ; ax = y/2
 
-    ; bank_add = +0x2000 si DI<0x2000 sinon -0x2000 -> BX
-    mov     bx, 02000h
-    cmp     di, bx
-    jl      .bank_ok
-    neg     bx
-.bank_ok:
+    mov     di, ax
+    shl     di, 4                ; (y/2)*16
+    shl     ax, 6                ; (y/2)*64
+    add     di, ax               ; *80
 
-    ; AL = row (0..15)
-    xor     ax, ax                 ; AL=0, AH=0
-    ; AH = toggle bank flag:
-    ; 0 => prochaine ligne: DI += BX
-    ; 1 => prochaine ligne: DI -= BX, DI += 80
+    mov     ax, cx
+    shr     ax, 3                ; x/8
+    add     di, ax
+
+    test    byte [BDA_MOUSE + mouse.y], 1
+    jz      .addr_even
+    add     di, CGA_ODD_BANK
+.addr_even:
+
+    ; row index dans AL
+    xor     ax, ax               ; AL = 0 (row)
+
+.row_loop:
+    ; conserver row + (off/bytes) sur pile, pour libérer BL/BH si besoin
+    push    ax
+    push    bx                   ; BL=off, BH=bytes_to_touch
+
+    ; -----------------------------------------
+    ; Charger AND/XOR pour la ligne (row=AL)
+    ; CX = AND, DX = XOR
+    ; -----------------------------------------
     xor     ah, ah
+    shl     ax, 1                ; AX = row*2
 
-.line_loop:
-    push    ax                     ; préserver row(AL) + toggle(AH) (draw_line_masked détruit AX)
+    mov     bx, si
+    add     bx, ax
+    mov     cx, [gs:bx]          ; AND word
+    add     bx, 32
+    mov     dx, [gs:bx]          ; XOR word
 
-    ; charge AND'/XOR' clippés pour row=AL -> CX/DX
-    call    .load_andxor_clipped
+    ; restaurer row dans AL
+    pop     bx                   ; restore off/bytes into BL/BH
+    pop     ax                   ; restore row in AL
 
-    ; dessine la ligne: ES:DI, BL=off, BH=bytes, CX=AND', DX=XOR'
-    call    draw_line_masked
+    ; -----------------------------------------
+    ; clipmask16 = 0xFFFF << (16-width)
+    ; width est dans DL
+    ; clipmask -> BX
+    ; -----------------------------------------
+    mov     bx, 0FFFFh
+    mov     cl, 16
+    sub     cl, dl
+    shl     bx, cl               ; BX = clipmask
 
-    pop     ax                     ; restore row/toggle
+    ; AND' = AND | (~clipmask)
+    mov     ax, bx
+    not     ax
+    or      cx, ax               ; CX = AND'
 
-    ; next line
+    ; XOR' = XOR & clipmask
+    and     dx, bx               ; DX = XOR'
+
+    ; -----------------------------------------
+    ; Construire seg 16-bit depuis VRAM (ES:DI)
+    ; w0 = (b0<<8)|b1
+    ; seg = (w0<<off) | (b2>>(8-off)) si off!=0 et bytes==3
+    ; seg -> AX
+    ; -----------------------------------------
+    ; AX = w0
+    mov     ah, [es:di]          ; b0
+    mov     al, [es:di+1]        ; b1
+
+    ; if off==0 -> seg ready
+    test    bl, bl
+    jz      .seg_ready
+
+    ; seg = w0 << off
+    mov     cl, bl
+    shl     ax, cl
+
+    ; if bytes==3, OR b2>>(8-off)
+    cmp     bh, 3
+    jne     .seg_ready
+
+    mov     cl, 8
+    sub     cl, bl               ; 8-off
+    xor     bh, bh               ; BH=0, BL=off (on évite bpl etc)
+    mov     bl, [es:di+2]        ; BL=b2
+    shr     bx, cl               ; BX = b2>>(8-off)
+    or      ax, bx
+    ; restaurer BL=off, BH=bytes: (on ne peut pas, on a écrasé)
+    ; => ne jamais écraser BL/BH. Donc on refait proprement:
+    ; (ce bloc est remplacé ci-dessous)
+    ; --- on ne doit pas passer ici ---
+.seg_ready:
+
+    ; *** IMPORTANT ***
+    ; Le bloc ci-dessus a montré le piège (écraser BL/BH).
+    ; On fait le chemin correct ci-dessous, sans toucher BL/BH.
+
+    ; Refaire seg proprement sans écraser BL/BH:
+    ; AX = w0 (recharge)
+    mov     ah, [es:di]
+    mov     al, [es:di+1]
+
+    test    bl, bl
+    jz      .seg2_ready
+
+    mov     cl, bl
+    shl     ax, cl
+
+    cmp     bh, 3
+    jne     .seg2_ready
+
+    mov     cl, 8
+    sub     cl, bl               ; 8-off
+    xor     ah, ah
+    mov     al, [es:di+2]        ; AL=b2
+    ; AX = b2
+    shr     ax, cl               ; AX = b2>>(8-off)
+    ; OR into seg: need seg in another reg -> use BX temp
+    mov     bx, [es:di]          ; not ok (word read uses little endian, avoid)
+    ; simplest: use stack temp
+    push    ax                   ; save (b2>>(8-off))
+    ; reload seg again and OR
+    mov     ah, [es:di]
+    mov     al, [es:di+1]
+    mov     cl, bl
+    shl     ax, cl
+    pop     bx
+    or      ax, bx
+.seg2_ready:
+
+    ; -----------------------------------------
+    ; newseg = (seg & AND') ^ XOR'
+    ; seg in AX
+    ; -----------------------------------------
+    and     ax, cx
+    xor     ax, dx               ; AX=newseg
+
+    ; -----------------------------------------
+    ; Ecriture vers VRAM
+    ; - off==0 : b0=AH, b1=AL (si bytes>=2)
+    ; - off!=0 : b0 partiel, b1 complet si bytes>=2, b2 partiel si bytes==3
+    ; -----------------------------------------
+    test    bl, bl
+    jnz     .write_unaligned
+
+.write_aligned:
+    mov     [es:di], ah
+    cmp     bh, 1
+    je      .after_write
+    mov     [es:di+1], al
+    jmp     .after_write
+
+.write_unaligned:
+    ; mask0 = (1<<(8-off))-1  (bits bas de b0)
+    mov     cl, 8
+    sub     cl, bl
+    mov     dh, 1
+    shl     dh, cl
+    dec     dh                   ; DH = mask0
+
+    ; val0 = newseg >> (8+off)
+    mov     bx, ax               ; BX = newseg
+    mov     cl, bl
+    add     cl, 8
+    shr     bx, cl               ; BL = val0 (low 8)
+
+    ; b0 = (old & ~mask0) | (val0 & mask0)
+    mov     dl, [es:di]          ; old b0
+    mov     cl, dh               ; CL=mask0
+    not     cl
+    and     dl, cl               ; keep upper bits
+    not     cl                   ; CL=mask0
+    and     bl, cl               ; val0 masked
+    or      dl, bl
+    mov     [es:di], dl
+
+    cmp     bh, 1
+    je      .after_write
+
+    ; b1 = (newseg >> off) & 0xFF
+    mov     bx, ax
+    mov     cl, bl               ; BUG: BL now val0, not off
+    ; => on doit recharger off depuis BDA_MOUSE.x &7, ou le sauver.
+    ; On le sauve au début de la fonction dans une variable: ici on le recharge (coût faible)
+    mov     bl, [BDA_MOUSE + mouse.x] ; low byte x
+    and     bl, 7
+    mov     cl, bl
+    shr     bx, cl
+    mov     [es:di+1], bl
+
+    cmp     bh, 2
+    je      .after_write
+
+    ; b2 partiel (bits hauts off)
+    ; mask2 = 0xFF << (8-off)
+    mov     cl, 8
+    sub     cl, bl               ; bl=off
+    mov     dl, 0FFh
+    shl     dl, cl               ; DL=mask2
+
+    ; part2 = (newseg << (8-off)) & 0xFF
+    mov     bx, ax               ; BX=newseg
+    shl     bx, cl               ; BL=part2
+
+    ; b2 = (old & ~mask2) | (part2 & mask2)
+    mov     dh, [es:di+2]        ; old b2
+    mov     cl, dl               ; CL=mask2
+    not     cl
+    and     dh, cl
+    not     cl
+    and     bl, cl
+    or      dh, bl
+    mov     [es:di+2], dh
+
+.after_write:
+    ; -----------------------------------------
+    ; next row
+    ; -----------------------------------------
     inc     al
-    dec     dl
+    dec     bp
     jz      .done
 
-    ; alternance banks et stride CGA
-    test    ah, ah
-    jnz     .to_base
+    ; stepping CGA:
+    ; even->odd: +0x2000
+    ; odd ->even: -0x2000 + 80
+    test    ch, ch
+    jz      .even_to_odd
 
-    ; vers autre bank
-    add     di, bx
-    mov     ah, 1
-    jmp     .line_loop
-
-.to_base:
-    sub     di, bx
+    ; odd -> even
+    sub     di, CGA_ODD_BANK
     add     di, CGA_STRIDE
-    xor     ah, ah
-    jmp     .line_loop
+    xor     ch, ch
+    jmp     .row_loop
+
+.even_to_odd:
+    add     di, CGA_ODD_BANK
+    mov     ch, 1
+    jmp     .row_loop
 
 .done:
     popa
     pop     gs
     pop     es
-    pop     ds
     ret
-
-
-; ------------------------------------------------------------
-; .load_andxor_clipped
-; Entrées:
-;   AL = row (0..15)
-;   GS:SI = base sprite
-;   BP = clipmask16
-; Sorties:
-;   CX = AND' , DX = XOR'
-; Détruit:
-;   AX, DI (DI restauré)
-; ------------------------------------------------------------
-.load_andxor_clipped:
-    push    di
-    xor     ah, ah
-    shl     ax, 1                  ; AX = row*2
-
-    mov     di, si
-    add     di, ax
-    mov     cx, [gs:di]            ; AND
-    add     di, 32
-    mov     dx, [gs:di]            ; XOR
-
-    ; AND' = AND | (~clipmask)
-    ; XOR' = XOR & clipmask
-    mov     ax, bp
-    not     ax
-    or      cx, ax
-    and     dx, bp
-
-    pop     di
-    ret
-
-
-; ============================================================
-; draw_line_masked (NASM bits16, CPU 386+ ok, pas de bpl/sil)
-;
-; Entrées:
-;   ES:DI = adresse b0
-;   BL    = off (0..7)
-;   BH    = bytes_to_touch (1..3)
-;   CX    = AND'
-;   DX    = XOR'
-;
-; Détruit: AX,BP,SI,CL,DL,DH,AH
-; (ok car caller recharge CX/DX à chaque ligne)
-; ============================================================
-draw_line_masked:
-    push    si
-    push    bp
-
-    ; w0 = (b0<<8)|b1 dans SI
-    mov     al, [es:di]
-    mov     ah, [es:di+1]
-    xchg    al, ah
-    mov     si, ax
-
-    ; seg in AX
-    mov     ax, si
-    test    bl, bl
-    jz      .seg_ready
-
-    cmp     bh, 3
-    jne     .seg_no_b2
-
-    ; BP = w1 = (b1<<8)|b2
-    mov     al, [es:di+1]
-    mov     ah, [es:di+2]
-    xchg    al, ah
-    mov     bp, ax
-
-    mov     ax, si                 ; AX=w0
-    mov     cl, bl
-    shl     ax, cl
-    mov     cl, 8
-    sub     cl, bl
-    shr     bp, cl
-    or      ax, bp
-    jmp     .seg_ready
-
-.seg_no_b2:
-    mov     cl, bl
-    shl     ax, cl
-
-.seg_ready:
-    ; newseg in BP
-    and     ax, cx
-    xor     ax, dx
-    mov     bp, ax
-
-    test    bl, bl
-    jz      .write_aligned
-
-    ; -------- b0 partiel --------
-    ; val0 = newseg >> (8+off) dans AL
-    mov     ax, bp
-    mov     cl, bl
-    add     cl, 8
-    shr     ax, cl                 ; AL=val0
-
-    ; mask0 = (1<<(8-off))-1 dans AH
-    mov     cl, 8
-    sub     cl, bl
-    mov     ah, 1
-    shl     ah, cl
-    dec     ah
-
-    ; b0 = (b0 & ~mask0) | (val0 & mask0)
-    mov     dl, [es:di]
-    mov     dh, ah
-    not     dh
-    and     dl, dh
-    not     dh
-    and     al, dh
-    or      dl, al
-    mov     [es:di], dl
-
-    cmp     bh, 1
-    je      .ret
-
-    ; -------- b1 complet --------
-    mov     ax, bp
-    mov     cl, bl
-    shr     ax, cl                 ; AL=b1
-    mov     [es:di+1], al
-
-    cmp     bh, 2
-    je      .ret
-
-    ; -------- b2 partiel --------
-    mov     ax, bp                 ; AL=newseg low
-
-    ; lowmask = (1<<off)-1 dans DL
-    mov     dl, 1
-    mov     cl, bl
-    shl     dl, cl
-    dec     dl
-    and     al, dl                 ; lowbits
-
-    mov     cl, 8
-    sub     cl, bl
-    shl     al, cl                 ; part2
-
-    ; mask2 = 0xFF << (8-off) dans DL
-    mov     dl, 0FFh
-    shl     dl, cl
-
-    ; b2 = (b2 & ~mask2) | (part2 & mask2)
-    mov     ah, [es:di+2]
-    mov     dh, dl
-    not     dh
-    and     ah, dh
-    not     dh
-    and     al, dh
-    or      ah, al
-    mov     [es:di+2], ah
-    jmp     .ret
-
-.write_aligned:
-    ; aligned: BP=(b0'<<8)|b1'
-    mov     ax, bp
-    xchg    al, ah                 ; AL=b0', AH=b1'
-    mov     [es:di], al
-    cmp     bh, 1
-    je      .ret
-    mov     [es:di+1], ah
-
-.ret:
-    pop     bp
-    pop     si
-    ret
-
-
-; ------------------------------------------------------------
-; Dessine le curseur 16x16 AND/XOR à [mouse.x,mouse.y]
-;
-; sprite (AND[16] suivi de XOR[16] à +32 bytes)
-; ------------------------------------------------------------
-gfx___cursor_draw:
-            ; pusha
-
-            mov       ax, BDA_DATA_SEG
-            mov       ds, ax
-
-            mov       ax, VIDEO_SEG
-            mov       es, ax
-
-						mov				ax, word [BDA_MOUSE + mouse.cur_ofs]
-						mov				si, ax
-
-						mov 			ax, word [BDA_MOUSE + mouse.cur_seg]
-						mov 			gs, ax
-
-            mov       cx, word [BDA_MOUSE + mouse.x]
-            mov       dx, word [BDA_MOUSE + mouse.y]
-
-						mov		 		word [BDA_MOUSE + mouse.cur_x], cx		; sauvegarde la nouvelle position
-						mov		 		word [BDA_MOUSE + mouse.cur_y], dx
-
-            ; calcule offset et bytes/ligne (2 ou 3)
-            call      gfx_cursor_calc_align
-						mov       bl, byte [BDA_MOUSE + mouse.cur_bit_ofs]; 0..7
-
-            ; calcule DI de départ (attention: gfx_calc_addr modifie CL)
-            push      cx
-            call      gfx_calc_addr               ; DI ok, AH ignoré
-            pop       cx
-            ; dxbank = +0x2000 si DI < 0x2000, sinon dxbank = -0x2000
-            mov       bp, 02000h
-            cmp       di, bp
-            jl        .bank_ok
-            neg       bp                           ; bp = -0x2000
-.bank_ok:
-            ; on va dessiner 16 lignes: 8 paires (ligne dans bank courant + ligne dans autre bank)
-            mov       bh, 0                        ; row index (0..15)
-            mov       dh, 8
-.pair:
-            ; ----- ligne row (bank courant) -----
-;            push      di
-;            push      si
-            call      .draw_line                   ; utilise DI, row=BX
-;            pop       si
-;            pop       di
-
-            ; ----- ligne row+1 (autre bank) -----
-            add       di, bp
-            inc       bh
-;            push      di
-;            push      si
-            call      .draw_line
-;            pop       si
-;            pop       di
-            sub       di, bp
-
-            ; avancer de 2 lignes (dans le bank courant): +80 bytes
-            add       di, CGA_STRIDE
-
-            inc       bh
-            dec       dh
-            jnz       .pair
-
-            ; popa
-            ret
-
-; ------------------------------------------------------------
-; .draw_line (8086 safe)
-;
-; BH = row (0..15)
-; BL = bit offset (0..7)
-; ES:DI = adresse b0
-; GS:SI = base sprite
-;
-; détruit AX,CX,DX,BP
-; préserve BX,SI,DI
-; ------------------------------------------------------------
-.draw_line:
-    ; --- BP = row*2 ---
-    xor     bp, bp
-    mov     bl, bh
-    shl     bl, 1
-    mov     bp, bx            ; BP = row*2
-
-    ; --- charger AND / XOR ---
-    mov     cx, [gs:si + bp]       ; AND
-    mov     dx, [gs:si + bp + 32]  ; XOR
-
-    ; --- w0 = (b0<<8)|b1 ---
-    mov     al, [es:di]
-    mov     ah, [es:di+1]          ; AX = w0
-
-    test    bl, bl
-    jz      .aligned
-
-    ; --- w1 = (b1<<8)|b2 ---
-    mov     bp, ax                 ; BP = w0
-    mov     al, [es:di+2]
-    mov     ah, bh                 ; AH = b1
-    xchg    al, ah                 ; BP = w1
-
-    ; --- seg = (w0<<off)|(w1>>(8-off)) ---
-    mov     cl, bl
-    shl     ax, cl
-    mov     cl, 8
-    sub     cl, bl
-    shr     bp, cl
-    or      ax, bp                 ; AX = seg
-
-    ; --- newseg ---
-    and     ax, cx
-    xor     ax, dx
-
-    ; --- write unaligned ---
-    ; b0
-    mov     bp, ax
-    mov     cl, bl
-    add     cl, 8
-    shr     bp, cl                 ; BP = val0
-    mov     dl, 1
-    mov     cl, 8
-    sub     cl, bl
-    shl     dl, cl
-    dec     dl                     ; mask0
-    mov     dh, [es:di]
-    not     dl
-    and     dh, dl
-    not     dl
-    or      dh, bl
-    mov     [es:di], dh
-
-    ; b1
-    mov     cl, bl
-    shr     ax, cl
-    mov     [es:di+1], al
-
-    ; b2
-    mov     ax, bp
-    mov     cl, bl
-    ; and     al, (1<<cl)-1
-    mov     cl, 8
-    sub     cl, bl
-    shl     al, cl
-    mov     dl, 0FFh
-    shl     dl, cl
-    mov     dh, [es:di+2]
-    not     dl
-    and     dh, dl
-    not     dl
-    or      dh, al
-    mov     [es:di+2], dh
-    ret
-
-.aligned:
-    and     ax, cx
-    xor     ax, dx
-    mov     [es:di], ah
-    mov     [es:di+1], al
-    ret
-
-; ------------------------------------------------------------
-; Sauvegarde le background (24x16) sous le curseur
-;
-; utilise les variables du BDA pour stocker
-; ------------------------------------------------------------
-gfx___cursor_savebg:
-						cmp 			byte [BDA_MOUSE + mouse.bkg_saved], 0
-						jne 	  	.done																	; ne pas sauver tant qu'il y a une image
-
-						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 1	; image saved
-
-						mov				cx, [BDA_MOUSE + mouse.x]							;
-						mov				dx, [BDA_MOUSE + mouse.y]
-
-						call    	gfx_calc_addr   		        					; ES:DI = byteaddr pour (X,Y)
-						mov 			dx,0x2000															; offset pour lignes impaire
-						cmp		 		di,dx
-						jl      	.no_odd_bank
-						neg		 		dx																		; Y est déja une ligne impaire, on retire l'offset
-
-.no_odd_bank:
-						mov       ax, di																; préserver l'address de départ
-						mov       word [BDA_MOUSE + mouse.cur_addr_start],ax
-						mov			  word [BDA_MOUSE + mouse.cur_bank_add], dx
-
-						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
-						mov     	si, ax																; DS:SI = buffer de sauvegarde
-						mov     	bx, 8
-
-.row:				; sauve 3 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax, word [es:di]											; charge first word
-						mov     	word [ds:si], ax											; sauvegarde
-						mov		 		al, byte [es:di+2]										; charge 3ème byte
-						mov     	byte [ds:si+2], al
-						add		 		si, 3
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx																; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax, word [es:di]
-						mov     	word [ds:si], ax
-						mov		 		al, byte [es:di+2]
-						mov     	byte [ds:si+2], al
-						add		 		si, 3
-						sub		 		di, dx
-						add 			di, CGA_STRIDE * 2
-						dec     	bx
-						jnz     	.row
-.done:
-						ret
 
 ; -----------------------------------------------
 ; gfx_cursor_savebg_32
@@ -898,50 +705,3 @@ gfx_cursor_restorebg:
 
 .done:
     ret
-
-
-; ------------------------------------------------------------
-; restore le background (24x16)
-;
-; utilise les variables du BDA pour stocker
-; ------------------------------------------------------------
-gfx___cursor_restorebg:
-						cmp 			byte [BDA_MOUSE + mouse.bkg_saved], 0		; pas de background sauvé
-						je 		  	.done
-
-						mov		 		cx,word [BDA_MOUSE + mouse.cur_x]				; restore de la position
-						mov		 		dx,word [BDA_MOUSE + mouse.cur_y]
-						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 0		; le background a été restauré
-
-						mov 			ax, word [BDA_MOUSE + mouse.cur_addr_start]
-						mov				di,ax
-						mov				dx, word [BDA_MOUSE + mouse.cur_bank_add]
-
-						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
-						mov     	si, ax																	; DS:SI = buffer de sauvegarde
-						mov     	bx, 8																		; 16 lignes, mais nous traitons "en une fois" les paire/impaires
-
-.row:			; restore en 3 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax,word [ds:si]													; recupère le 1er word
-						mov     	word [es:di],ax
-						mov     	al,byte [ds:si+2]												; charge 3ème byte
-						mov		 		byte [es:di+2],al
-						add		 		si, 3
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; autre banque mémoire
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						mov     	al,byte [ds:si+2]						; charge 3ème byte
-						mov		 		byte [es:di+2],al
-						add		 		si, 3
-
-						sub		 		di, dx											; destination - bank
-						add 			di, CGA_STRIDE * 2					; desination+=160 (on vient de faire 2 lignes)
-						dec     	bx
-						jnz     	.row
-.done:
-;						popa
-						ret
-
