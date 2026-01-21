@@ -50,6 +50,11 @@
 %define BDA_DATA_SEG	        0x0050
 %define BDA_MOUSE               0x0000
 
+%define BKG_DWORDS_PER_LINE     1          ; 1 dword stocké par ligne
+%define BKG_LINES               16
+%define BKG_TOTAL_DWORDS        (BKG_LINES * BKG_DWORDS_PER_LINE) ; 16
+%define BKG_TOTAL_BYTES         (BKG_TOTAL_DWORDS * 4)            ; 64
+
 struc  mouse
         .buffer          resb   4       ; i8042 input buffer
         .idx             resb   1       ; index in the buffer
@@ -71,7 +76,7 @@ struc  mouse
         .cur_mask        resb   1       ; pixels mask (bit per pixel)
         .cur_bit_ofs     resb   1       ; 0..7 bits d'offset (x&7)
         .bkg_saved       resb   1       ; background saved
-        .bkg_buffer      resb   16*3    ; buffer for saved background
+        .bkg_buffer      resd   16      ; buffer for saved background
 endstruc
 
 %define  BDA_TIMER       (BDA_MOUSE + mouse_size)

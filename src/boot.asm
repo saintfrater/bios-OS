@@ -96,7 +96,7 @@ reset:
 						; call 			mouse_reset
 						call			mouse_init
 
-						call 			gfx_cursor_move
+						; call 			gfx_cursor_move
 
 endless:
 						mov				ax,BDA_DATA_SEG
@@ -120,7 +120,7 @@ endless:
 .moveok:
 						mov 			 [BDA_MOUSE + mouse.x],ax
 ;
-						call 			gfx_cursor_move
+						; call 			gfx_cursor_move
 
 						cmp 			byte [BDA_MOUSE + mouse.buffer+1], 0
 						jge				.skip
