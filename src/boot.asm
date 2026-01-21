@@ -93,11 +93,25 @@ reset:
 						; on active le mode graphique
 						call			gfx_init
 
-						;call 			mouse_reset
+						; call 			mouse_reset
 						call			mouse_init
+
+						call 			gfx_cursor_move
+
 endless:
 						mov				ax,BDA_DATA_SEG
 						mov				ds,ax
+
+;						mov 			ax, [BDA_MOUSE + mouse.x]
+;						add 			ax, 80
+;						cmp 			ax,640
+;						jb				.moveok
+;
+;						mov 			ax,0
+;.moveok:
+;						mov 			 [BDA_MOUSE + mouse.x],ax
+;
+;						call 			gfx_cursor_move		
 
 						mov				dx,0
 						call			scr_gotoxy

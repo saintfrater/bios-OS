@@ -37,13 +37,20 @@
 ; Cette table doit être située au début du driver pour être
 ; accessible par la GUI à des offsets fixes.
 ; ------------------------------------------------------------
-gfx_api_table:
+
+%define	INIT							0
+%define PUTPIXEL					3
+%define GETPIXEL 					6
+%define MOUSE_UPDATE 		  9
+
+gfx_api:
     jmp gfx_init            ; Offset +0: Initialisation
     jmp gfx_putpixel        ; Offset +3: Dessin pixel
     jmp gfx_getpixel        ; Offset +6: Lecture pixel
-    jmp gfx_fill_rect       ; Offset +9: Remplissage rectangle (Nouveau)
-    jmp gfx_invert_rect     ; Offset +12: Inversion (Nouveau pour Menus)
-    jmp gfx_draw_hline      ; Offset +15: Ligne horizontale rapide (Nouveau)
+		jmp gfx_cursor_move			; Offset +9: mouse update
+;    jmp gfx_fill_rect       ; Remplissage rectangle (Nouveau)
+;    jmp gfx_invert_rect     ; Offset +12: Inversion (Nouveau pour Menus)
+;    jmp gfx_draw_hline      ; Offset +15: Ligne horizontale rapide (Nouveau)
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -211,12 +218,6 @@ gfx_cursor_calc_align:
         		mov     	al, cl
         		and     	al, 7                  ; offset = x&7
         		mov     	byte [BDA_MOUSE + mouse.cur_bit_ofs], al
-        		cmp     	al, 0
-        		jne     	.unaligned
-        		mov     	byte [BDA_MOUSE + mouse.cur_bytes], 2
-        		ret
-.unaligned:
-        		mov     	byte [BDA_MOUSE + mouse.cur_bytes], 3
         		ret
 
 ; ------------------------------------------------------------
@@ -248,6 +249,28 @@ gfx_getpixel_fast:
 						setnz   	al
 						ret
 
+gfx_cursor_move:
+						pusha
+						push 			ds
+
+						; move Data Segment
+						mov				ax, BDA_DATA_SEG
+						mov				ds, ax
+
+						mov		 		ax, VIDEO_SEG
+						mov		 		es, ax
+
+						call 			gfx_cursor_restorebg
+
+						call			gfx_cursor_savebg
+
+						call 			gfx_cursor_draw
+
+						pop 			ds
+
+						popa
+						ret
+
 ; ------------------------------------------------------------
 ; Dessine le curseur 16x16 AND/XOR à [BDA_CURSOR_NEWX],[BDA_CURSOR_NEWY]
 ;
@@ -255,7 +278,7 @@ gfx_getpixel_fast:
 ; Uses: BDA_CURSOR_BITOFF/BDA_CURSOR_BYTES (via gfx_cursor_calc_align)
 ; ------------------------------------------------------------
 gfx_cursor_draw:
-            pusha
+            ; pusha
 
             mov       ax, BDA_DATA_SEG
             mov       ds, ax
@@ -265,8 +288,8 @@ gfx_cursor_draw:
 						mov				ax, word [BDA_MOUSE + mouse.cur_ofs]
 						mov				si, ax
 
-            mov       cx, word [BDA_MOUSE + mouse.cur_newx]
-            mov       dx, word [BDA_MOUSE + mouse.cur_newy]
+            mov       cx, word [BDA_MOUSE + mouse.x]
+            mov       dx, word [BDA_MOUSE + mouse.y]
 
             ; calcule offset et bytes/ligne (2 ou 3)
             call      gfx_cursor_calc_align
@@ -310,7 +333,7 @@ gfx_cursor_draw:
             dec       dh
             jnz       .pair
 
-            popa
+            ; popa
             ret
 
 ; ------------------------------------------------------------
@@ -460,78 +483,51 @@ gfx_cursor_draw:
 ; utilise les variables du BDA pour stocker
 ; ------------------------------------------------------------
 gfx_cursor_savebg:
-						pusha																	; sauvegarde registres
-
-						mov				ax, BDA_DATA_SEG
-						mov				ds, ax
-
-						mov		 		ax, VIDEO_SEG
-						mov		 		es, ax
-
 						cmp 			byte [BDA_MOUSE + mouse.bkg_saved], 0
-						jne 	  	.done												; déjà sauvé
+						jne 	  	.done																	; ne pas sauver tant qu'il y a une image
 
-						mov				cx, [BDA_MOUSE + mouse.x]
+						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 1	; image saved
+
+						mov				cx, [BDA_MOUSE + mouse.x]							; 
 						mov				dx, [BDA_MOUSE + mouse.y]
 
-						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 1	; flag image saved
+						mov		 		word [BDA_MOUSE + mouse.cur_x], cx		; sauvegarde la nouvelle position
+						mov		 		word [BDA_MOUSE + mouse.cur_y], dx
 
-						mov		 		word [BDA_MOUSE + mouse.cur_newx], cx	; sauvegarde la nouvelle position
-						mov		 		word [BDA_MOUSE + mouse.cur_newy], dx
-
-						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
-						mov 			dx,0x2000										; offset pour lignes impaire
+						call    	gfx_calc_addr   		        					; ES:DI = byteaddr pour (X,Y)
+						mov 			dx,0x2000															; offset pour lignes impaire
 						cmp		 		di,dx
 						jl      	.no_odd_bank
-						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
+						neg		 		dx																		; Y est déja une ligne impaire, on retire l'offset
 .no_odd_bank:
+						mov       ax, di																; préserver l'address de départ 
+						mov       word [BDA_MOUSE + mouse.cur_addr_start],ax
+						mov			  word [BDA_MOUSE + mouse.cur_bank_add], dx
+
 						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
-						mov     	si, ax						; DS:SI = buffer de sauvegarde
+						mov     	si, ax																; DS:SI = buffer de sauvegarde
 						mov     	bx, 8
 
-						and				cx,0x0007										; alignement X
-						jnz 			.row3
-
-.row3:			; sauve 3 bytes/ligne
-						mov		 		byte [BDA_MOUSE + mouse.cur_bytes], 3	; 3 bytes/ligne
+.row:				; sauve 3 bytes/ligne
 						; ligne 'y', peut etre paire ou impaire
-						mov     	ax, word [es:di]						; charge first word
-						mov     	word [ds:si], ax						; sauvegarde
-						mov		 		al, byte [es:di+2]					; charge 3ème byte
+						mov     	ax, word [es:di]											; charge first word
+						mov     	word [ds:si], ax											; sauvegarde
+						mov		 		al, byte [es:di+2]										; charge 3ème byte
 						mov     	byte [ds:si+2], al
 						add		 		si, 3
 
 						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
+						add		  	di, dx																; charge first word other bank (+0x2000 ou -0x2000)
 						mov     	ax, word [es:di]
 						mov     	word [ds:si], ax
 						mov		 		al, byte [es:di+2]
 						mov     	byte [ds:si+2], al
 						add		 		si, 3
 						sub		 		di, dx
-						add 			di, CGA_STRIDE
+						add 			di, CGA_STRIDE * 2
 						dec     	bx
-						jnz     	.row3
-						jmp				.done
-
-.row2:			; sauve 2 bytes/ligne
-						mov		 		byte [BDA_MOUSE + mouse.cur_bytes], 2 	; par défaut
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax, word [es:di]						; charge first word
-						mov     	word [ds:si], ax						; sauvegarde
-						add		 		si, 2
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax, word [es:di]
-						mov     	word [ds:si], ax
-						add		 		si, 2
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row3
+						jnz     	.row
 .done:
-						popa
 						ret
 
 ; ------------------------------------------------------------
@@ -540,72 +536,42 @@ gfx_cursor_savebg:
 ; utilise les variables du BDA pour stocker
 ; ------------------------------------------------------------
 gfx_cursor_restorebg:
-						pusha																	; sauvegarde registres
-
-						mov				ax, BDA_DATA_SEG
-						mov				ds, ax
-
-						mov		 		ax, VIDEO_SEG
-						mov		 		es, ax
-
-						cmp 			byte [BDA_MOUSE + mouse.bkg_saved], 0	; pas de background sauvé
+						cmp 			byte [BDA_MOUSE + mouse.bkg_saved], 0		; pas de background sauvé
 						je 		  	.done
 
-						mov		 		cx,word [BDA_MOUSE + mouse.cur_oldx]		; restore de la position
-						mov		 		dx,word [BDA_MOUSE + mouse.cur_oldy]
-						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 0	; le background a été restauré
+						mov		 		cx,word [BDA_MOUSE + mouse.cur_x]				; restore de la position
+						mov		 		dx,word [BDA_MOUSE + mouse.cur_y]
+						mov		 		byte [BDA_MOUSE + mouse.bkg_saved], 0		; le background a été restauré
 
-						call    	gfx_calc_addr   		        ; ES:DI = byteaddr pour (X,Y)
-						mov 			dx,0x2000										; offset pour lignes impaire
-						cmp		 		di,dx
-						jl      	.no_odd_bank
-						neg		 		dx													; Y est déja une ligne impaire, on retire l'offset
-.no_odd_bank:
-
+						mov 			ax, word [BDA_MOUSE + mouse.cur_addr_start]
+						mov				di,ax
+						mov				dx, word [BDA_MOUSE + mouse.cur_bank_add]
+						
 						mov 			ax, BDA_MOUSE + mouse.bkg_buffer
-						mov     	si, ax																; DS:SI = buffer de sauvegarde
-						mov     	bx, 8
+						mov     	si, ax																	; DS:SI = buffer de sauvegarde
+						mov     	bx, 8																		; 16 lignes, mais nous traitons "en une fois" les paire/impaires
 
-						cmp		 		byte [BDA_MOUSE + mouse.cur_bytes], 2	; si la sauvegarde est en 2 bytes/ligne
-						je 				.row2
-
-.row3:			; restore en 3 bytes/ligne
+.row:			; restore en 3 bytes/ligne
 						; ligne 'y', peut etre paire ou impaire
+						mov     	ax,word [ds:si]													; recupère le 1er word
+						mov     	word [es:di],ax
+						mov     	al,byte [ds:si+2]												; charge 3ème byte
+						mov		 		byte [es:di+2],al
+						add		 		si, 3
+
+						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
+						add		  	di, dx											; autre banque mémoire
 						mov     	ax,word [ds:si]							; recupère le 1er word
 						mov     	word [es:di],ax
 						mov     	al,byte [ds:si+2]						; charge 3ème byte
 						mov		 		byte [es:di+2],al
 						add		 		si, 3
 
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						mov     	al,byte [ds:si+2]						; charge 3ème byte
-						mov		 		byte [es:di+2],al
-						add		 		si, 3
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
+						sub		 		di, dx											; destination - bank
+						add 			di, CGA_STRIDE * 2					; desination+=160 (on vient de faire 2 lignes)
 						dec     	bx
-						jnz     	.row3
-						jmp				.done
-
-.row2:			; restore en 2 bytes/ligne
-						; ligne 'y', peut etre paire ou impaire
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						add		 		si, 2
-
-						; ligne 'y'+1; si paire +0x2000, si impaire -0x2000
-						add		  	di, dx											; charge first word other bank (+0x2000 ou -0x2000)
-						mov     	ax,word [ds:si]							; recupère le 1er word
-						mov     	word [es:di],ax
-						add		 		si, 2
-						sub		 		di, dx
-						add 			di, CGA_STRIDE
-						dec     	bx
-						jnz     	.row2
+						jnz     	.row
 .done:
-						popa
+;						popa
 						ret
 

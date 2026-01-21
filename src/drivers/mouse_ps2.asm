@@ -38,43 +38,7 @@
 %define I8042_CMD_DIS_MOUSE	 0xA7
 %define I8042_CMD_WRITE_AUX  0xD4
 
-
-%define CURSOR_W               16
-%define CURSOR_H               16
-
-mouse_arrow:
-						dw 1001111111111111b    ; 0x9FFF
-						dw 1000111111111111b    ; 0x8FFF
-						dw 1000011111111111b    ; 0x87FF
-						dw 1000001111111111b    ; 0x83FF
-						dw 1000000111111111b    ; 0x81FF
-						dw 1000000011111111b    ; 0x80FF
-						dw 1000000001111111b    ; 0x807F
-						dw 1000000000111111b    ; 0x803F
-						dw 1000000000011111b    ; 0x801F
-						dw 1000000000001111b    ; 0x800F
-						dw 1000000011111111b    ; 0x80FF
-						dw 1000100001111111b    ; 0x887F
-						dw 1001100001111111b    ; 0x987F
-						dw 1111110000111111b    ; 0xFC3F
-						dw 1111110000111111b    ; 0xFC3F
-						dw 1111111000111111b    ; 0xFE3F
-						dw 0000000000000000b    ; 0x0000
-						dw 0010000000000000b    ; 0x2000
-						dw 0011000000000000b    ; 0x3000
-						dw 0011100000000000b    ; 0x3800
-						dw 0011110000000000b    ; 0x3C00
-						dw 0011111000000000b    ; 0x3E00
-						dw 0011111100000000b    ; 0x3F00
-						dw 0011111110000000b    ; 0x3F80
-						dw 0011111111000000b    ; 0x3FC0
-						dw 0011111000000000b    ; 0x3E00
-						dw 0011011000000000b    ; 0x3600
-						dw 0010001100000000b    ; 0x2300
-						dw 0000001100000000b    ; 0x0300
-						dw 0000000110000000b    ; 0x0180
-						dw 0000000110000000b    ; 0x0180
-						dw 0000000000000000b    ; 0x0000
+%include "./services/cursor.asm"
 
 ; ------------------------------------------------------------
 ; remise a zero des valeurs internes du "drivers"
@@ -87,7 +51,7 @@ mouse_reset:
 						; effacer les variables du drivers
 						mov				byte  [fs:BDA_MOUSE + mouse.idx],0
 						mov				dword [fs:BDA_MOUSE + mouse.buffer],0
-						mov				byte  [fs:BDA_MOUSE + mouse.packetlen],3
+						mov				byte  [fs:BDA_MOUSE + mouse.packetlen],3	; 3 bytes par défaut
 
 						mov				byte [fs:BDA_MOUSE + mouse.status],0
 						mov				word [fs:BDA_MOUSE + mouse.x],320					; vous pouvez aussi préciser le centre
@@ -97,8 +61,8 @@ mouse_reset:
 						mov				word [fs:BDA_MOUSE + mouse.wheel],0
 
 						mov			 	byte [fs:BDA_MOUSE + mouse.cur_visible], 1
-						mov       word [fs:BDA_MOUSE + mouse.cur_oldx], 0
-						mov       word [fs:BDA_MOUSE + mouse.cur_oldy], 0
+						mov       word [fs:BDA_MOUSE + mouse.cur_x], 0
+						mov       word [fs:BDA_MOUSE + mouse.cur_y], 0
 
 						mov 			ax, cs
 						mov 			word [fs:BDA_MOUSE + mouse.cur_seg], ax
@@ -351,16 +315,18 @@ isr_mouse_handler:
 					mov 				al, [BDA_MOUSE + mouse.buffer]					; status
 					mov 				[BDA_MOUSE + mouse.status], al
 
-					mov					al, [BDA_MOUSE + mouse.buffer+1]				; delta X
+					xor					ax,ax
+					mov  				al, byte [BDA_MOUSE + mouse.buffer+1]				; delta X
 					cbw
 					add					[BDA_MOUSE + mouse.x], ax
 
-					mov					al, [BDA_MOUSE + mouse.buffer+2]				; delta Y
+					xor					ax,ax
+					mov 				al, byte [BDA_MOUSE + mouse.buffer+2]				; delta Y
 					cbw
 					sub					[BDA_MOUSE + mouse.y], ax
 
 					; si packetlen = 4, gérer la molette; experimental
-					mov					al, [BDA_MOUSE + mouse.buffer+3]				; delta Wheel
+					movsx				ax, byte [BDA_MOUSE + mouse.buffer+3]				; delta Wheel
 					cbw
 					add					word [BDA_MOUSE + mouse.wheel], ax
 

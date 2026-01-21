@@ -52,27 +52,26 @@
 %define BDA_MOUSE             0x0000
 
 struc  mouse
-        .buffer       resb  4         ; i8042 input buffer
-        .idx          resb  1         ; index in the buffer
-        .packetlen    resb  1         ; max buffer len (3 ou 4)
+        .buffer          resb  4         ; i8042 input buffer
+        .idx             resb  1         ; index in the buffer
+        .packetlen       resb  1         ; max buffer len (3 ou 4)
 
-        .status       resb  1         ; mouse status (button etc)
-        .wheel        resb  1         ; if a packet size is 4; experimental
-        .x            resw  1         ; 
-        .y            resw  1
+        .status          resb  1         ; mouse status (button etc)
+        .wheel           resb  1         ; if a packet size is 4; experimental
+        .x               resw  1         ; 
+        .y               resw  1
         ; cursor management
-        .cur_oldx     resw  1
-        .cur_oldy     resw  1
-        .cur_newx     resw  1
-        .cur_newy     resw  1
-        .cur_visible  resb  1
-        .cur_seg      resw  1         ; segment / offset of the pointer
-        .cur_ofs      resw  1
-        .cur_mask     resb  1         ; pixels mask (bit per pixel)
-        .cur_bit_ofs  resb  1         ; 0..7 bits d'offset (x&7)
-        .cur_bytes    resb  1         ; byte 2 ou 3 bytes as source for cursor image
-        .bkg_saved    resb  1         ; background saved 
-        .bkg_buffer   resb  48        ; buffer for saved background
+        .cur_x           resw  1         ; preservation des x,y du background
+        .cur_y           resw  1
+        .cur_addr_start  resw  1         ; adresse de départ de la sauvegarde
+        .cur_bank_add    resw  1         ; + ou - 0x2000
+        .cur_visible     resb  1
+        .cur_seg         resw  1         ; segment / offset of the pointer
+        .cur_ofs         resw  1
+        .cur_mask        resb  1         ; pixels mask (bit per pixel)
+        .cur_bit_ofs     resb  1         ; 0..7 bits d'offset (x&7)
+        .bkg_saved       resb  1         ; background saved 
+        .bkg_buffer      resb  16*3      ; buffer for saved background
 endstruc
 
 ; -----------------------------------------------------------------------------------
