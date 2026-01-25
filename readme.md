@@ -12,6 +12,8 @@ Rather than booting an operating system from disk, the PC starts **directly from
 
 The project is intentionally educational, experimental, and minimalist.
 
+![Screenshot of the boot + text test](/doc/assets/Capture-txt-test.png)
+
 ---
 
 ### Objectives
@@ -132,6 +134,8 @@ Ce projet consiste à concevoir et développer un **BIOS/ROM PC compatible enti�
 Au lieu de charger un système d’exploitation depuis un disque, le PC **démarre directement depuis la ROM** vers une **interface graphique minimaliste**, utilisant le mode **CGA Haute Résolution Monochrome (640×200)**.
 
 Le projet est volontairement **éducatif, expérimental et minimaliste**.
+
+![Screenshot of the boot + text test](/doc/assets/Capture-txt-test.png)
 
 ---
 
