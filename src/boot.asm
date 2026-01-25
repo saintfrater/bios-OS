@@ -26,13 +26,16 @@ bits			16
 ; configuration du bios
 ;
 ; ---------------------------------------------------------------------------
-%define DEBUG_PORT		0xe9								; 0x402 ou 0xe9
+%define DEBUG_PORT		0xe9		; 0x402 ou 0xe9
 
 ; initial stack
-%define STACK_SEG   	0x1000							; segment de base
+%define STACK_SEG   	0x0800		; segment de base
 
 section 		.text
-bits				16
+bits		16
+
+;%include		"./common/chartable.asm"
+;%include		"./common/cursor.asm"
 
 ; definition du BDA
 %include 		"./bda.asm"
@@ -44,152 +47,188 @@ bits				16
 %include 		"./drivers/keyboard_ps2.asm"
 %include 		"./services/generic.asm"
 
-err_vganok	db				'VGA Not Initialized',0
-;err_end			db				'code completed successfully',0
+err_vganok		db		'VGA Not Initialized',0
+;err_end			db		'code completed successfully',0
+
+cpt_txt			db '0123456789A123456789B123456789C123456789D123456789E123456789F123456789',0
+helloworld		db 'Hello World !',0
 
 reset:
-						cli
-						cld
+		cli
+		; il n'existe aucun 'stack' par défaut
+		mov		ax, STACK_SEG
+		mov 	ss, ax
+		mov 	sp, 0xFFFE     	; haut du segment (64ko de stack), mot-aligné
+		cld
 
-						; il n'existe aucun 'stack' par défaut
-						mov				ax, STACK_SEG
-						mov 			ss, ax
-						mov 			sp, 0xFFFE     	; haut du segment (64ko de stack), mot-aligné
+		; installé une table d'interruption "dummy"
+		call 	ivt_setup
 
-						; installé une table d'interruption "dummy"
-						call 			ivt_setup
+		call	bda_setup
 
-						call			bda_setup
+		; test IRQ 0
+		mov		ax,cs
+		mov		dx,ax
+		mov		bx,test_isr
+		mov		ax,i8259_MASTER_INT
 
-						; test IRQ 0
-						mov				ax,cs
-						mov				dx,ax
-						mov				bx,test_isr
-						mov				ax,i8259_MASTER_INT
+		call	ivt_setvector
 
-						call			ivt_setvector
+		; initialisation des PIC 8259A
+		call 	pic_init
 
-						; initialisation des PIC 8259A
-						call 			pic_init
+		; load Roms
+		call 	setup_load_rom
 
-						; load Roms
-						call 			setup_load_rom
+		; on vérifie que le BIOS VGA a installé une INT 10h
+		call	setup_check_vga
 
-						; on vérifie que le BIOS VGA a installé une INT 10h
-						call			setup_check_vga
+		; on initialise le mode texte 80x25 par défaut DEBUG
+		;mov		ax, 0x0003
+		;int		10h
 
-						; on initialise le mode texte 80x25 par défaut DEBUG
-						;mov				ax, 0x0003
-						;int				10h
+		; enable IRQ 0
+		mov     ah,IRQ_ENABLED
+		mov     al,0
+		call    pic_set_irq_mask
 
-						; enable IRQ 0
-            mov       ah,IRQ_ENABLED
-            mov       al,0
-            call      pic_set_irq_mask
+		call	kbd_init
+		sti
 
-						call 			kbd_init
-						sti
+		; on active le mode graphique
+		GFX_DRV	GFX_INIT
 
-						; on active le mode graphique
-						call			gfx_init
+		call 	mouse_reset
+		;call	mouse_init
 
-						call 			mouse_reset
-						; call			mouse_init
+; 		GFX_DRV	GFX_CRS_UPDATE
 
-						call 			gfx_cursor_move
+		GFX_SET_WRTIE_MODE GFX_TXT_BLACK_ON_WHITE
+
+		xor		cx,cx
+		mov		dx,0
+		GFX_DRV	GFX_GOTOXY
+
+		push	cs
+		pop		ds
+		mov		si, cpt_txt
+		GFX_DRV	GFX_WRITE
+
+		GFX_SET_WRTIE_MODE GFX_TXT_WHITE_TRANSPARENT
+
+		mov		cx,8
+		mov		dx,8
+		GFX_DRV	GFX_GOTOXY
+
+		mov		si, helloworld
+		GFX_DRV	GFX_WRITE
+
+		mov		cx,8
+		mov		dx,24
+
+		GFX_SET_WRTIE_MODE 0
+
+.loopshift:
+		GFX_DRV	GFX_GOTOXY
+		mov		si, helloworld
+		GFX_DRV	GFX_WRITE
+		add		dx,8
+		inc		cx
+		cmp		cx,16
+		jbe		.loopshift
 
 endless:
-						mov				ax,BDA_DATA_SEG
-						mov				ds,ax
+		mov		ax,BDA_DATA_SEG
+		mov		ds,ax
 
-						;mov				dx,0x300
-						;call			scr_gotoxy
+		;mov		dx,0x300
+		;call	scr_gotoxy
 
-						;mov				al, byte [BDA_TIMER]
-						;call			scr_puthex8
+		;mov		al, byte [BDA_TIMER]
+		;call	scr_puthex8
 
-						cmp				byte [BDA_TIMER],5
-						ja				.skip2
+		;cmp		byte [BDA_TIMER],5
+		;ja		.skip2
 
-						mov 			ax, [BDA_MOUSE + mouse.x]
-						add 			ax, 25
-						cmp 			ax,640
-						jb				.moveok
+		;mov 	ax, [BDA_MOUSE + mouse.x]
+		;add 	ax, 25
+		;cmp 	ax,640
+		;jb		.moveok
 ;
-						mov 			ax,0
+		mov 	ax,0
 .moveok:
-						mov 			 [BDA_MOUSE + mouse.x],ax
+		mov 	 [BDA_MOUSE + mouse.x],ax
 ;
-						call 			gfx_cursor_move
+		GFX_DRV	GFX_CRS_UPDATE
 
-						cmp 			byte [BDA_MOUSE + mouse.buffer+1], 0
-						jge				.skip
+		cmp 	byte [BDA_MOUSE + mouse.buffer+1], 0
+		jge		.skip
 
-						;mov				dx,0x400
-						;call			scr_gotoxy
+		;mov		dx,0x400
+		;call	scr_gotoxy
 
-						;mov				al, byte [BDA_MOUSE + mouse.buffer+1]
-						;call			scr_puthex8
+		;mov		al, byte [BDA_MOUSE + mouse.buffer+1]
+		;call	scr_puthex8
 .skip:
-						;cmp 			byte [BDA_MOUSE + mouse.buffer+2], 0
-						;jge				.skip2
+		;cmp 		byte [BDA_MOUSE + mouse.buffer+2], 0
+		;jge		.skip2
 
-						;mov				dx,0x404
-						;call			scr_gotoxy
+		;mov		dx,0x404
+		;call	scr_gotoxy
 
-						;mov				al, byte [BDA_MOUSE + mouse.buffer+2]
-						;call			scr_puthex8
+		;mov		al, byte [BDA_MOUSE + mouse.buffer+2]
+		;call	scr_puthex8
 .skip2:
-						;mov				dx,0
-						;call			scr_gotoxy
+		;mov		dx,0
+		;call	scr_gotoxy
 
-						;mov				ax,[BDA_MOUSE]									; adresse début dump
-						;mov				si,ax
-						mov				cx, 0x20
+		;mov		ax,[BDA_MOUSE]			; adresse début dump
+		;mov		si,ax
+		mov		cx, 0x20
 .dump:
-;						test 			cx,0x000F
-;						jnz				.sameline
-;						inc				dh
-;						xor				dl,dl
-;						call			scr_gotoxy
+;		test 	cx,0x000F
+;		jnz		.sameline
+;		inc		dh
+;		xor		dl,dl
+;		call	scr_gotoxy
 ;.sameline:
-;						mov				al,[ds:si]
-;						inc				si
+;		mov		al,[ds:si]
+;		inc		si
 
-;						push			ds
-;						push			si
+;		push	ds
+;		push	si
 
-;						call			scr_puthex8
-;						mov				al,' '
-;						call			scr_putc
+;		call	scr_puthex8
+;		mov		al,' '
+;		call	scr_putc
 
-;						pop				si
-;						pop				ds
+;		pop		si
+;		pop		ds
 
-						nop
+		nop
 
-						loop			.dump
+		loop	.dump
 
-						jmp				endless
+		jmp		endless
 
 
 ; -----------------------------------------------------------
-; Keyboard ISR (IRQ -> INT)
+; timer ISR (IRQ -> INT)
 ; -----------------------------------------------------------
 test_isr:
-            push			  ax
+		push	ax
 
-            push        fs
-            mov         ax,BDA_DATA_SEG
-            mov         fs,ax
-						inc         byte [fs:BDA_TIMER]
+		push    fs
+		mov     ax,BDA_DATA_SEG
+		mov		fs,ax
+; 		inc		byte [fs:BDA_TIMER]
 
-            mov         al, PIC_EOI            ; EOI master
-            out         i8259_MASTER_CMD, al
-            pop         fs
+		mov		al, PIC_EOI            ; EOI master
+		out		i8259_MASTER_CMD, al
+		pop		fs
 
-            pop					ax
-            iret
+		pop		ax
+		iret
 
 ; ------------------------------------------------------------------
 ; Padding jusqu'au reset vector
@@ -200,13 +239,15 @@ times 0xFFF0 - ($ - $$) db 0xFF
 ; RESET VECTOR (exécuté par le CPU)
 ; ------------------------------------------------------------------
 section 		.resetvect
-bits 				16
+bits 		16
 global			reset_vector
 
 reset_vector:
-    				; code minimal au reset
-				    jmp 			0xF000:reset
-builddate 	db 				'06/01/2026'
-						times 		16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
+   		; code minimal au reset
+		jmp		0xF000:reset
+
+builddate:
+		db 		'06/01/2026'
+		times 		16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
 
 

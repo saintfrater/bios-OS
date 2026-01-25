@@ -48,7 +48,6 @@
 ; information relative à la souris
 ;
 %define BDA_DATA_SEG	        0x0050
-%define BDA_MOUSE               0x0000
 
 %define BKG_DWORDS_PER_LINE     1          ; 1 dword stocké par ligne
 %define BKG_LINES               16
@@ -56,30 +55,57 @@
 %define BKG_TOTAL_BYTES         (BKG_TOTAL_DWORDS * 4)            ; 64
 
 struc  mouse
-        .buffer          resb   4       ; i8042 input buffer
-        .idx             resb   1       ; index in the buffer
-        .packetlen       resb   1       ; max buffer len (3 ou 4)
+        .buffer         resb    4       ; i8042 input buffer
+        .idx            resb    1       ; index in the buffer
+        .packetlen      resb    1       ; max buffer len (3 ou 4)
 
-        .status          resb   1       ; mouse status (button etc)
-        .wheel           resb   1       ; if a packet size is 4; experimental
-        .x               resw   1       ;
-        .y               resw   1
+        .status         resb    1       ; mouse status (button etc)
+        .wheel          resb    1       ; if a packet size is 4; experimental
+        .x              resw    1       ;
+        .y              resw    1
         ; cursor management
-        .cur_x           resw   1       ; preservation des x,y du background
-        .cur_y           resw   1
-        .cur_addr_start  resw   1       ; adresse de départ de la sauvegarde
-        .cur_bank_add    resw   1       ; + ou - 0x2000
-        .cur_drawing     resb   1
-        .cur_visible     resb   1
-        .cur_seg         resw   1       ; segment / offset of the pointer
-        .cur_ofs         resw   1
-        .cur_mask        resb   1       ; pixels mask (bit per pixel)
-        .cur_bit_ofs     resb   1       ; 0..7 bits d'offset (x&7)
-        .bkg_saved       resb   1       ; background saved
-        .bkg_buffer      resd   16      ; buffer for saved background
+        .cur_x          resw    1       ; preservation des x,y du background
+        .cur_y          resw    1
+        .cur_addr_start resw    1       ; adresse de départ de la sauvegarde
+        .cur_bank_add   resw    1       ; + ou - 0x2000
+        .cur_drawing    resb    1
+        .cur_visible    resb    1
+        .cur_seg        resw    1       ; segment / offset of the pointer
+        .cur_ofs        resw    1
+        .cur_mask       resb    1       ; pixels mask (bit per pixel)
+        .cur_bit_ofs    resb    1       ; 0..7 bits d'offset (x&7)
+        .bkg_saved      resb    1       ; background saved
+        alignb                  4       ; alignement 4 bytes
+        .bkg_buffer     resd    16      ; buffer for saved background
 endstruc
 
-%define  BDA_TIMER       (BDA_MOUSE + mouse_size)
+struc   gfx
+        .cur_x          resw    1       ; x,y en pixel
+        .cur_y          resw    1
+        .cur_offset     resw    1       ; offset calculé pour le prochain caractère
+        .cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
+;         .cur_xbyte      resb    1       ; x>>3 (0..79)
+        .cur_shift      resb    1       ; x&7 (0..7)
+;         .cur_parity     resb    1
+;        .cur_color      resb    1       ; 0 = texte en noir, autre = texte en blanc
+;         .cur_trans      resb    1       ; 0 = fond transparent, autre = fond inversé .txt_color
+        .cur_mode       resb    1       ;
+endstruc
+
+%define BDA_MOUSE               0x0000
+%define BDA_GFX                 (BDA_MOUSE + mouse_size)
+
+;
+; memory map
+;
+;   0x00000-0x003FF : IVT (1kB)
+;   0x00400-0x007FF : BDA (1kB) pour les options 'ROMS' carte graphique, etc...
+;   0x00800-0x009FF : Varibles custom.
+;
+;   0x03C00-0x08000 : stack segment
+;   0x
+
+
 
 ; -----------------------------------------------------------------------------------
 ; PC components I/O ports

@@ -8,13 +8,13 @@
 %define MEM_DUMP_RESET  8
 %define MEM_DUMP_NEXT   10
 
-mem_api:
-  dw mem_init
-  dw mem_detect
-  dw mem_alloc
-  dw mem_free
-  dw mem_dump_reset
-  dw mem_dump_next
+memory_api:
+                dw        mem_init
+                dw        mem_detect
+                dw        mem_alloc
+                dw        mem_free
+                dw        mem_dump_reset
+                dw        mem_dump_next
 
 ; =======================
 ; Contexte en RAM (DS = CTX_SEG)
@@ -32,6 +32,79 @@ dump_cursor     dw 0
 %define FTR_SIZE   2
 %define MIN_BLK    12        ; aligné (>= HDR+FTR)
 %define FLAG_USED  1
+
+%define MEM_SEG_DEB		0x0800 						  ; 0x0800:0000 = 0x8000 (32KB) évite IVT/BDA + stack 7C00
+%define MEM_SEG_END   0xA000    					; 0xA000:0000 = 0xA0000 (début zone vidéo)
+%define MEM_SEG_STEP  0x0040    					; 1KB = 0x400 bytes = 0x40 paragraphs
+
+; ---------------------------------------------------------------------------
+; Détection RAM conventionnelle
+; Teste la RAM de MEM_SEG_DEB -> MEM_SEG_END (0xA000, 640KB), par pas de 1KB.
+; Méthode: sauvegarde 1 mot, écrit 2 patterns, relit, restaure.
+;
+; Résultats:
+;   AX = taille détectée en Ko (KB) à partir de 0 jusqu’au “top conventionnel”
+;   DX = top_segment (segment du premier Ko NON valide)  (optionnel)
+;
+; Précautions:
+; - Ne testez PAS une zone où se trouve votre pile / variables.
+; - Si votre pile est à 0000:7C00 (phys 0x7C00), commencez au moins à 0x0800.
+; - Ne testez pas au-delà de MEM_SEG_END (0xA000: début VGA/vidéo).
+; ---------------------------------------------------------------------------
+memory_setup:
+						xor 				ax, ax            ; AX = compteur KB trouvés
+						mov 				dx, MEM_SEG_DEB 	; DX = segment courant testé
+						mov 				cx, MEM_SEG_END   ; CX = segment fin (exclu)
+						xor 				di, di            ; tester au début du bloc 1KB: ES:0000
+
+.loop_seg:
+						cmp 				dx, cx
+						jae 				.done
+						mov 				es, dx
+
+						; sauvegarder le mot existant
+						mov 				bx, [es:di]
+
+						; pattern 1
+						mov 				word [es:di], 0x55AA
+						cmp 				word [es:di], 0x55AA
+						jne 				.fail_restore
+
+						; pattern 2 (inverse)
+						mov 				word [es:di], 0xAA55
+						cmp 				word [es:di], 0xAA55
+						jne 				.fail_restore
+
+						; restaurer
+						mov 				[es:di], bx
+
+						; OK: avancer d’1KB
+						inc 				ax                     ; +1KB valide
+						add 				dx, MEM_SEG_STEP
+						jmp 				.loop_seg
+
+.fail_restore:
+						; restaurer avant de sortir
+						mov 				[es:di], bx
+
+.done:
+						; AX contient le nb de KB valides *à partir de MEM_SEG_DEB*.
+						; Si vous voulez une taille “depuis 0KB”, ajoutez MEM_SEG_DEB*16/1024 = MEM_SEG_DEB/64.
+						;
+						; base_kb = MEM_SEG_DEB / 0x0040 (car 1KB = 0x40 segments)
+						mov 				bx, MEM_SEG_DEB
+						shr 				bx, 6                 ; /64 = /0x40  => KB de base
+						add 				ax, bx                ; AX = taille conventionnelle totale en KB (approx. 0..640)
+						; DX = segment du premier bloc NON valide (top)
+						; DX est déjà positionné (segment courant)
+
+						; stocker l'information dans le BDA
+						mov 				bx, BDA_SEGMENT
+						mov 				ds, bx
+						mov 				[BDA_INFO_MEM_SIZE], ax
+						mov					[BDA_INFO_MEM_SEG], dx
+
+						ret
 
 ; -----------------------
 ; mem_detect

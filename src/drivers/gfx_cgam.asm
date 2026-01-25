@@ -23,34 +23,83 @@
 ;
 ; graphics drivers pour carte video/mode CGA-Mono (640x200x2)
 ;
-%define VIDEO_SEG    	0xB800        			; ou 0xB000
+%define VIDEO_SEG    	0xB800        	; ou 0xB000
 
-%define GFX_MODE			0x06								; MCGA HiRes (B/W)
-%define GFX_WIDTH			640
+%define GFX_MODE		0x06			; MCGA HiRes (B/W)
+%define GFX_WIDTH		640
 %define GFX_HEIGHT		200
 
-%define CGA_STRIDE    80
-%define CGA_ODD_BANK  0x2000
+%define CGA_STRIDE      80
+%define CGA_ODD_BANK    0x2000
+
+; décommenter cette constante si vous voulez un mode aligné/non alligné différent
+; sinon le code utilisé sera toujours "shifted"
+; %define FULL_MODE_ALLIGNED          1
+
+; align putch mode
+%define GFX_TXT_WHITE_TRANSPARENT   0
+%define GFX_TXT_BLACK_TRANSPARENT   1
+%define GFX_TXT_TRANSP_ON_WHITE     2
+%define GFX_TXT_WHITE_ON_BLACK      3
+%define GFX_TXT_BLACK_ON_WHITE      4
+
+%macro GFX_DRV  1
+    call word [cs:graph_driver + ((%1)*2)]
+%endmacro
 
 ; ------------------------------------------------------------
 ; TABLE DE SAUT (VECTEURS API)
 ; Cette table doit être située au début du driver pour être
 ; accessible par la GUI à des offsets fixes.
 ; ------------------------------------------------------------
+%define	GFX_INIT		0
+%define GFX_PUTPIXEL	1
+%define GFX_GETPIXEL 	2
+%define GFX_GOTOXY		3
+%define GFX_PUTCH_MODE  4
+%define GFX_PUTCH       5
+%define GFX_WRITE       6
+%define GFX_CRS_UPDATE  7
 
-%define	INIT							0
-%define PUTPIXEL					3
-%define GETPIXEL 					6
-%define MOUSE_UPDATE 		  9
-
-gfx_api:
-    jmp gfx_init            ; Offset +0: Initialisation
-    jmp gfx_putpixel        ; Offset +3: Dessin pixel
-    jmp gfx_getpixel        ; Offset +6: Lecture pixel
-		jmp gfx_cursor_move			; Offset +9: mouse update
+graph_driver:
+        dw cga_init
+        dw cga_putpixel
+        dw cga_getpixel
+        dw cga_set_charpos
+        dw cga_none
+        dw cga_putc
+        dw cga_write
+ 		dw cga_cursor_move
 ;    jmp gfx_fill_rect       ; Remplissage rectangle (Nouveau)
 ;    jmp gfx_invert_rect     ; Offset +12: Inversion (Nouveau pour Menus)
 ;    jmp gfx_draw_hline      ; Offset +15: Ligne horizontale rapide (Nouveau)
+
+%include "./common/cursor.asm"
+%include "./common/chartable.asm"
+
+;
+;
+; convert al -> AX aligned with "cl"
+%macro ALING_BYTE 0
+        mov     ah,al
+        xor     al,al
+        shr     ax,cl
+
+        xchg    ah,al
+%endmacro
+
+
+%macro GFX_SET_WRTIE_MODE 1
+        push    fs
+
+        push    BDA_DATA_SEG
+        pop     fs
+
+        mov     [fs:BDA_GFX + gfx.cur_mode], %1
+
+        pop     fs
+        pop     ax
+%endmacro
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -72,51 +121,335 @@ gfx_api:
 ;
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
-gfx_init:
-						; init graphics mode
-						mov 			ah, 0x00     					; AH=00h set video mode
-						mov				al, GFX_MODE
-						int 			0x10
+cga_init:
+        mov     ax, BDA_DATA_SEG
+        mov     ds, ax
 
-						mov		 		byte [BDA_MOUSE + mouse.bkg_saved],0	; flag image saved
+		; init graphics mode
+		mov 	ah, 0x00     			; AH=00h set video mode
+		mov		al, GFX_MODE
+		int 	0x10
+		mov		byte [BDA_MOUSE + mouse.bkg_saved],0	; flag image saved
 
-						; dessine un background "check-board"
-						call			gfx_background
+        mov     byte [BDA_GFX + gfx.cur_mode], 1
+		; dessine un background "check-board"
+		call	cga_background
+		ret
 
-						ret
+cga_none:
+        ret
+
+; ---------------------------------------------------------------------------
+; gfx_set_charpos
+; In : CX = x (pixels), DX = y (pixels)
+; Out: variables DS:GFX_CUR_*
+; Notes:
+;  - calcule l'offset VRAM de la scanline y: base = (y&1?2000:0) + (y>>1)*80 + (x>>3)
+;  - stocke aussi shift = x&7
+; ---------------------------------------------------------------------------
+cga_set_charpos:
+        pusha
+        push    fs
+
+        mov     ax,BDA_DATA_SEG
+        mov     fs,ax
+
+        ; store x,y en pixel
+        mov     [fs:BDA_GFX + gfx.cur_x], cx
+        mov     [fs:BDA_GFX + gfx.cur_y], dx
+
+        mov     ax, cx
+        and     ax, 0x07
+        mov     [fs:BDA_GFX + gfx.cur_shift], al
+
+        ; calcul de l'offset de la position 'x,y':
+        ; si 'y' est paire, DI < 0x2000 & add = 0x2000
+        ; si 'y' est impaire, DI> 0x2000 & add = -0x2000
+        ; DI = (y>>1)*80 + (x>>3) + (y&1)*
+        mov     ax, dx
+        shr     ax, 1
+        mov     bx, ax                          ; bx = dx>>1
+        shl     bx, 4                           ; bx = bx * 16
+        shl     ax, 6                           ; ax = ax * 64
+        add     bx, ax
+        mov     ax, cx
+        shr     ax, 3                           ; ax = x/8
+        add     bx, ax
+        mov     ax, CGA_ODD_BANK
+
+        test    dl, 1
+        jz      .even
+        add     bx, ax
+        neg     ax
+.even:
+        mov     [fs:BDA_GFX + gfx.cur_line_ofs], ax
+        mov     [fs:BDA_GFX + gfx.cur_offset], bx
+
+
+        pop     fs
+        popa
+        ret
+
+; ---------------------------------------------------------------------------
+; get_glyph_offset
+; In : AL = char (ASCII)
+; Out: CS:SI -> 8 bytes
+; ---------------------------------------------------------------------------
+get_glyph_offset:
+        cmp     al, 0x20
+        jb      .qmark              ; al < 20h (' '
+        cmp     al, 0x7E
+        ja      .qmark              ; al > 7Eh ('~')
+        sub     al, 0x20
+        jmp     .ok
+.qmark:
+        mov     al, '?'
+        sub     al, 0x20
+.ok:
+        xor     ah, ah
+        mov     si, ax
+        shl     si, 3
+        add     si, font8x8
+        ret
+
+; ---------------------------------------------------------------------------
+; cga_putc_aligned
+; In : AL = char (ASCII)
+; Uses: DS:GFX_CUR_* (baseDI, shift, etc.)
+; Out: avance le curseur d'un caractère (8 pixels) sans recalcul complet
+; Notes:
+;  - Nécessite une font 8x8 accessible en CS (voir get_glyph8x8_cs_si)
+;  - Transparent: bits 0 du glyph ne touchent pas le fond
+; ---------------------------------------------------------------------------
+
+%ifdef FULL_MODE_ALLIGNED
+cga_putc_aligned:
+    ; Base offset VRAM pour la scanline Y
+    mov     di, [fs:BDA_GFX + gfx.cur_offset]
+    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
+    mov     dl, [fs:BDA_GFX + gfx.cur_mode]
+
+    mov     cx,4
+.row_loop:
+    ; AL = byte glyph pour cette scanline
+    mov     ax, [cs:si]
+    add     si,2
+
+    cmp     dl,0
+    jne     .black_transparent
+
+    ; white with transparent
+    or      [es:di], al
+    or      [es:di+bx], ah
+    jmp     .next
+
+.black_transparent:
+    cmp     dl,1
+    jne     .transparent_white
+
+    ; black with transparent
+    not      ax
+    and      [es:di], al
+    and      [es:di+bx], ah
+    jmp     .next
+
+.transparent_white:
+    cmp     dl,2
+    jne     .black_white
+
+    ; transparent on white
+    not      ax
+    or      [es:di], al
+    or      [es:di+bx], ah
+    jmp     .next
+
+.black_white:
+    cmp     dl,3
+    jne     .white_transparent
+
+    ; white on black
+    mov     [es:di], al
+    mov     [es:di+bx], ah
+    jmp     .next
+
+.white_transparent:
+    not      ax
+    mov     [es:di], al
+    mov     [es:di+bx], ah
+
+.next:
+    add     di,CGA_STRIDE
+
+    loop    .row_loop
+
+    ; Avancer curseur d'un caractère (8 pixels)
+    inc     word [fs:BDA_GFX + gfx.cur_offset]
+    add     word [fs:BDA_GFX + gfx.cur_x], 8
+
+    ret
+%endif
+
+; ---------------------------------------------------------------------------
+; cga_putc_unalign
+; In : AL = char (ASCII)
+; Uses: FS:BDA_GFX + gfx.cur_* (offset, add_ofs, shift, mode)
+; Notes:
+;   - x non aligné (x&7 != 0)
+;   - écrit sur 2 bytes (di et di+1) dans chaque banque
+; ---------------------------------------------------------------------------
+cga_putc_unaligned:
+    ; Base offset VRAM pour la scanline Y
+    mov     di, [fs:BDA_GFX + gfx.cur_offset]
+    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
+    mov     ch, [fs:BDA_GFX + gfx.cur_mode]
+    mov     cl, [fs:BDA_GFX + gfx.cur_shift]
+
+    mov     bp,4
+.row_loop:
+
+    ; ligne "paire" du gylphe
+    mov     al, [cs:si]
+    inc     si
+    ALING_BYTE
+    push    ax
+
+    ; ligne "impaire" du gylphe
+    mov     al, [cs:si]
+    inc     si
+    ALING_BYTE
+    pop     dx
+    xchg    ax, dx
+
+    cmp     ch,0
+    jne     .black_transparent
+
+; white with transparent
+    or      [es:di], ax
+    or      [es:di+bx], dx
+    jmp     .next
+
+.black_transparent:
+;    cmp     ch,1
+;    jne     .transparent_white
+
+; black with transparent
+    not      ax
+    not      dx
+    and      [es:di], ax
+    and      [es:di+bx], dx
+;    jmp     .next
+
+;    .transparent_white:
+;        cmp     ch,2
+;        jne     .black_white
+;
+;    ; transparent on white
+;        not      ax
+;        or      [es:di], ax
+;        or      [es:di+bx], dx
+;        jmp     .next
+;
+;    .black_white:
+;        cmp     ch,3
+;        jne     .white_transparent
+;
+;    ; white on black
+;        mov     [es:di], ax
+;        mov     [es:di+bx], dx
+;        jmp     .next
+;
+;    .white_transparent:
+;        not      ax
+;        mov     [es:di], ax
+;        mov     [es:di+bx], dx
+;
+.next:
+    add     di,CGA_STRIDE
+
+    dec     bp
+    jnz     .row_loop
+
+    ; Avancer curseur d'un caractère (8 pixels)
+    inc     word [fs:BDA_GFX + gfx.cur_offset]
+    add     word [fs:BDA_GFX + gfx.cur_x], 8
+
+    ret
+
+cga_putc:
+    pusha
+    push    fs
+    push    es
+
+    mov     bx, VIDEO_SEG
+    mov     es, bx
+    mov     bx, BDA_DATA_SEG
+    mov     fs, bx
+
+    call    get_glyph_offset
+
+%ifdef FULL_MODE_ALLIGNED
+    cmp     byte [fs:BDA_GFX + gfx.cur_shift], 0
+    jne     .unaligned
+
+    call    cga_putc_aligned
+    jmp     .done
+.unaligned:
+%endif
+
+    call    cga_putc_unaligned
+.done:
+    pop     es
+    pop     fs
+    popa
+    ret
+
+;
+; write string from [DS:SI] to screen
+;
+cga_write:
+    push    ax
+
+.loops:
+    lodsb
+    cmp     al,0
+    je      .done
+    call    cga_putc
+    jmp     .loops
+.done:
+
+    pop     ax
+    ret
+
 
 ; ------------------------------------------------------------
 ; Calcule DI + AH=mask pour (CX=x, DX=y) en mode CGA 640x200
 ;
 ; Out: ES=VIDEO_SEG, DI=offset, AH=bitmask (0x80 >> (x&7))
 ; ------------------------------------------------------------
-gfx_calc_addr:
-						; calcul de l'offset 'y':
-						; si y est impaire, DI+=0x2000
-        		; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
-        		mov	     	ax, dx
-        		shr 	    ax, 1                  ; ax = y/2
-
-						mov     	di, ax
-						shl  		  di, 4                  ; (y/2)*16
-						shl     	ax, 6                  ; (y/2)*64
-						add     	di, ax                 ; *80
-
-						mov     	ax, cx
-						shr     	ax, 3
-						add     	di, ax
-
-						test    	dl, 1
-						jz      	.even
-						add     	di, CGA_ODD_BANK
+cga_calc_addr:
+		; calcul de l'offset 'y':
+		; si y est impaire, DI+=0x2000
+		; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
+		mov	    ax, dx
+		shr 	ax, 1                  ; ax = y/2
+		mov     di, ax
+		shl  	di, 4                  ; (y/2)*16
+		shl     ax, 6                  ; (y/2)*64
+		add     di, ax                 ; *80
+		mov     ax, cx
+		shr     ax, 3
+		add     di, ax
+		test    dl, 1
+		jz      .even
+		add     di, CGA_ODD_BANK
 .even:
-						; masque bit = 0x80 >> (x&7)
-						push		 	cx
-						and     	cl, 7
-						mov     	ah, 080h
-						shr     	ah, cl
-						pop     	cx
-						ret
+		; masque bit = 0x80 >> (x&7)
+		push	cx
+		and     cl, 7
+		mov     ah, 080h
+		shr     ah, cl
+		pop     cx
+		ret
 
 ; ------------------------------------------------------------
 ; Dessine un pixel, accès VRAM direct.
@@ -126,22 +459,22 @@ gfx_calc_addr:
 ;   ES = Target Segment (usually VIDEO_SEG)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
-gfx_local_putpixel:
-						call   		gfx_calc_addr
+cga_local_putpixel:
+		call   	cga_calc_addr
 
-						; write
-						cmp  	   	bl, 0
-						je    	  .clear
+		; write
+		cmp     bl, 0
+		je    	.clear
 .set:
-						or   		  byte [es:di], ah
-						jmp       .done
+		or      byte [es:di], ah
+		jmp     .done
 
 .clear:
-						not       ah
-						and       byte [es:di], ah
+		not     ah
+		and     byte [es:di], ah
 
 .done:
-						ret
+		ret
 
 ; ------------------------------------------------------------
 ; Dessine un pixel, accès VRAM direct.
@@ -150,76 +483,76 @@ gfx_local_putpixel:
 ;   DX = y (0..199)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
-gfx_putpixel:
-						push			ax
-						push  	  di
-						push    	es
+cga_putpixel:
+		push	ax
+		push  	di
+		push    es
 
-						mov				ax,	VIDEO_SEG
-						mov				es,ax
-						call   		gfx_calc_addr
+		mov		ax,	VIDEO_SEG
+		mov		es,ax
+		call   	cga_calc_addr
 
-						; write
-						cmp  	   	bl, 0
-						je    	  .clear
+		; write
+		cmp  	bl, 0
+		je    	.clear
 .set:
-						or   		  byte [es:di], ah
-						jmp       .done
+		or   	byte [es:di], ah
+		jmp     .done
 
 .clear:
-						not       ah
-						and       byte [es:di], ah
+		not     ah
+		and     byte [es:di], ah
 
 .done:
-						pop 	    es
-						pop   	  di
-						pop				ax
-						ret
+		pop 	es
+		pop   	di
+		pop		ax
+		ret
 
 ; ------------------------------------------------------------
 ; Lit un pixel (CX=x, DX=y)
 ; Out: AL=0/1
 ; ------------------------------------------------------------
-gfx_getpixel:
-						push    	di
-						push    	es
+cga_getpixel:
+		push    	di
+		push    	es
 
-						call    	gfx_calc_addr
-						mov     	al, [es:di]
-						and     	al, ah
-						setnz   	al
+		call    	cga_calc_addr
+		mov     	al, [es:di]
+		and     	al, ah
+		setnz   	al
 
-						pop     	es
-						pop     	di
-						ret
+		pop     	es
+		pop     	di
+		ret
 
 ; ------------------------------------------------------------
 ; Dessine un background "check-board", accès VRAM direct.
 ;
 ; ------------------------------------------------------------
-gfx_background:
-						mov				ax,VIDEO_SEG
-						mov				es,ax
-						mov				di,0x0000
-						mov				eax,0xaaaaaaaa
-						mov				cx,0x800
-						rep				stosd
-						mov				di,0x2000
-						mov				eax,0x55555555
-						mov				cx,0x800			; 640/8/4
-						rep				stosd
-						ret
+cga_background:
+		mov		ax,VIDEO_SEG
+		mov		es,ax
+		mov		di,0x0000
+		mov		eax,0xaaaaaaaa
+		mov		cx,0x800
+		rep		stosd
+		mov		di,0x2000
+		mov		eax,0x55555555
+		mov		cx,0x800			; 640/8/4
+		rep		stosd
+		ret
 
 ; ------------------------------------------------------------
 ; Calcule les infos de l'alignement du curseur, basé sur cx=X
 ; il est important que DS pointe sur le BDA_MOUSE_SEG
 ; Out: BDA_CURSOR_BITOFF, BDA_CURSOR_BYTES
 ; ------------------------------------------------------------
-gfx_cursor_calc_align:
-        		mov     	al, cl
-        		and     	al, 7                  ; offset = x&7
-        		mov     	byte [BDA_MOUSE + mouse.cur_bit_ofs], al
-        		ret
+cga_cursor_calc_align:
+        mov     al, cl
+        and     al, 7                  ; offset = x&7
+        mov     byte [BDA_MOUSE + mouse.cur_bit_ofs], al
+        ret
 
 ; ------------------------------------------------------------
 ; Dessine un pixel, en [ES:DI] accès VRAM direct.
@@ -228,62 +561,54 @@ gfx_cursor_calc_align:
 ;   DX = y (0..199)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
-gfx_putpixel_fast:
-						cmp  	   	bl, 0
-						je    	  .clear
+cga_putpixel_fast:
+		cmp  	bl, 0
+		je    	.clear
 .set:
-						or   		  byte [es:di], ah
-						jmp       .done
+		or      byte [es:di], ah
+		jmp     .done
 .clear:
-						not       ah
-						and       byte [es:di], ah
+		not     ah
+		and     byte [es:di], ah
 .done:
-						ret
+		ret
 
 ; ------------------------------------------------------------
 ; Lit un pixel, en [ES:DI] accès VRAM direct.
 ;
 ; ------------------------------------------------------------
-gfx_getpixel_fast:
-						mov     	al, [es:di]
-						and     	al, ah
-						setnz   	al
-						ret
+cga_getpixel_fast:
+		mov     al, [es:di]
+		and     al, ah
+		setnz   al
+		ret
 
-gfx_cursor_move:
-						pusha
-						push 			ds
-						push 			es
+cga_cursor_move:
+		pusha
+		push 	ds
+		push 	es
 
-						; move Data Segment
-						mov				ax, BDA_DATA_SEG
-						mov				ds, ax
+		; move Data Segment
+		mov		ax, BDA_DATA_SEG
+		mov		ds, ax
 
-						cmp				byte [BDA_MOUSE + mouse.cur_drawing],0
-						jne				.done
-						mov 			byte [BDA_MOUSE + mouse.cur_drawing],1
+		cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
+		jne		.done
+		mov 	byte [BDA_MOUSE + mouse.cur_drawing],1
 
-						mov		 		ax, VIDEO_SEG
-						mov		 		es, ax
+		mov		ax, VIDEO_SEG
+		mov		es, ax
 
-						;call 			gfx_cursor_restorebg
+		;call 			cga_cursor_restorebg
 
-						;call			gfx_cursor_savebg
-
-						call 			gfx_cursor_draw
-						mov 			byte [BDA_MOUSE + mouse.cur_drawing],0
+		;call			cga_cursor_savebg
+		call 	cga_cursor_draw
+		mov 	byte [BDA_MOUSE + mouse.cur_drawing],0
 .done:
-						pop 			es
-						pop 			ds
-						popa
-						ret
-
-bits 16
-
-%define GFX_WIDTH    640
-%define GFX_HEIGHT   200
-%define CGA_STRIDE   80
-%define CGA_ODD_BANK 0x2000
+		pop 	es
+		pop 	ds
+		popa
+		ret
 
 ; ============================================================
 ; gfx_cursor_draw_rm16_i386_self
@@ -292,7 +617,7 @@ bits 16
 ; Sortie: rien
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
-gfx_cursor_draw_rm16_i386_self:
+cga_cursor_draw:
     push    es
     push    gs
     pusha
@@ -605,7 +930,7 @@ gfx_cursor_draw_rm16_i386_self:
     ret
 
 ; -----------------------------------------------
-; gfx_cursor_savebg_32
+; cga_cursor_savebg_32
 ; Sauve 16 lignes (3 bytes/ligne) sous le curseur.
 ; Stocke 16 DWORDs: chaque DWORD contient (b0|b1<<8|b2<<16) dans les 24 bits bas.
 ; -----------------------------------------------
@@ -622,7 +947,7 @@ gfx_cursor_savebg:
     mov     [BDA_MOUSE + mouse.cur_y], dx
 
     ; calcule ES:DI pour (x,y)
-    call    gfx_calc_addr
+    call    cga_calc_addr
 
     ; bank_add = +0x2000 si DI<0x2000 sinon -0x2000
     mov     bx, 02000h
@@ -660,12 +985,12 @@ gfx_cursor_savebg:
     ret
 
 ; -----------------------------------------------
-; gfx_cursor_restorebg_32
+; cga_cursor_restorebg_32
 ; Restaure 16 lignes sauvegardées.
 ; Pour ne pas écraser le 4e byte voisin:
 ;   dst = (dst & 0xFF000000) | (saved & 0x00FFFFFF)
 ; -----------------------------------------------
-gfx_cursor_restorebg:
+cga_cursor_restorebg:
     cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
     je      .done
 
