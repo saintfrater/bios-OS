@@ -50,18 +50,22 @@ mouse_reset:
 		mov		byte  [fs:BDA_MOUSE + mouse.idx],0
 		mov		dword [fs:BDA_MOUSE + mouse.buffer],0
 		mov		byte  [fs:BDA_MOUSE + mouse.packetlen],3	; 3 bytes par défaut
-		mov		byte [fs:BDA_MOUSE + mouse.status],0
-		mov		word [fs:BDA_MOUSE + mouse.x],320					; vous pouvez aussi préciser le centre
-		mov		word [fs:BDA_MOUSE + mouse.y],100					; vous pouvez aussi préciser le centre
-		; experiemntal
-		mov		word [fs:BDA_MOUSE + mouse.wheel],0
-		mov		byte [fs:BDA_MOUSE + mouse.cur_visible], 1
-		mov     word [fs:BDA_MOUSE + mouse.cur_x], 0
-		mov     word [fs:BDA_MOUSE + mouse.cur_y], 0
-		mov 	byte [fs:BDA_MOUSE + mouse.cur_drawing], 0
+		mov		byte  [fs:BDA_MOUSE + mouse.status],0
+
+		mov		word  [fs:BDA_MOUSE + mouse.x],320					; vous pouvez aussi préciser le centre
+		mov		word  [fs:BDA_MOUSE + mouse.y],100					; vous pouvez aussi préciser le centre
+
+		mov		byte  [fs:BDA_MOUSE + mouse.cur_visible], 1
+		mov     word  [fs:BDA_MOUSE + mouse.cur_x], 0
+		mov     word  [fs:BDA_MOUSE + mouse.cur_y], 0
+		mov 	byte  [fs:BDA_MOUSE + mouse.cur_drawing], 0
+
 		mov 	ax, cs
-		mov 	word [fs:BDA_MOUSE + mouse.cur_seg], ax
-		mov 	word [fs:BDA_MOUSE + mouse.cur_ofs], mouse_arrow
+		mov 	word  [fs:BDA_MOUSE + mouse.cur_seg], ax
+		mov 	word  [fs:BDA_MOUSE + mouse.cur_ofs], mouse_arrow
+
+		; experiemntal
+		mov		word  [fs:BDA_MOUSE + mouse.wheel],0
 		ret
 
 ; ------------------------------------------------------------
@@ -276,7 +280,7 @@ isr_mouse_handler:
 		mov		ds,ax
 
 		; lire un octet depuis le contrôleur et le stocker dans le buffer
-		in  	al, i8042_PS2_DATA   										; lire octet souris
+		in  	al, i8042_PS2_DATA   						; lire octet souris
 
 		movzx 	bx, byte [BDA_MOUSE + mouse.idx]
 		mov 	byte [BDA_MOUSE + mouse.buffer + bx], al
@@ -288,37 +292,42 @@ isr_mouse_handler:
 		jb 		.done_eoi
 
 		; packet complet, on decode les données (ou on jette si c'est incorrect)
-		mov 	byte [BDA_MOUSE + mouse.idx], 0					; reset de l'index de lecture
+		mov 	byte [BDA_MOUSE + mouse.idx], 0				; reset de l'index de lecture
 
 		; check bit 3 octet 0 pour assurer que le bloc est ok:
 		mov		al, byte [BDA_MOUSE + mouse.buffer]
-		and 	al, 00001000b														; bit 3 = 1
-		je		.done_eoi																; allignement erroné 				
+		and 	al, 00001000b								; bit 3 = 1
+		je		.done_eoi									; allignement erroné
 
-		
-		
-		mov 	bl, [BDA_MOUSE + mouse.buffer]					; status
-		mov 	[BDA_MOUSE + mouse.status], bl
+		; debut du décodage des données
+		mov 	bl, [BDA_MOUSE + mouse.buffer]				; status
+		mov 	al,bl
+		; --- BOUTONS (Optionnel mais recommandé) ---
+        and     al, 00000111b       ; Bits 0, 1, 2 = Gauche, Droite, Milieu
+		mov 	[BDA_MOUSE + mouse.status], al
 
-		movsx ax, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
-		test	bl,00010000b														; signe X
+		xor 	ax,ax
+		mov 	al, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
+		test	bl,00010000b								; signe X
 		jz		.x_pos
-		neg		ax																			; X est négatif
+		mov		ah,0xff										; X est négatif
 .x_pos:
 		add		[BDA_MOUSE + mouse.x], ax
 
-		movsx	ax, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
-		test	bl,00100000b														; signe Y
+		xor 	ax,ax
+		mov		al, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
+		test	bl,00100000b								; signe Y
 		jz		.y_pos
-		neg 	ax																			; y est négatif
+		mov		ah,0xff										; y est négatif
 .y_pos:
 		sub		[BDA_MOUSE + mouse.y], ax
 
+		; check si il y a un 4eme byte a traiter
 		mov 	al, [BDA_MOUSE + mouse.packetlen]
 		cmp		al,4
 		jne		.done_eoi
 
-		; si packetlen = 4, gérer la molette; experimental
+		; si packetlen = 4, gérer la molette; experimental et non fonctionnel
 		movsx	ax, byte [BDA_MOUSE + mouse.buffer+3]		; delta Wheel
 		add		word [BDA_MOUSE + mouse.wheel], ax
 
@@ -328,8 +337,8 @@ isr_mouse_handler:
 		; call 				gfx_cursor_move
 .done_eoi:
 		mov 	al, 0x20
-		out 	i8259_SLAVE_CMD, al      								; EOI PIC esclave
-		out 	i8259_MASTER_CMD, al     								; EOI PIC maître
+		out 	i8259_SLAVE_CMD, al      					; EOI PIC esclave
+		out 	i8259_MASTER_CMD, al     					; EOI PIC maître
 
 		; restaurer tous les registres
 		pop		ds

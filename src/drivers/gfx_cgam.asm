@@ -594,64 +594,98 @@ cga_cursor_move:
 cga_cursor_draw:
     push    ds
     push    es
-    push    fs
-    push    gs
     pushad
-
-    ; -----------------------------
-    ; ES = VRAM
-    ; -----------------------------
-    mov     ax, VIDEO_SEG
-    mov     es, ax
 
     mov     ax, BDA_DATA_SEG
     mov     ds, ax
-    ; -----------------------------
-    ; GS:SI = sprite (AND puis XOR à +32)
-    ; -----------------------------
-    mov     ax, [BDA_MOUSE + mouse.cur_seg]
-    mov     gs, ax
-    mov     si, [BDA_MOUSE + mouse.cur_ofs]
+    mov     ax, VIDEO_SEG
+    mov     es, ax
 
-    ; -----------------------------
-    ; Charger x,y
-    ; CX = x, DX = y
-    ; -----------------------------
+    ; --- CLIPPING VERTICAL (Y) ---
+    mov     dx, [BDA_MOUSE + mouse.y]
+    cmp     dx, 200
+    jae     .exit               ; Trop bas ou négatif (si signé)
+
+    mov     bp, 16              ; Hauteur max du sprite
+    mov     ax, 200
+    sub     ax, dx              ; AX = nombre de lignes restantes à l'écran
+    cmp     bp, ax
+    jbe     .y_clip_ok
+    mov     bp, ax              ; On réduit la boucle à la place restante
+.y_clip_ok:
+
+    ; --- SETUP POINTEURS ---
     mov     cx, [BDA_MOUSE + mouse.x]
     mov     dx, [BDA_MOUSE + mouse.y]
+    call    cga_calc_addr       ; DI = offset VRAM
 
-    ; get DI = offset de départ x,y
-    ; on ignore le bitmask retourné
-    call    cga_calc_addr
+    mov     ax, [BDA_MOUSE + mouse.cur_seg]
+    mov     fs, ax
+    mov     si, [BDA_MOUSE + mouse.cur_ofs] ; FS:SI = Sprite data
 
-    mov     ax, CGA_ODD_BANK
+    ; --- SETUP STRIDES ---
+    mov     bx, CGA_ODD_BANK          ; Stride 1: Vers banque opposée
+    mov     dx, -CGA_ODD_BANK+80      ; Stride 2: Vers banque origine + 1 ligne
+    test    word [BDA_MOUSE + mouse.y], 1
+    jz      .strides_ok
+    xchg    bx, dx
+.strides_ok:
 
-    test    cx, 0x0001                          ; y est pair: +0x2000
+    ; --- SHIFT COUNT ---
+    and     cx, 7               ; CL = Shift (0..7)
 
-    jz      .addr_even
-    neg     ax                                  ; y impair: -0x2000
-
-.addr_even:
-    ; conservation du pas entre les 2 banques de VRAM
-    mov     [BDA_MOUSE + mouse.cur_bank_add], ax
-
-    ; calcul du bit rotation du curseur
-    mov     ax, cx
-    and     ax, 0x07
-    mov     [BDA_MOUSE + mouse.cur_bit_ofs], al
-
-    ; curseur = 16 lignes
-    mov     cx, 16
 .row_loop:
-    xor     eax,eax
-    xor     ebx,ebx
+    ; --- CONSTRUCTION DU MASQUE AND (EAX) ---
+    ; On veut 11111111 (L) (R) 11111111 sur 32 bits, puis décalé
+    mov     eax, 0x0000FFFF     ; Masque neutre
+    mov     ah, [fs:si]         ; Octet sprite gauche
+    mov     al, [fs:si+1]       ; Octet sprite droit
+    not     ax                  ; On inverse pour le masque AND (0=sprite, 1=fond)
+    ror     eax, 16             ; EAX = 1111 1111 | 1111 1111 | (InvL) | (InvR)
 
-    ;
+    ; --- CONSTRUCTION DU MASQUE XOR (EBX) ---
+    xor     ebx, ebx
+    mov     bh, [fs:si+32]      ; Sprite XOR gauche
+    mov     bl, [fs:si+33]      ; Sprite XOR droit
+    ; EBX = 0000 0000 | 0000 0000 | (XorL) | (XorR)
 
-.done:
+    ; --- DECALAGE DES MASQUES ---
+    ; On décale à droite pour aligner sur le pixel X exact
+    ; Pour EAX, on doit injecter des '1' à gauche lors du shift
+    push    ecx
+    mov     ch, cl              ; Sauver shift
+    shr     ebx, cl             ; EBX prêt
+
+    push    edx
+    mov     edx, 0xFFFFFFFF
+    shrd    eax, edx, cl        ; SHRD injecte les 1 de EAX dans ECX
+    pop     edx
+
+    ; --- READ-MODIFY-WRITE (SÉCURISÉ) ---
+    ; On traite 3 octets (24 bits) pour couvrir le débordement du shift
+    mov     edx, [es:di]        ; Lit 4 octets (b0, b1, b2, b3)
+
+    ; Note: On travaille en Little-Endian ici, donc le shift visuel
+    ; est inverse. Pour simplifier, on applique les masques
+    ; directement si on considère EAX/EBX comme des flux de bits.
+
+    and     edx, eax
+    xor     edx, ebx
+
+    ; Réécriture partielle pour ne pas toucher au 4ème octet (b3)
+    mov     [es:di], dx         ; Ecrit b0 et b1
+    shr     edx, 16
+    mov     [es:di+2], dl       ; Ecrit b2 uniquement
+
+    ; --- PROCHAINE LIGNE ---
+    add     di, bx
+    xchg    bx, dx              ; Alternance banques
+    add     si, 2               ; Prochaine ligne du sprite
+    dec     bp
+    jnz     .row_loop
+
+.exit:
     popad
-    pop     gs
-    pop     fs
     pop     es
     pop     ds
     ret

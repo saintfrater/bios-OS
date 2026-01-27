@@ -50,7 +50,7 @@ bits		16
 err_vganok		db		'VGA Not Initialized',0
 ;err_end			db		'code completed successfully',0
 
-cpt_txt			db '0123456789A123456789B123456789C123456789D123456789E123456789F123456789',0
+cpt_txt			db '0123456789A123456789B123456789C123456789D123456789E123456789F123456789G123456789',0
 helloworld		db 'Hello World !',0
 
 reset:
@@ -63,13 +63,12 @@ reset:
 
 		; installé une table d'interruption "dummy"
 		call 	ivt_setup
-
 		call	bda_setup
 
-		; test IRQ 0
+		; Install IRQ 0 : timer_isr
 		mov		ax,cs
 		mov		dx,ax
-		mov		bx,test_isr
+		mov		bx,timer_isr
 		mov		ax,i8259_MASTER_INT
 
 		call	ivt_setvector
@@ -101,7 +100,7 @@ reset:
 		call 	mouse_reset
 		;call	mouse_init
 
-; 		GFX_DRV	GFX_CRS_UPDATE
+ 		GFX_DRV	GFX_CRS_UPDATE
 
 		GFX_SET_WRTIE_MODE GFX_TXT_BLACK_ON_WHITE
 
@@ -140,74 +139,7 @@ reset:
 endless:
 		mov		ax,BDA_DATA_SEG
 		mov		ds,ax
-
-		;mov		dx,0x300
-		;call	scr_gotoxy
-
-		;mov		al, byte [BDA_TIMER]
-		;call	scr_puthex8
-
-		;cmp		byte [BDA_TIMER],5
-		;ja		.skip2
-
-		;mov 	ax, [BDA_MOUSE + mouse.x]
-		;add 	ax, 25
-		;cmp 	ax,640
-		;jb		.moveok
-;
 		mov 	ax,0
-.moveok:
-		mov 	 [BDA_MOUSE + mouse.x],ax
-;
-		GFX_DRV	GFX_CRS_UPDATE
-
-		cmp 	byte [BDA_MOUSE + mouse.buffer+1], 0
-		jge		.skip
-
-		;mov		dx,0x400
-		;call	scr_gotoxy
-
-		;mov		al, byte [BDA_MOUSE + mouse.buffer+1]
-		;call	scr_puthex8
-.skip:
-		;cmp 		byte [BDA_MOUSE + mouse.buffer+2], 0
-		;jge		.skip2
-
-		;mov		dx,0x404
-		;call	scr_gotoxy
-
-		;mov		al, byte [BDA_MOUSE + mouse.buffer+2]
-		;call	scr_puthex8
-.skip2:
-		;mov		dx,0
-		;call	scr_gotoxy
-
-		;mov		ax,[BDA_MOUSE]			; adresse début dump
-		;mov		si,ax
-		mov		cx, 0x20
-.dump:
-;		test 	cx,0x000F
-;		jnz		.sameline
-;		inc		dh
-;		xor		dl,dl
-;		call	scr_gotoxy
-;.sameline:
-;		mov		al,[ds:si]
-;		inc		si
-
-;		push	ds
-;		push	si
-
-;		call	scr_puthex8
-;		mov		al,' '
-;		call	scr_putc
-
-;		pop		si
-;		pop		ds
-
-		nop
-
-		loop	.dump
 
 		jmp		endless
 
@@ -215,7 +147,7 @@ endless:
 ; -----------------------------------------------------------
 ; timer ISR (IRQ -> INT)
 ; -----------------------------------------------------------
-test_isr:
+timer_isr:
 		push	ax
 
 		push    fs
