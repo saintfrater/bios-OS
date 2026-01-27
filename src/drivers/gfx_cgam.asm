@@ -584,112 +584,6 @@ cga_cursor_move:
 		pop     ax
 		ret
 
-; ============================================================
-; gfx_cursor_draw_rm16_i386_self
-; Entrée:
-;   DS = BDA_DATA_SEG
-; Sortie: rien
-; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
-; ============================================================
-cga_cursor_draw:
-    push    ds
-    push    es
-    pushad
-
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
-    mov     ax, VIDEO_SEG
-    mov     es, ax
-
-    ; --- CLIPPING VERTICAL (Y) ---
-    mov     dx, [BDA_MOUSE + mouse.y]
-    cmp     dx, 200
-    jae     .exit               ; Trop bas ou négatif (si signé)
-
-    mov     bp, 16              ; Hauteur max du sprite
-    mov     ax, 200
-    sub     ax, dx              ; AX = nombre de lignes restantes à l'écran
-    cmp     bp, ax
-    jbe     .y_clip_ok
-    mov     bp, ax              ; On réduit la boucle à la place restante
-.y_clip_ok:
-
-    ; --- SETUP POINTEURS ---
-    mov     cx, [BDA_MOUSE + mouse.x]
-    mov     dx, [BDA_MOUSE + mouse.y]
-    call    cga_calc_addr       ; DI = offset VRAM
-
-    mov     ax, [BDA_MOUSE + mouse.cur_seg]
-    mov     fs, ax
-    mov     si, [BDA_MOUSE + mouse.cur_ofs] ; FS:SI = Sprite data
-
-    ; --- SETUP STRIDES ---
-    mov     bx, CGA_ODD_BANK          ; Stride 1: Vers banque opposée
-    mov     dx, -CGA_ODD_BANK+80      ; Stride 2: Vers banque origine + 1 ligne
-    test    word [BDA_MOUSE + mouse.y], 1
-    jz      .strides_ok
-    xchg    bx, dx
-.strides_ok:
-
-    ; --- SHIFT COUNT ---
-    and     cx, 7               ; CL = Shift (0..7)
-
-.row_loop:
-    ; --- CONSTRUCTION DU MASQUE AND (EAX) ---
-    ; On veut 11111111 (L) (R) 11111111 sur 32 bits, puis décalé
-    mov     eax, 0x0000FFFF     ; Masque neutre
-    mov     ah, [fs:si]         ; Octet sprite gauche
-    mov     al, [fs:si+1]       ; Octet sprite droit
-    not     ax                  ; On inverse pour le masque AND (0=sprite, 1=fond)
-    ror     eax, 16             ; EAX = 1111 1111 | 1111 1111 | (InvL) | (InvR)
-
-    ; --- CONSTRUCTION DU MASQUE XOR (EBX) ---
-    xor     ebx, ebx
-    mov     bh, [fs:si+32]      ; Sprite XOR gauche
-    mov     bl, [fs:si+33]      ; Sprite XOR droit
-    ; EBX = 0000 0000 | 0000 0000 | (XorL) | (XorR)
-
-    ; --- DECALAGE DES MASQUES ---
-    ; On décale à droite pour aligner sur le pixel X exact
-    ; Pour EAX, on doit injecter des '1' à gauche lors du shift
-    push    ecx
-    mov     ch, cl              ; Sauver shift
-    shr     ebx, cl             ; EBX prêt
-
-    push    edx
-    mov     edx, 0xFFFFFFFF
-    shrd    eax, edx, cl        ; SHRD injecte les 1 de EAX dans ECX
-    pop     edx
-
-    ; --- READ-MODIFY-WRITE (SÉCURISÉ) ---
-    ; On traite 3 octets (24 bits) pour couvrir le débordement du shift
-    mov     edx, [es:di]        ; Lit 4 octets (b0, b1, b2, b3)
-
-    ; Note: On travaille en Little-Endian ici, donc le shift visuel
-    ; est inverse. Pour simplifier, on applique les masques
-    ; directement si on considère EAX/EBX comme des flux de bits.
-
-    and     edx, eax
-    xor     edx, ebx
-
-    ; Réécriture partielle pour ne pas toucher au 4ème octet (b3)
-    mov     [es:di], dx         ; Ecrit b0 et b1
-    shr     edx, 16
-    mov     [es:di+2], dl       ; Ecrit b2 uniquement
-
-    ; --- PROCHAINE LIGNE ---
-    add     di, bx
-    xchg    bx, dx              ; Alternance banques
-    add     si, 2               ; Prochaine ligne du sprite
-    dec     bp
-    jnz     .row_loop
-
-.exit:
-    popad
-    pop     es
-    pop     ds
-    ret
-
 ; -----------------------------------------------
 ; cga_cursor_savebg_32
 ; Sauve 16 lignes (3 bytes/ligne) sous le curseur.
@@ -790,4 +684,128 @@ cga_cursor_restorebg:
     jnz     .rowpair
 
 .done:
+    ret
+
+; ============================================================
+; gfx_cursor_draw_rm16_i386_self
+; Entrée:
+;   DS = BDA_DATA_SEG
+; Sortie: rien
+; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
+; ============================================================
+cga_cursor_draw:
+    pushad
+    push    ds
+    push    es
+
+    mov     ax, BDA_DATA_SEG
+    mov     ds, ax
+    mov     ax, VIDEO_SEG
+    mov     es, ax
+
+    ; --- 1. CLIPPING VERTICAL ---
+    mov     dx, [ds:BDA_MOUSE + mouse.y]
+    cmp     dx, 200
+    jae     .exit_total
+
+    mov     bp, 16
+    mov     ax, 200
+    sub     ax, dx
+    cmp     bp, ax
+    jbe     .y_ok
+    mov     bp, ax
+.y_ok:
+
+    ; --- 2. ADRESSAGE ---
+    mov     cx, [ds:BDA_MOUSE + mouse.x]
+    mov     dx, [ds:BDA_MOUSE + mouse.y]
+    call    cga_calc_addr       ; DI = Offset VRAM
+
+    mov     ax, [ds:BDA_MOUSE + mouse.cur_seg]
+    mov     gs, ax
+    mov     si, [ds:BDA_MOUSE + mouse.cur_ofs]
+
+    ; --- 3. CALCUL DES STRIDES ---
+    mov     bx, 0x2000          ; Banque opposée
+    mov     dx, -0x2000 + 80    ; Retour + ligne suivante
+    test    word [ds:BDA_MOUSE + mouse.y], 1
+    jz      .setup_done
+    xchg    bx, dx
+.setup_done:
+
+    and     cx, 7               ; CL = Shift (0..7)
+
+.row_loop:
+    ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
+    ; On force l'ordre [GAUCHE][DROITE] visuel en lisant par octet
+    xor     eax, eax
+    ;mov     ah, [gs:si+1]       ; Octet GAUCHE du masque AND
+    ;mov     al, [gs:si]         ; Octet DROITE du masque AND
+    mov     ax, [gs:si]         ; Octet DROITE du masque AND
+    ; Ton sprite cursor.asm utilise 0 pour le curseur, donc PAS de NOT
+    shl     eax, 8
+    or      eax, 0xFF0000FF     ; Bourrage de 1 (fond transparent)
+
+    xor     ebx, ebx
+    mov     bx, [gs:si+32]      ; Octet GAUCHE du masque XOR
+
+    ;mov     bh, [gs:si+33]      ; Octet GAUCHE du masque XOR
+    ;mov     bl, [gs:si+32]      ; Octet DROITE du masque XOR
+    shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
+
+    ; --- DECALAGE (SHIFT) ---
+    push    edx
+    mov     edx, 0xFFFFFFFF
+    shrd    eax, edx, cl        ; Injecte du fond (1) à gauche
+    xor     edx, edx
+    shrd    ebx, edx, cl        ; Injecte du vide (0) à gauche
+    pop     edx
+
+    ; --- RMW SUR 3 OCTETS (Fenêtre de 24 bits) ---
+    ; Octet 0 (Gauche)
+    mov     dl, [es:di]
+    push    eax
+    shr     eax, 16             ; Récupère bits 23-16
+    and     dl, al
+    push    ebx
+    shr     ebx, 16
+    xor     dl, bl
+    mov     [es:di], dl
+    pop     ebx
+    pop     eax
+
+    ; Octet 1 (Milieu)
+    mov     dl, [es:di+1]
+    push    eax
+    shr     eax, 8
+    and     dl, al              ; Bits 15-8
+    push    ebx
+    shr     ebx, 8
+    xor     dl, bl
+    mov     [es:di+1], dl
+    pop     ebx
+    pop     eax
+
+    ; Octet 2 (Droite + Clipping X)
+    mov     ax, [ds:BDA_MOUSE + mouse.x]
+    shr     ax, 3
+    cmp     ax, 78
+    jae     .next_line
+
+    mov     dl, [es:di+2]
+    and     dl, al              ; Bits 7-0
+    xor     dl, bl
+    mov     [es:di+2], dl
+
+.next_line:
+    add     di, bx
+    xchg    bx, dx
+    add     si, 2               ; Prochaine ligne du sprite
+    dec     bp
+    jnz     .row_loop
+
+.exit_total:
+    pop     es
+    pop     ds
+    popad
     ret
