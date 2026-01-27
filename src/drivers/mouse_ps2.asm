@@ -22,21 +22,21 @@
 ; =============================================================================
 
 ; commandes
-%define MOUSE_CMD_RESET      0xFF
-%define MOUSE_CMD_DEFAULT    0xF6
-%define MOUSE_EN_STREAM      0xF4
-%define MOUSE_DIS_STREAM     0xF5
-%define MOUSE_GET_ID         0xF2
-%define MOUSE_SET_RATE       0xF3
+%define MOUSE_CMD_RESET      	0xFF
+%define MOUSE_CMD_DEFAULT    	0xF6
+%define MOUSE_EN_STREAM      	0xF4
+%define MOUSE_DIS_STREAM     	0xF5
+%define MOUSE_GET_ID         	0xF2
+%define MOUSE_SET_RATE       	0xF3
 
-%define MOUSE_ACK            0xFA
+%define MOUSE_ACK            	0xFA
 
-%define I8042_CMD_EN_AUX     0xA8
-%define I8042_CMD_RD_CBYTE   0x20
-%define I8042_CMD_WR_CBYTE   0x60
-%define I8042_CMD_DIS_KBD	 0xAD
-%define I8042_CMD_DIS_MOUSE	 0xA7
-%define I8042_CMD_WRITE_AUX  0xD4
+%define I8042_CMD_EN_AUX     	0xA8
+%define I8042_CMD_RD_CBYTE   	0x20
+%define I8042_CMD_WR_CBYTE   	0x60
+%define I8042_CMD_DIS_KBD	 		0xAD
+%define I8042_CMD_DIS_MOUSE	 	0xA7
+%define I8042_CMD_WRITE_AUX  	0xD4
 
 ; ------------------------------------------------------------
 ; remise a zero des valeurs internes du "drivers"
@@ -251,7 +251,7 @@ mouse_sendcmd:
 ; ------------------------------------------------------------
 ; interrupt handler
 ;
-; buffer[0] = status
+; buffer[0] = status (voir ci-dessous)
 ; buffer[1] = déplacement x
 ; buffer[2] = déplacement y (inversé)
 ; buffer[4] = molette (si PacketLen = 4)
@@ -276,7 +276,7 @@ isr_mouse_handler:
 		mov		ds,ax
 
 		; lire un octet depuis le contrôleur et le stocker dans le buffer
-		in  	al, i8042_PS2_DATA   					; lire octet souris
+		in  	al, i8042_PS2_DATA   										; lire octet souris
 
 		movzx 	bx, byte [BDA_MOUSE + mouse.idx]
 		mov 	byte [BDA_MOUSE + mouse.buffer + bx], al
@@ -285,61 +285,51 @@ isr_mouse_handler:
 		; vérifier si le packet est complet
 		mov 	al, [BDA_MOUSE + mouse.packetlen]
 		cmp 	byte [BDA_MOUSE + mouse.idx], al
-		jb 		.done
+		jb 		.done_eoi
 
-		; packet complet, on decode les données
-		mov 	byte [BDA_MOUSE + mouse.idx], 0
+		; packet complet, on decode les données (ou on jette si c'est incorrect)
+		mov 	byte [BDA_MOUSE + mouse.idx], 0					; reset de l'index de lecture
+
+		; check bit 3 octet 0 pour assurer que le bloc est ok:
+		mov		al, byte [BDA_MOUSE + mouse.buffer]
+		and 	al, 00001000b														; bit 3 = 1
+		je		.done_eoi																; allignement erroné 				
+
+		
+		
 		mov 	bl, [BDA_MOUSE + mouse.buffer]					; status
 		mov 	[BDA_MOUSE + mouse.status], bl
 
-		xor		ax,ax
-		mov  	al, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
+		movsx ax, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
 		test	bl,00010000b														; signe X
 		jz		.x_pos
-		or 		al, 0xF0
+		neg		ax																			; X est négatif
 .x_pos:
-		cbw
 		add		[BDA_MOUSE + mouse.x], ax
 
-		xor		ax,ax
-		mov 	al, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
+		movsx	ax, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
 		test	bl,00100000b														; signe Y
 		jz		.y_pos
-		or 		al, 0xF0
+		neg 	ax																			; y est négatif
 .y_pos:
-		cbw
 		sub		[BDA_MOUSE + mouse.y], ax
 
+		mov 	al, [BDA_MOUSE + mouse.packetlen]
+		cmp		al,4
+		jne		.done_eoi
+
 		; si packetlen = 4, gérer la molette; experimental
-		movsx	ax, byte [BDA_MOUSE + mouse.buffer+3]				; delta Wheel
-		cbw
+		movsx	ax, byte [BDA_MOUSE + mouse.buffer+3]		; delta Wheel
 		add		word [BDA_MOUSE + mouse.wheel], ax
 
-		; clamp X
-		cmp 	word [BDA_MOUSE + mouse.x], 0
-		jge 	.x_ok_low
-		mov 	word [BDA_MOUSE + mouse.x], 0
-.x_ok_low:
-		cmp 	word [BDA_MOUSE + mouse.x], 639
-		jle		.x_ok_high
-		mov 	word [BDA_MOUSE + mouse.x], 639
-.x_ok_high:
-
-		; clamp Y
-		cmp 	word [BDA_MOUSE + mouse.y], 0
-		jge 	.y_ok_low
-		mov 	word [BDA_MOUSE + mouse.y], 0
-.y_ok_low:
-		cmp 	word [BDA_MOUSE + mouse.y], 199
-		jle 	.y_ok_high
-		mov 	word [BDA_MOUSE + mouse.y], 199
-.y_ok_high:
-
-		; call 				gfx_cursor_move
 .done:
+		; update la position du curseur sur l'écran
+		; en ce moment c'est commented out (debug)
+		; call 				gfx_cursor_move
+.done_eoi:
 		mov 	al, 0x20
-		out 	i8259_SLAVE_CMD, al      ; EOI PIC esclave
-		out 	i8259_MASTER_CMD, al     ; EOI PIC maître
+		out 	i8259_SLAVE_CMD, al      								; EOI PIC esclave
+		out 	i8259_MASTER_CMD, al     								; EOI PIC maître
 
 		; restaurer tous les registres
 		pop		ds
