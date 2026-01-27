@@ -95,7 +95,7 @@ graph_driver:
         push    BDA_DATA_SEG
         pop     fs
 
-        mov     [fs:BDA_GFX + gfx.cur_mode], %1
+        mov     byte [fs:BDA_GFX + gfx.cur_mode], %1
 
         pop     fs
         pop     ax
