@@ -714,6 +714,7 @@ cga_cursor_draw:
     sub     ax, dx                                  ; 200-y
     cmp     bp, ax
     jbe     .y_ok                                   ; y<= 200-16
+
     mov     bp, ax
 .y_ok:
 
@@ -727,7 +728,6 @@ cga_cursor_draw:
     mov     si, [BDA_MOUSE + mouse.cur_ofs]
 
     ; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
-
     mov     ax, 0x2000          ; Banque +1
     mov     cx, [BDA_MOUSE + mouse.y]
     test    cx, 1
@@ -738,25 +738,29 @@ cga_cursor_draw:
 
 .row_loop:
     ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
-    xor     eax, eax
-    xor     ebx, ebx
+    push    cx                  ; préserver la banque "suivante"
+    mov     ch, [BDA_MOUSE + mouse.x]
+    and     ch, 0x07
+    mov     cl, 16
+    sub     cl, ch
 
-    mov     bx, [gs:si+32]      ; masque XOR
-    xchg    bl, bh
-    ; expansion 16 bits -> 32 bits avec padding
-    shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
-
+    mov     eax,0xffff0000
     mov     ax, [gs:si]         ; masque AND
-    xchg    al, ah
-    ; expansion 16 bits -> 32 bits avec padding
-    shl     eax, 8
-    or      eax, 0xFF0000FF     ; EAX = [FF][GAUCHE][DROITE][FF]
+    bswap   eax
+    ror     eax, cl
 
+    xor     ebx, ebx
+    mov     bx, [gs:si+32]      ; masque XOR
+    bswap   ebx
+    ror     ebx, cl
     mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
+
     and     edx, eax            ; application du masque AND (AX)
     xor     edx, ebx            ; application du masque XOR (BX)
 
     mov     [es:di], edx        ; ecriture du résultat
+
+    pop     cx
     add     di, cx              ; banque suivante
     test    cx,0x8000
     jz      .next_line
@@ -764,8 +768,6 @@ cga_cursor_draw:
 
 .next_line:
     neg     cx                  ; prochaine banque = -banque
-;     [BDA_MOUSE + mouse.cur_bank_add]
-    ; mov     [BDA_MOUSE + mouse.cur_bank_add], bx   ; interligne + ou - 0x2000
     add     si, 2               ; Prochaine ligne du sprite
     dec     bp
     jnz     .row_loop

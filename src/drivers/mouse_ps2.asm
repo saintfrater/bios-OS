@@ -52,7 +52,7 @@ mouse_reset:
 	mov		byte  [fs:BDA_MOUSE + mouse.packetlen],3	; 3 bytes par défaut
 	mov		byte  [fs:BDA_MOUSE + mouse.status],0
 
-	mov		word  [fs:BDA_MOUSE + mouse.x],320			; vous pouvez aussi préciser le centre
+	mov		word  [fs:BDA_MOUSE + mouse.x],324			; vous pouvez aussi préciser le centre
 	mov		word  [fs:BDA_MOUSE + mouse.y],100	    	; vous pouvez aussi préciser le centre
 
 	mov		byte  [fs:BDA_MOUSE + mouse.cur_visible], 1
