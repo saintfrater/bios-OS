@@ -1,4 +1,4 @@
-80; =============================================================================
+; =============================================================================
 ;  Project  : Custom BIOS / ROM
 ;  File     : gfx_cgam.asm
 ;  Author   : frater
@@ -573,9 +573,10 @@ cga_cursor_move:
 		mov		ax, VIDEO_SEG
 		mov		es, ax
 
-		;call 			cga_cursor_restorebg
+		call 	cga_cursor_restorebg
 
-		;call			cga_cursor_savebg
+		call	cga_cursor_savebg
+
 		call 	cga_cursor_draw
 		mov 	byte [BDA_MOUSE + mouse.cur_drawing],0
 .done:
@@ -589,7 +590,7 @@ cga_cursor_move:
 ; Sauve 16 lignes (3 bytes/ligne) sous le curseur.
 ; Stocke 16 DWORDs: chaque DWORD contient (b0|b1<<8|b2<<16) dans les 24 bits bas.
 ; -----------------------------------------------
-gfx_cursor_savebg:
+cga_cursor_savebg:
     cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
     jne     .done
 
@@ -726,41 +727,45 @@ cga_cursor_draw:
     mov     si, [BDA_MOUSE + mouse.cur_ofs]
 
     ; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
-    mov     bx, 0x2000          ; Banque opposée
-    test    word [BDA_MOUSE + mouse.y], 1
+
+    mov     ax, 0x2000          ; Banque +1
+    mov     cx, [BDA_MOUSE + mouse.y]
+    test    cx, 1
     jz      .setup_done
-    neg     bx
+    neg     ax                  ; banque -1
 .setup_done:
-    mov     [BDA_MOUSE + mouse.cur_bank_add], bx   ; interligne + ou - 0x2000
+    mov     cx, ax
 
 .row_loop:
     ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
     xor     eax, eax
     xor     ebx, ebx
 
-    mov     ax, [gs:si]         ; masque AND
-    xchg    al, ah
-    ; expansion 16 bits -> 32 bits avec padding
-    ;shl     eax, 8
-    ;or      eax, 0xFF0000FF     ; EAX = [FF][GAUCHE][DROITE][FF]
-
-
     mov     bx, [gs:si+32]      ; masque XOR
     xchg    bl, bh
     ; expansion 16 bits -> 32 bits avec padding
-    ;shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
+    shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
 
+    mov     ax, [gs:si]         ; masque AND
+    xchg    al, ah
+    ; expansion 16 bits -> 32 bits avec padding
+    shl     eax, 8
+    or      eax, 0xFF0000FF     ; EAX = [FF][GAUCHE][DROITE][FF]
 
-    mov     dx, [es:di]         ; lecture des 16 bits a la position du curseur
-    and     dx, ax              ; application du masque AND (AX)
-    xor     dx, bx              ; application du masque XOR (BX)
+    mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
+    and     edx, eax            ; application du masque AND (AX)
+    xor     edx, ebx            ; application du masque XOR (BX)
 
-    mov     [es:di], dx         ; ecriture du résultat
+    mov     [es:di], edx        ; ecriture du résultat
+    add     di, cx              ; banque suivante
+    test    cx,0x8000
+    jz      .next_line
+    add     di,80
 
 .next_line:
-    add     di, CGA_STRIDE
+    neg     cx                  ; prochaine banque = -banque
 ;     [BDA_MOUSE + mouse.cur_bank_add]
-
+    ; mov     [BDA_MOUSE + mouse.cur_bank_add], bx   ; interligne + ou - 0x2000
     add     si, 2               ; Prochaine ligne du sprite
     dec     bp
     jnz     .row_loop

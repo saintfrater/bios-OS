@@ -97,8 +97,8 @@ reset:
 		; on active le mode graphique
 		GFX_DRV	GFX_INIT
 
-		call 	mouse_reset
-		;call	mouse_init
+		; call 	mouse_reset
+		call	mouse_init
 
  		GFX_DRV	GFX_CRS_UPDATE
 
