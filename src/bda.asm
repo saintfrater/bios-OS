@@ -55,27 +55,28 @@
 %define BKG_TOTAL_BYTES         (BKG_TOTAL_DWORDS * 4)            ; 64
 
 struc  mouse
-        .buffer         resb    4       ; i8042 input buffer
-        .idx            resb    1       ; index in the buffer
-        .packetlen      resb    1       ; max buffer len (3 ou 4)
+        .buffer         resb    4       ; i8042 input buffer                         0..3
+        .idx            resb    1       ; index in the buffer                        4
+        .packetlen      resb    1       ; max buffer len (3 ou 4)                    5
 
-        .status         resb    1       ; mouse status (button etc)
-        .wheel          resb    1       ; if a packet size is 4; experimental
-        .x              resw    1       ;
-        .y              resw    1
+        .status         resb    1       ; mouse status (button etc)                  6
+        .wheel          resb    1       ; if a packet size is 4; experimental        7
+        .x              resw    1       ;                                            8..9
+        .y              resw    1       ;                                            A..B
         ; cursor management
-        .cur_x          resw    1       ; preservation des x,y du background
-        .cur_y          resw    1
-        .cur_addr_start resw    1       ; adresse de départ de la sauvegarde
-        .cur_bank_add   resw    1       ; + ou - 0x2000
-        .cur_drawing    resb    1
-        .cur_visible    resb    1
-        .cur_seg        resw    1       ; segment / offset of the pointer
-        .cur_ofs        resw    1
-        .cur_mask       resb    1       ; pixels mask (bit per pixel)
-        .cur_bit_ofs    resb    1       ; 0..7 bits d'offset (x&7)
-        .bkg_saved      resb    1       ; background saved
-        alignb                  4       ; alignement 4 bytes
+        .cur_x          resw    1       ; preservation des x,y du background         C..D
+        .cur_y          resw    1       ;                                            E..F
+        .cur_addr_start resw    1       ; adresse de départ de la sauvegarde        10..11
+        .cur_bank_add   resw    1       ; + ou - 0x2000                             12..13
+
+        .cur_drawing    resb    1       ;                                           14
+        .cur_visible    resb    1       ;                                           15
+        .cur_seg        resw    1       ; segment / offset of the pointer           16..17
+        .cur_ofs        resw    1       ;                                           18..19
+        .cur_mask       resb    1       ; pixels mask (bit per pixel)               1A
+        .cur_bit_ofs    resb    1       ; 0..7 bits d'offset (x&7)                  1B
+        .bkg_saved      resb    1       ; background saved                          1C
+        alignb                  4       ; alignement 4 bytes                        1D
         .bkg_buffer     resd    16      ; buffer for saved background
 endstruc
 
@@ -94,6 +95,8 @@ endstruc
 
 %define BDA_MOUSE               0x0000
 %define BDA_GFX                 (BDA_MOUSE + mouse_size)
+
+%warning offset Mouse: BAD_MOUSE, Gfx : BDA_GFX
 
 ;
 ; memory map

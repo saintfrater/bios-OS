@@ -31,8 +31,8 @@ bits			16
 ; initial stack
 %define STACK_SEG   	0x0800		; segment de base
 
-section 		.text
-bits		16
+section     .text
+    bits	16
 
 ;%include		"./common/chartable.asm"
 ;%include		"./common/cursor.asm"

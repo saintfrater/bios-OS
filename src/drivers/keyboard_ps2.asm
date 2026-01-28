@@ -22,61 +22,47 @@
 ; =============================================================================
 
 kbd_flush:
-            in        al, 0x64              ; Lire le Status Register
-            test      al, 1                 ; Est-ce qu'il y a une donnée (Output Buffer Full) ?
-            jz        .done
-            in        al, 0x60              ; Lire et ignorer la donnée
-            jmp       kbd_flush
+    in        al, 0x64              ; Lire le Status Register
+    test      al, 1                 ; Est-ce qu'il y a une donnée (Output Buffer Full) ?
+    jz        .done
+    in        al, 0x60              ; Lire et ignorer la donnée
+    jmp       kbd_flush
 .done:
-            ret
+    ret
 
 kbd_init:
-            push      ds
-            push      ax
+    push      ds
+    push      ax
+    call      kbd_flush
+    ; gestion du buffer clavier
 
-            call      kbd_flush
+    mov       ax,cs                     ; get current CS
+    mov       dx,ax
+    mov       bx,kbd_isr                ; Event handler
+    mov       ax, i8259_MASTER_INT      ; base offset IRQ 0
+    inc       ax                        ; IRQ 1
+    call      ivt_setvector
 
-            ; gestion du buffer clavier
-            mov       ax, BDA_SEGMENT
-            mov       ds, ax
-            mov       byte [BDA_KBD_HEAD], 0
-            mov       byte [BDA_KBD_TAIL], 0
-            mov       byte [BDA_KBD_FLAGS], 0
-
-            mov       ax,cs
-            mov       dx,ax
-            mov       bx,kbd_isr
-
-            mov       ax, i8259_MASTER_INT          ; base offset IRQ0
-            inc       ax                            ; IRQ 1
-
-            call      ivt_setvector
-
-            ; enable IRQ 1
-            mov       ah,IRQ_ENABLED
-            mov       al,1
-            call      pic_set_irq_mask
-
-            pop       ax
-            pop       ds
-            ret
+    ; enable IRQ 1
+    mov       ah,IRQ_ENABLED
+    mov       al,1
+    call      pic_set_irq_mask
+    pop       ax
+    pop       ds
+    ret
 
 ; -----------------------------------------------------------
 ; Keyboard ISR (IRQ -> INT)
 ; -----------------------------------------------------------
 kbd_isr:
-            pusha
-            push        ds
+    pusha
+    push        ds
 
-            in          al, 0x60               ; consomme scancode (obligatoire)
+    in          al, 0x60               ; consomme scancode (obligatoire)
 
-            mov         ax,BDA_DATA_SEG
-            mov         ds,ax
-            inc         byte [0x0000]
+    mov         al, PIC_EOI            ; EOI master
+    out         i8259_MASTER_CMD, al
 
-            mov         al, PIC_EOI            ; EOI master
-            out         i8259_MASTER_CMD, al
-
-            pop         ds
-            popa
-            iret
+    pop         ds
+    popa
+    iret

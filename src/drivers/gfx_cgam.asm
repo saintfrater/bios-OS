@@ -1,4 +1,4 @@
-; =============================================================================
+80; =============================================================================
 ;  Project  : Custom BIOS / ROM
 ;  File     : gfx_cgam.asm
 ;  Author   : frater
@@ -122,22 +122,22 @@ graph_driver:
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
 cga_init:
-        mov     ax, BDA_DATA_SEG
-        mov     ds, ax
+    mov     ax, BDA_DATA_SEG
+    mov     ds, ax
 
-		; init graphics mode
-		mov 	ah, 0x00     			; AH=00h set video mode
-		mov		al, GFX_MODE
-		int 	0x10
-		mov		byte [BDA_MOUSE + mouse.bkg_saved],0	; flag image saved
+	; init graphics mode
+	mov 	ah, 0x00     	                		; AH=00h set video mode
+	mov		al, GFX_MODE
+	int 	0x10
+	mov		byte [BDA_MOUSE + mouse.bkg_saved],0	; flag image saved
 
-        mov     byte [BDA_GFX + gfx.cur_mode], 1
-		; dessine un background "check-board"
-		call	cga_background
-		ret
+    ; mov     byte [BDA_GFX + gfx.cur_mode], 1
+	; dessine un background "check-board"
+	call	cga_background
+	ret
 
 cga_none:
-        ret
+    ret
 
 
 ; ------------------------------------------------------------
@@ -146,29 +146,29 @@ cga_none:
 ; Out: ES=VIDEO_SEG, DI=offset, AH=bitmask (0x80 >> (x&7))
 ; ------------------------------------------------------------
 cga_calc_addr:
-		; calcul de l'offset 'y':
-		; si y est impaire, DI+=0x2000
-		; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
-		mov	    ax, dx
-		shr 	ax, 1                  ; ax = y/2
-		mov     di, ax
-		shl  	di, 4                  ; (y/2)*16
-		shl     ax, 6                  ; (y/2)*64
-		add     di, ax                 ; *80
-		mov     ax, cx
-		shr     ax, 3
-		add     di, ax
-		test    dl, 1
-		jz      .even
-		add     di, CGA_ODD_BANK
+	; calcul de l'offset 'y':
+	; si y est impaire, DI+=0x2000
+	; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
+	mov	    ax, dx
+	shr 	ax, 1                  ; ax = y/2
+	mov     di, ax
+	shl  	di, 4                  ; (y/2)*16
+	shl     ax, 6                  ; (y/2)*64
+	add     di, ax                 ; *80
+	mov     ax, cx
+	shr     ax, 3
+	add     di, ax
+	test    dl, 1
+	jz      .even
+	add     di, CGA_ODD_BANK
 .even:
-		; masque bit = 0x80 >> (x&7)
-		push	cx
-		and     cl, 7
-		mov     ah, 080h
-		shr     ah, cl
-		pop     cx
-		ret
+	; masque bit = 0x80 >> (x&7)
+	push	cx
+	and     cl, 7
+	mov     ah, 080h
+	shr     ah, cl
+	pop     cx
+	ret
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos
@@ -703,103 +703,64 @@ cga_cursor_draw:
     mov     ax, VIDEO_SEG
     mov     es, ax
 
-    ; --- 1. CLIPPING VERTICAL ---
+    ; --- CLIPPING VERTICAL ---
     mov     dx, [ds:BDA_MOUSE + mouse.y]
     cmp     dx, 200
     jae     .exit_total
 
     mov     bp, 16
     mov     ax, 200
-    sub     ax, dx
+    sub     ax, dx                                  ; 200-y
     cmp     bp, ax
-    jbe     .y_ok
+    jbe     .y_ok                                   ; y<= 200-16
     mov     bp, ax
 .y_ok:
 
-    ; --- 2. ADRESSAGE ---
-    mov     cx, [ds:BDA_MOUSE + mouse.x]
-    mov     dx, [ds:BDA_MOUSE + mouse.y]
-    call    cga_calc_addr       ; DI = Offset VRAM
+    ; --- ADRESSAGE ---
+    mov     cx, [BDA_MOUSE + mouse.x]
+    mov     dx, [BDA_MOUSE + mouse.y]
+    call    cga_calc_addr                           ; DI = Offset VRAM
 
-    mov     ax, [ds:BDA_MOUSE + mouse.cur_seg]
+    mov     ax, [BDA_MOUSE + mouse.cur_seg]
     mov     gs, ax
-    mov     si, [ds:BDA_MOUSE + mouse.cur_ofs]
+    mov     si, [BDA_MOUSE + mouse.cur_ofs]
 
-    ; --- 3. CALCUL DES STRIDES ---
+    ; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
     mov     bx, 0x2000          ; Banque opposée
-    mov     dx, -0x2000 + 80    ; Retour + ligne suivante
-    test    word [ds:BDA_MOUSE + mouse.y], 1
+    test    word [BDA_MOUSE + mouse.y], 1
     jz      .setup_done
-    xchg    bx, dx
+    neg     bx
 .setup_done:
-
-    and     cx, 7               ; CL = Shift (0..7)
+    mov     [BDA_MOUSE + mouse.cur_bank_add], bx   ; interligne + ou - 0x2000
 
 .row_loop:
     ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
-    ; On force l'ordre [GAUCHE][DROITE] visuel en lisant par octet
     xor     eax, eax
-    ;mov     ah, [gs:si+1]       ; Octet GAUCHE du masque AND
-    ;mov     al, [gs:si]         ; Octet DROITE du masque AND
-    mov     ax, [gs:si]         ; Octet DROITE du masque AND
-    ; Ton sprite cursor.asm utilise 0 pour le curseur, donc PAS de NOT
-    shl     eax, 8
-    or      eax, 0xFF0000FF     ; Bourrage de 1 (fond transparent)
-
     xor     ebx, ebx
-    mov     bx, [gs:si+32]      ; Octet GAUCHE du masque XOR
 
-    ;mov     bh, [gs:si+33]      ; Octet GAUCHE du masque XOR
-    ;mov     bl, [gs:si+32]      ; Octet DROITE du masque XOR
-    shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
+    mov     ax, [gs:si]         ; masque AND
+    xchg    al, ah
+    ; expansion 16 bits -> 32 bits avec padding
+    ;shl     eax, 8
+    ;or      eax, 0xFF0000FF     ; EAX = [FF][GAUCHE][DROITE][FF]
 
-    ; --- DECALAGE (SHIFT) ---
-    push    edx
-    mov     edx, 0xFFFFFFFF
-    shrd    eax, edx, cl        ; Injecte du fond (1) à gauche
-    xor     edx, edx
-    shrd    ebx, edx, cl        ; Injecte du vide (0) à gauche
-    pop     edx
 
-    ; --- RMW SUR 3 OCTETS (Fenêtre de 24 bits) ---
-    ; Octet 0 (Gauche)
-    mov     dl, [es:di]
-    push    eax
-    shr     eax, 16             ; Récupère bits 23-16
-    and     dl, al
-    push    ebx
-    shr     ebx, 16
-    xor     dl, bl
-    mov     [es:di], dl
-    pop     ebx
-    pop     eax
+    mov     bx, [gs:si+32]      ; masque XOR
+    xchg    bl, bh
+    ; expansion 16 bits -> 32 bits avec padding
+    ;shl     ebx, 8              ; EBX = [00][GAUCHE][DROITE][00]
 
-    ; Octet 1 (Milieu)
-    mov     dl, [es:di+1]
-    push    eax
-    shr     eax, 8
-    and     dl, al              ; Bits 15-8
-    push    ebx
-    shr     ebx, 8
-    xor     dl, bl
-    mov     [es:di+1], dl
-    pop     ebx
-    pop     eax
 
-    ; Octet 2 (Droite + Clipping X)
-    mov     ax, [ds:BDA_MOUSE + mouse.x]
-    shr     ax, 3
-    cmp     ax, 78
-    jae     .next_line
+    mov     dx, [es:di]         ; lecture des 16 bits a la position du curseur
+    and     dx, ax              ; application du masque AND (AX)
+    xor     dx, bx              ; application du masque XOR (BX)
 
-    mov     dl, [es:di+2]
-    and     dl, al              ; Bits 7-0
-    xor     dl, bl
-    mov     [es:di+2], dl
+    mov     [es:di], dx         ; ecriture du résultat
 
 .next_line:
-    add     di, bx
-    xchg    bx, dx
+    add     di, CGA_STRIDE
+;     [BDA_MOUSE + mouse.cur_bank_add]
+
     add     si, 2               ; Prochaine ligne du sprite
     dec     bp
     jnz     .row_loop
