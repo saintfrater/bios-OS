@@ -212,6 +212,7 @@ cga_set_charpos:
         jz      .even
         add     bx, ax
         neg     ax
+        add     ax, CGA_STRIDE
 .even:
         mov     [fs:BDA_GFX + gfx.cur_line_ofs], ax
         mov     [fs:BDA_GFX + gfx.cur_offset], bx
@@ -333,6 +334,8 @@ cga_putc_unaligned:
     mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
     mov     ch, [fs:BDA_GFX + gfx.cur_mode]
     mov     cl, [fs:BDA_GFX + gfx.cur_shift]
+
+    ; mov     bx, 0x2000          ; Banque +1
 
     mov     bp,4
 .row_loop:
@@ -739,27 +742,32 @@ cga_cursor_draw:
 .row_loop:
     ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
     push    cx                  ; préserver la banque "suivante"
-    mov     ch, [BDA_MOUSE + mouse.x]
-    and     ch, 0x07
-    mov     cl, 16
-    sub     cl, ch
+    mov     cl, [BDA_MOUSE + mouse.x]
+    and     cl, 0x07
 
-    mov     eax,0xffff0000
+    ; --- MASQUE AND (EAX) ---
+    mov     eax, 0xFFFFFFFF
     mov     ax, [gs:si]         ; masque AND
+    xchg    al, ah              ; Redresser pour l'ordre des pixels CGA
     bswap   eax
     ror     eax, cl
 
+    ; --- MASQUE XOR (EBX) ---
     xor     ebx, ebx
     mov     bx, [gs:si+32]      ; masque XOR
+    xchg    bl, bh
     bswap   ebx
     ror     ebx, cl
-    mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
 
+    ; --- LECTURE ET MODIFICATION (EDX) ---
+    mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
+    bswap   edx
     and     edx, eax            ; application du masque AND (AX)
     xor     edx, ebx            ; application du masque XOR (BX)
-
+    bswap   edx
     mov     [es:di], edx        ; ecriture du résultat
 
+    ; --- GESTION DES BANQUES ---
     pop     cx
     add     di, cx              ; banque suivante
     test    cx,0x8000

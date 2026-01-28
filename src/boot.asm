@@ -47,11 +47,11 @@ section     .text
 %include 		"./drivers/keyboard_ps2.asm"
 %include 		"./services/generic.asm"
 
-err_vganok		db		'VGA Not Initialized',0
-;err_end			db		'code completed successfully',0
+err_vganok		db	'VGA Not Initialized',0
 
-cpt_txt			db '0123456789A123456789B123456789C123456789D123456789E123456789F123456789G123456789',0
-helloworld		db 'Hello World !',0
+cpt_txt			db 	'0123456789A123456789B123456789C123456789D123456789E123456789F123456789G123456789',0
+helloworld		db 	'Hello World !',0
+centre			db	'TEXTEAUCENTR',0
 
 reset:
 		cli
@@ -96,6 +96,17 @@ reset:
 
 		; on active le mode graphique
 		GFX_DRV	GFX_INIT
+
+		mov		cx, 300
+		mov		dx, 102
+		GFX_DRV	GFX_GOTOXY
+
+		GFX_SET_WRTIE_MODE GFX_TXT_WHITE_TRANSPARENT
+
+		push	cs
+		pop		ds
+		mov		si, centre
+		GFX_DRV	GFX_WRITE
 
 		; call 	mouse_reset
 		call	mouse_init
