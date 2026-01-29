@@ -108,7 +108,7 @@ reset:
 	mov		dx, 80
 	GFX_DRV	GFX_GOTOXY
 
-	GFX_SET_WRTIE_MODE GFX_TXT_WHITE_TRANSPARENT
+	GFX_WRITE_MODE GFX_TXT_WHITE_TRANSPARENT
 
 	push	cs
 	pop		ds
@@ -119,7 +119,7 @@ reset:
 	mov		dx, 90
 	GFX_DRV	GFX_GOTOXY
 
-	GFX_SET_WRTIE_MODE GFX_TXT_BLACK_TRANSPARENT
+	GFX_WRITE_MODE GFX_TXT_BLACK_TRANSPARENT
 
 	push	cs
 	pop		ds
@@ -130,7 +130,7 @@ reset:
 	mov		dx, 100
 	GFX_DRV	GFX_GOTOXY
 
-	GFX_SET_WRTIE_MODE GFX_TXT_WHITE
+	GFX_WRITE_MODE GFX_TXT_WHITE
 
 	push	cs
 	pop		ds
@@ -141,7 +141,7 @@ reset:
 	mov		dx, 110
 	GFX_DRV	GFX_GOTOXY
 
-	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
+	GFX_WRITE_MODE GFX_TXT_BLACK
 
 	push	cs
 	pop		ds
@@ -151,7 +151,7 @@ reset:
 	; call 	mouse_reset
 	call	mouse_init
 
-	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
+	GFX_WRITE_MODE GFX_TXT_BLACK
 
 	xor		cx,cx
 	mov		dx,0
@@ -162,7 +162,7 @@ reset:
 	mov		si, cpt_txt
 	GFX_DRV	GFX_WRITE
 
-	GFX_SET_WRTIE_MODE GFX_TXT_WHITE_TRANSPARENT
+	GFX_WRITE_MODE GFX_TXT_WHITE_TRANSPARENT
 
 	mov		cx,8
 	mov		dx,8
@@ -173,7 +173,7 @@ reset:
 
 	mov		cx,8
 	mov		dx,24
-	GFX_SET_WRTIE_MODE 0
+	GFX_WRITE_MODE 0
 
 	GFX_DRV	GFX_CRS_UPDATE
 
@@ -189,7 +189,7 @@ reset:
 	mov		ax,BDA_DATA_SEG
 	mov		ds,ax
 endless:
-	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
+	GFX_WRITE_MODE GFX_TXT_BLACK
 	xor 	cx,cx
 	mov		dx,180
 	GFX_DRV	GFX_GOTOXY

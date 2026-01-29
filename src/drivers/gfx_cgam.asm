@@ -43,10 +43,10 @@
 ;
 %define GFX_TXT_WHITE_TRANSPARENT   00000000b
 %define GFX_TXT_BLACK_TRANSPARENT   00000001b
-%define GFX_TXT_WHITE               00000011b
-%define GFX_TXT_BLACK               00000010b
+%define GFX_TXT_WHITE               00000010b
+%define GFX_TXT_BLACK               00000011b
 
-%macro GFX_DRV  1
+%macro GFX_DRV  1-*
     call word [cs:graph_driver + ((%1)*2)]
 %endmacro
 
@@ -106,7 +106,7 @@ graph_driver:
         xchg    ah,al
 %endmacro
 
-%macro GFX_SET_WRTIE_MODE 1
+%macro GFX_WRITE_MODE 1
         push    fs
 
         push    BDA_DATA_SEG
