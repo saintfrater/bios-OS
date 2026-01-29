@@ -60,31 +60,26 @@ dump_ram_words:
 ; Sortie : Affiche "1A2B" via cga_putc
 ; =============================================================================
 print_word_hex:
-    push    ax                 ; Sauvegarde AX car on va le modifier (rotation)
-    push    cx
-    push    bx
-
+    pusha
+    mov     dx, ax
     mov     cx, 4               ; 4 caractères hex dans un mot de 16 bits
 
 .next_digit:
     ; On veut afficher les bits 12-15 d'abord.
     ; L'astuce est de faire une rotation à gauche de 4 bits.
     ; Le quartet de poids fort se retrouve en bas (bits 0-3).
-    rol     ax, 4
+    rol     dx, 4
 
-    mov     bx, ax              ; Copie temporaire
-    and     bl, 0x0F            ; On isole les 4 derniers bits (0 à 15)
+    mov     ax, dx              ; Copie temporaire
+    and     al, 0x0F            ; On isole les 4 derniers bits (0 à 15)
 
-    mov     al, bl              ; AL contient la valeur numérique (0-15)
     call    nibble_to_ascii    ; Convertit AL en caractère ASCII
 
     call    cga_putc           ; Affiche le caractère
 
     loop    .next_digit        ; Répète 4 fois
 
-    pop     bx
-    pop     cx
-    pop     ax                  ; Restaure l'état original de AX
+    popa
     ret
 
 ; =============================================================================

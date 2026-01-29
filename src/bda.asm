@@ -93,8 +93,6 @@ endstruc
 %define BDA_MOUSE               0x0000
 %define BDA_GFX                 (BDA_MOUSE + mouse_size)
 
-%warning offset Mouse: BAD_MOUSE, Gfx : BDA_GFX
-
 ;
 ; memory map
 ;

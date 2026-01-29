@@ -12,7 +12,7 @@ Rather than booting an operating system from disk, the PC starts **directly from
 
 The project is intentionally educational, experimental, and minimalist.
 
-![Screenshot of the boot + text test](/doc/assets/Capture-txt-test.png)
+![Screenshot of the boot + text test](/doc/assets/Capture-2026-01-29 210122.png)
 
 ---
 
@@ -135,7 +135,7 @@ Au lieu de charger un système d’exploitation depuis un disque, le PC **démar
 
 Le projet est volontairement **éducatif, expérimental et minimaliste**.
 
-![Screenshot of the boot + text test](/doc/assets/Capture-txt-test.png)
+![Screenshot of the boot + text test](/doc/assets/Capture-2026-01-29 210122.png)
 
 ---
 

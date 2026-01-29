@@ -36,12 +36,15 @@
 ; sinon le code utilisé sera toujours "shifted"
 ; %define FULL_MODE_ALLIGNED          1
 
-; align putch mode
-%define GFX_TXT_WHITE_TRANSPARENT   0
-%define GFX_TXT_BLACK_TRANSPARENT   1
-%define GFX_TXT_TRANSP_ON_WHITE     2
-%define GFX_TXT_WHITE_ON_BLACK      3
-%define GFX_TXT_BLACK_ON_WHITE      4
+;
+; bit : descr
+;  0  : text color : 0=black, 1=white
+;  1  : transparent : 1=apply background attribut
+;
+%define GFX_TXT_WHITE_TRANSPARENT   00000000b
+%define GFX_TXT_BLACK_TRANSPARENT   00000001b
+%define GFX_TXT_WHITE               00000011b
+%define GFX_TXT_BLACK               00000010b
 
 %macro GFX_DRV  1
     call word [cs:graph_driver + ((%1)*2)]
@@ -61,6 +64,21 @@
 %define GFX_WRITE       6
 %define GFX_CRS_UPDATE  7
 
+; ------------------------------------------------------------
+; COMMENTAIRE SUR LA MÉTHODE D'APPEL
+;
+; Pour appeler une fonction du driver depuis votre GUI :
+; 1. Définissez l'adresse de base du driver (ex: GFX_DRIVER_BASE)
+; 2. Utilisez un call indirect via l'offset de la table.
+;
+; Exemple en ASM pour remplir un rectangle :
+;    call [GFX_DRIVER_BASE + 9]  ; Appelle gfx_fill_rect
+;
+; Cette méthode isole totalement votre bibliothèque GUI du driver.
+; Si vous changez le code du driver, tant que la table au début
+; ne change pas d'ordre, la GUI n'a pas besoin d'être recompilée.
+; ------------------------------------------------------------
+
 graph_driver:
         dw cga_init
         dw cga_putpixel
@@ -78,7 +96,6 @@ graph_driver:
 %include "./common/chartable.asm"
 
 ;
-;
 ; convert al -> AX aligned with "cl"
 %macro ALING_BYTE 0
         mov     ah,al
@@ -87,7 +104,6 @@ graph_driver:
 
         xchg    ah,al
 %endmacro
-
 
 %macro GFX_SET_WRTIE_MODE 1
         push    fs
@@ -100,21 +116,6 @@ graph_driver:
         pop     fs
         pop     ax
 %endmacro
-
-; ------------------------------------------------------------
-; COMMENTAIRE SUR LA MÉTHODE D'APPEL
-;
-; Pour appeler une fonction du driver depuis votre GUI :
-; 1. Définissez l'adresse de base du driver (ex: GFX_DRIVER_BASE)
-; 2. Utilisez un call indirect via l'offset de la table.
-;
-; Exemple en ASM pour remplir un rectangle :
-;    call [GFX_DRIVER_BASE + 9]  ; Appelle gfx_fill_rect
-;
-; Cette méthode isole totalement votre bibliothèque GUI du driver.
-; Si vous changez le code du driver, tant que la table au début
-; ne change pas d'ordre, la GUI n'a pas besoin d'être recompilée.
-; ------------------------------------------------------------
 
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
@@ -138,7 +139,6 @@ cga_init:
 
 cga_none:
     ret
-
 
 ; ------------------------------------------------------------
 ; Calcule DI + AH=mask pour (CX=x, DX=y) en mode CGA 640x200
@@ -244,83 +244,6 @@ get_glyph_offset:
         ret
 
 ; ---------------------------------------------------------------------------
-; cga_putc_aligned
-; In : AL = char (ASCII)
-; Uses: DS:GFX_CUR_* (baseDI, shift, etc.)
-; Out: avance le curseur d'un caractère (8 pixels) sans recalcul complet
-; Notes:
-;  - Nécessite une font 8x8 accessible en CS (voir get_glyph8x8_cs_si)
-;  - Transparent: bits 0 du glyph ne touchent pas le fond
-; ---------------------------------------------------------------------------
-
-%ifdef FULL_MODE_ALLIGNED
-cga_putc_aligned:
-    ; Base offset VRAM pour la scanline Y
-    mov     di, [fs:BDA_GFX + gfx.cur_offset]
-    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
-    mov     dl, [fs:BDA_GFX + gfx.cur_mode]
-
-    mov     cx,4
-.row_loop:
-    ; AL = byte glyph pour cette scanline
-    mov     ax, [cs:si]
-    add     si,2
-
-    cmp     dl,0
-    jne     .black_transparent
-
-    ; white with transparent
-    or      [es:di], al
-    or      [es:di+bx], ah
-    jmp     .next
-
-.black_transparent:
-    cmp     dl,1
-    jne     .transparent_white
-
-    ; black with transparent
-    not      ax
-    and      [es:di], al
-    and      [es:di+bx], ah
-    jmp     .next
-
-.transparent_white:
-    cmp     dl,2
-    jne     .black_white
-
-    ; transparent on white
-    not      ax
-    or      [es:di], al
-    or      [es:di+bx], ah
-    jmp     .next
-
-.black_white:
-    cmp     dl,3
-    jne     .white_transparent
-
-    ; white on black
-    mov     [es:di], al
-    mov     [es:di+bx], ah
-    jmp     .next
-
-.white_transparent:
-    not      ax
-    mov     [es:di], al
-    mov     [es:di+bx], ah
-
-.next:
-    add     di,CGA_STRIDE
-
-    loop    .row_loop
-
-    ; Avancer curseur d'un caractère (8 pixels)
-    inc     word [fs:BDA_GFX + gfx.cur_offset]
-    add     word [fs:BDA_GFX + gfx.cur_x], 8
-
-    ret
-%endif
-
-; ---------------------------------------------------------------------------
 ; cga_putc_unalign
 ; In : AL = char (ASCII)
 ; Uses: FS:BDA_GFX + gfx.cur_* (offset, add_ofs, shift, mode)
@@ -328,61 +251,6 @@ cga_putc_aligned:
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
-cga_putc_unaligned:
-    ; Base offset VRAM pour la scanline Y
-    mov     di, [fs:BDA_GFX + gfx.cur_offset]
-    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
-    mov     ch, [fs:BDA_GFX + gfx.cur_mode]
-    mov     cl, [fs:BDA_GFX + gfx.cur_shift]
-
-    ; mov     bx, 0x2000          ; Banque +1
-
-    mov     bp,4
-.row_loop:
-
-    ; ligne "paire" du gylphe
-    mov     al, [cs:si]
-    inc     si
-    ALING_BYTE
-    push    ax
-
-    ; ligne "impaire" du gylphe
-    mov     al, [cs:si]
-    inc     si
-    ALING_BYTE
-    pop     dx
-    xchg    ax, dx
-
-    cmp     ch,0
-    ja     .black_transparent
-
-; white with transparent
-    or      [es:di], ax
-    or      [es:di+bx], dx
-    jmp     .next
-
-.black_transparent:
-;    cmp     ch,1
-;    jne     .transparent_white
-
-; black with transparent
-    not      ax
-    not      dx
-    and      [es:di], ax
-    and      [es:di+bx], dx
-;    jmp     .next
-.next:
-    add     di,CGA_STRIDE
-
-    dec     bp
-    jnz     .row_loop
-
-    ; Avancer curseur d'un caractère (8 pixels)
-    inc     word [fs:BDA_GFX + gfx.cur_offset]
-    add     word [fs:BDA_GFX + gfx.cur_x], 8
-
-    ret
-
 cga_putc:
     pusha
     push    fs
@@ -395,17 +263,76 @@ cga_putc:
 
     call    get_glyph_offset
 
-%ifdef FULL_MODE_ALLIGNED
-    cmp     byte [fs:BDA_GFX + gfx.cur_shift], 0
-    jne     .unaligned
+    ; Base offset VRAM pour la scanline Y
+    mov     di, [fs:BDA_GFX + gfx.cur_offset]
+    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
+    mov     ch, [fs:BDA_GFX + gfx.cur_mode]
+    mov     cl, [fs:BDA_GFX + gfx.cur_shift]
+    mov     bp,4
+.row_loop:
+    ; gestion du fond de texte
+    test    ch, 00000010b               ; transparent background ?
+    jz      .skip_attribut              ; oui
 
-    call    cga_putc_aligned
-    jmp     .done
-.unaligned:
-%endif
+    test    ch, 00000001b               ; background blanc ?
+    je      .bkg_black
 
-    call    cga_putc_unaligned
-.done:
+    ; background = white
+    mov     ax, 0xFF00
+    shr     ax, cl
+    xchg    al, ah
+    or      [es:di], ax
+    or      [es:di+bx], ax
+    jmp     .skip_attribut
+
+.bkg_black:                             ; OK
+    ; background = black
+    mov     ax, 0xFF00
+    shr     ax, cl
+    xchg    al, ah
+    not     ax
+    and     [es:di], ax
+    and     [es:di+bx], ax
+
+.skip_attribut:
+    ; ligne "paire" du gylphe
+    xor     ax, ax
+    mov     al, [cs:si]
+    inc     si
+    ALING_BYTE
+    mov     dx,ax
+
+    ; ligne "impaire" du gylphe
+    mov     al, [cs:si]
+    inc     si
+    ALING_BYTE
+    xchg    ax, dx
+
+    test   ch,00000001b
+    jz     .black_text
+
+    ; white text
+    not      ax
+    not      dx
+    and      [es:di], ax
+    and      [es:di+bx], dx
+
+    jmp     .next
+
+.black_text:
+    or      [es:di], ax
+    or      [es:di+bx], dx
+
+.next:
+    add     di,CGA_STRIDE
+
+    dec     bp
+    jnz     .row_loop
+
+    ; Avancer curseur d'un caractère (8 pixels)
+    inc     word [fs:BDA_GFX + gfx.cur_offset]
+    add     word [fs:BDA_GFX + gfx.cur_x], 8
+
     pop     es
     pop     fs
     popa
@@ -569,6 +496,9 @@ cga_cursor_move:
 		mov		ax, BDA_DATA_SEG
 		mov		ds, ax
 
+        cmp     byte [BDA_MOUSE + mouse.cur_visible], 0
+        je      .done
+
 		cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
 		jne		.done
 		mov 	byte [BDA_MOUSE + mouse.cur_drawing],1
@@ -594,7 +524,7 @@ cga_cursor_move:
 ; Stocke 16 DWORDs: chaque DWORD contient (b0|b1<<8|b2<<16) dans les 24 bits bas.
 ; -----------------------------------------------
 cga_cursor_savebg:
-    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
+    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
     jne     .done
 
     mov     byte [BDA_MOUSE + mouse.bkg_saved], 1
@@ -608,38 +538,22 @@ cga_cursor_savebg:
     ; calcule ES:DI pour (x,y)
     call    cga_calc_addr
 
-    ; bank_add = +0x2000 si DI<0x2000 sinon -0x2000
-    mov     bx, 02000h
-    cmp     di, bx
-    jl      .bank_ok
-    neg     bx
-.bank_ok:
     mov     [BDA_MOUSE + mouse.cur_addr_start], di
-    mov     [BDA_MOUSE + mouse.cur_bank_add], bx
-
-    ; DS:SI = buffer (64 bytes)
     lea     si, [BDA_MOUSE + mouse.bkg_buffer]
 
-    mov     bp, 8                      ; 8 itérations = 16 lignes (pair/impair via bank)
-.rowpair:
+    mov     cx,16
+.row_loop:
     ; ---- ligne bank courant ----
     mov     eax, [es:di]               ; lit b0 b1 b2 b3
-    and     eax, 00FFFFFFh             ; ne garder que 3 bytes
     mov     [ds:si], eax               ; stocke 4 bytes (le byte haut sera 0)
     add     si, 4
 
-    ; ---- ligne bank opposé ----
-    add     di, bx                     ; +0x2000 ou -0x2000
-    mov     eax, [es:di]
-    and     eax, 00FFFFFFh
-    mov     [ds:si], eax
-    add     si, 4
-
-    sub     di, bx
-    add     di, CGA_STRIDE*2           ; avance de 2 lignes dans bank courant
-    dec     bp
-    jnz     .rowpair
-
+    xor     di, 0x2000
+    test    di, 0x2000
+    jnz     .next_line
+    add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
+.next_line:
+    loop    .row_loop
 .done:
     ret
 
@@ -657,35 +571,20 @@ cga_cursor_restorebg:
 
     ; restaurer depuis la dernière position sauvegardée
     mov     di, [BDA_MOUSE + mouse.cur_addr_start]
-    mov     bx, [BDA_MOUSE + mouse.cur_bank_add]
-
     lea     si, [BDA_MOUSE + mouse.bkg_buffer]
-
-    mov     bp, 8
-.rowpair:
+    mov     cx, 16
+.row_loop:
     ; ---- ligne bank courant ----
-    mov     eax, [ds:si]               ; saved (24 bits bas)
+    mov     eax, [ds:si]               ; saved (32 bits)
+    mov     [es:di], eax               ; restore line
     add     si, 4
-    mov     ecx, [es:di]               ; dst actuel
-    and     ecx, 0FF000000h            ; garder b3
-    and     eax, 00FFFFFFh
-    or      eax, ecx
-    mov     [es:di], eax
 
-    ; ---- ligne bank opposé ----
-    add     di, bx
-    mov     eax, [ds:si]
-    add     si, 4
-    mov     ecx, [es:di]
-    and     ecx, 0FF000000h
-    and     eax, 00FFFFFFh
-    or      eax, ecx
-    mov     [es:di], eax
-
-    sub     di, bx
-    add     di, CGA_STRIDE*2
-    dec     bp
-    jnz     .rowpair
+    xor     di, 0x2000
+    test    di, 0x2000
+    jnz     .next_line
+    add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
+.next_line:
+    loop    .row_loop
 
 .done:
     ret
@@ -720,6 +619,38 @@ cga_cursor_draw:
 
     mov     bp, ax
 .y_ok:
+    ; On calcule si les 4 octets vont dépasser la ligne (80 octets)
+    ; X est en bits (0-639). X >> 3 donne l'octet de départ (0-79).
+    ; Si StartByte >= 77, on déborde.
+
+    mov     cx, [BDA_MOUSE + mouse.x]
+    shr     cx, 3                   ; CX = Byte Offset (0-79)
+    xor     esi, esi                ; ESI = Masque de protection (0 = tout dessiner)
+
+    cmp     cx, 76                  ; 76 est le dernier offset sûr (76,77,78,79)
+    jbe     .mask_ready             ; Si <= 76, pas de débordement
+
+    ; Calcul du débordement
+    ; Si CX=77 (Déborde 1 byte) -> Masque 0x000000FF (LSB car bswap)
+    ; Si CX=78 (Déborde 2 bytes)-> Masque 0x0000FFFF
+    ; Si CX=79 (Déborde 3 bytes)-> Masque 0x00FFFFFF
+
+    cmp     cx, 77
+    jne     .check_78
+    mov     esi, 0x000000FF
+    jmp     .mask_ready
+.check_78:
+    cmp     cx, 78
+    jne     .check_79
+    mov     esi, 0x0000FFFF
+    jmp     .mask_ready
+.check_79:
+    mov     esi, 0x00FFFFFF         ; Cas extrême (bord droit)
+
+.mask_ready:
+    ; On sauvegarde ce masque pour l'utiliser dans la boucle
+    ; On utilise la pile pour libérer les registres
+    push    esi                     ; [ESP] contient maintenant le masque
 
     ; --- ADRESSAGE ---
     mov     cx, [BDA_MOUSE + mouse.x]
@@ -747,17 +678,24 @@ cga_cursor_draw:
 
     ; --- MASQUE AND (EAX) ---
     mov     eax, 0xFFFFFFFF
-    mov     ax, [gs:si]         ; masque AND
-    xchg    al, ah              ; Redresser pour l'ordre des pixels CGA
+    mov     ax, [gs:si]             ; masque AND
+    xchg    al, ah                  ; Redresser pour l'ordre des pixels CGA
     bswap   eax
     ror     eax, cl
 
+    or      eax, [esp+2]            ; Force les bits clippés à 1 (garde le fond)
+
     ; --- MASQUE XOR (EBX) ---
     xor     ebx, ebx
-    mov     bx, [gs:si+32]      ; masque XOR
+    mov     bx, [gs:si+32]          ; masque XOR
     xchg    bl, bh
     bswap   ebx
     ror     ebx, cl
+
+    mov     edx, [esp+2]            ; charge le masque de protection
+    not     edx                     ; inverse le masque de protection
+    and     ebx, edx                ; applique le masque de protection
+
 
     ; --- LECTURE ET MODIFICATION (EDX) ---
     mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
@@ -780,6 +718,7 @@ cga_cursor_draw:
     dec     bp
     jnz     .row_loop
 
+    pop     esi
 .exit_total:
     pop     es
     pop     ds

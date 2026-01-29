@@ -287,9 +287,15 @@ isr_mouse_handler:
 	; lire un octet depuis le contrôleur et le stocker dans le buffer
 	in  	al, i8042_PS2_DATA   						; lire octet souris
 
-	inc		byte [BDA_MOUSE + mouse.blinker]
-
 	movzx 	bx, byte [BDA_MOUSE + mouse.idx]
+	cmp		bl,0
+	jne		.read_packet
+
+	; check bit 3 octet 0 pour assurer que le bloc est ok:
+	test	al, 00001000b								; bit 3 = 1
+	jz		.done_eoi									; allignement erroné
+
+.read_packet:
 	mov 	byte [BDA_MOUSE + mouse.buffer + bx], al
 	inc		byte [BDA_MOUSE + mouse.idx]
 
@@ -300,11 +306,6 @@ isr_mouse_handler:
 
 	; packet complet, on decode les données (ou on jette si c'est incorrect)
 	mov 	byte [BDA_MOUSE + mouse.idx], 0				; reset de l'index de lecture
-
-	; check bit 3 octet 0 pour assurer que le bloc est ok:
-	mov		al, byte [BDA_MOUSE + mouse.buffer]
-	and 	al, 00001000b								; bit 3 = 1
-	je		.done_eoi									; allignement erroné
 
 	; debut du décodage des données
 	mov 	bl, [BDA_MOUSE + mouse.buffer]				; status
@@ -331,28 +332,28 @@ isr_mouse_handler:
 
 	; --- CLAMPING X ---
     ; Check minimum (0)
-    cmp     word [fs:BDA_MOUSE + mouse.x], 0
+    cmp     word [BDA_MOUSE + mouse.x], 0
     jge     .check_x_max
-    mov     word [fs:BDA_MOUSE + mouse.x], 0
+    mov     word [BDA_MOUSE + mouse.x], 0
     jmp     .done_x
 .check_x_max:
     ; Check maximum (e.g., 639 for graphics, or pixel width)
-    cmp     word [fs:BDA_MOUSE + mouse.x], GFX_WIDTH-1 ; Replace with variable or define
+    cmp     word [BDA_MOUSE + mouse.x], GFX_WIDTH-1 ; Replace with variable or define
     jle     .done_x
-    mov     word [fs:BDA_MOUSE + mouse.x], GFX_WIDTH-1
+    mov     word [BDA_MOUSE + mouse.x], GFX_WIDTH-1
 .done_x:
 
     ; --- CLAMPING Y ---
     ; Check minimum (0)
-    cmp     word [fs:BDA_MOUSE + mouse.y], 0
+    cmp     word [BDA_MOUSE + mouse.y], 0
     jge     .check_y_max
-    mov     word [fs:BDA_MOUSE + mouse.y], 0
+    mov     word [BDA_MOUSE + mouse.y], 0
     jmp     .done_y
 .check_y_max:
     ; Check maximum
-    cmp     word [fs:BDA_MOUSE + mouse.y], GFX_HEIGHT-1 ; Replace with variable or define
+    cmp     word [BDA_MOUSE + mouse.y], GFX_HEIGHT-1 ; Replace with variable or define
     jle     .done_y
-    mov     word [fs:BDA_MOUSE + mouse.y], GFX_HEIGHT-1
+    mov     word [BDA_MOUSE + mouse.y], GFX_HEIGHT-1
 .done_y:
 
 	; check si il y a un 4eme byte a traiter

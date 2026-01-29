@@ -58,7 +58,11 @@ err_vganok	db	'VGA Not Initialized',0
 
 cpt_txt		db 	'0123456789A123456789B123456789C123456789D123456789E123456789F123456789G123456789',0
 helloworld	db 	'Hello World !',0
-centre		db	'TEXTEAUCENTR',0
+
+W_T			db	'1 - TEXT WHITE - TRANSPARENT',0
+B_T 		db 	'2 - TEXT BLACK - TRANSPARENT',0
+W_B 		db 	'3 - TEXT WHITE - ON BLACK',0
+B_W 		db 	'4 - TEXT BLACK - ON WHITE',0
 
 reset:
 	cli
@@ -100,23 +104,54 @@ reset:
 	; on active le mode graphique
 	GFX_DRV	GFX_INIT
 
-	mov		cx, 300
-	mov		dx, 102
+	mov		cx, 290
+	mov		dx, 80
 	GFX_DRV	GFX_GOTOXY
 
 	GFX_SET_WRTIE_MODE GFX_TXT_WHITE_TRANSPARENT
 
 	push	cs
 	pop		ds
-	mov		si, centre
+	mov		si, W_T
+	GFX_DRV	GFX_WRITE
+
+	mov		cx, 290
+	mov		dx, 90
+	GFX_DRV	GFX_GOTOXY
+
+	GFX_SET_WRTIE_MODE GFX_TXT_BLACK_TRANSPARENT
+
+	push	cs
+	pop		ds
+	mov		si, B_T
+	GFX_DRV	GFX_WRITE
+
+	mov		cx, 290
+	mov		dx, 100
+	GFX_DRV	GFX_GOTOXY
+
+	GFX_SET_WRTIE_MODE GFX_TXT_WHITE
+
+	push	cs
+	pop		ds
+	mov		si, W_B
+	GFX_DRV	GFX_WRITE
+
+	mov		cx, 290
+	mov		dx, 110
+	GFX_DRV	GFX_GOTOXY
+
+	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
+
+	push	cs
+	pop		ds
+	mov		si, B_W
 	GFX_DRV	GFX_WRITE
 
 	; call 	mouse_reset
 	call	mouse_init
 
-	GFX_DRV	GFX_CRS_UPDATE
-
-	GFX_SET_WRTIE_MODE GFX_TXT_BLACK_ON_WHITE
+	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
 
 	xor		cx,cx
 	mov		dx,0
@@ -140,6 +175,8 @@ reset:
 	mov		dx,24
 	GFX_SET_WRTIE_MODE 0
 
+	GFX_DRV	GFX_CRS_UPDATE
+
 .loopshift:
 	GFX_DRV	GFX_GOTOXY
 	mov		si, helloworld
@@ -152,6 +189,7 @@ reset:
 	mov		ax,BDA_DATA_SEG
 	mov		ds,ax
 endless:
+	GFX_SET_WRTIE_MODE GFX_TXT_BLACK
 	xor 	cx,cx
 	mov		dx,180
 	GFX_DRV	GFX_GOTOXY
