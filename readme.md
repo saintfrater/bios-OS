@@ -42,7 +42,7 @@ The project is intentionally educational, experimental, and minimalist.
   - Real-mode execution constraints
 
 - **Improve mastery of x86 assembly**
-  - Real-mode x86 assembly (8086-compatible)
+  - Real-mode x86 assembly (i386+ compatible)
   - Performance-oriented routines
   - Hardware-near programming
   - Clear separation between hardware-specific drivers and core logic
@@ -165,7 +165,7 @@ Le projet est volontairement **éducatif, expérimental et minimaliste**.
   - Contraintes du mode réel
 
 - **Perfectionner la maîtrise de l’assembleur**
-  - Assembleur x86 en mode réel (compatible 8086)
+  - Assembleur x86 en mode réel (i386+ compatible)
   - Routines optimisées pour la performance
   - Programmation proche du matériel
   - Séparation claire entre cœur du BIOS et drivers matériels

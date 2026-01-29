@@ -66,9 +66,6 @@ mouse_reset:
 
 	; experiemntal
 	mov		byte  [fs:BDA_MOUSE + mouse.wheel],0
-
-	; debug
-	mov		byte  [fs:BDA_MOUSE + mouse.blinker],0
 	ret
 
 ; ------------------------------------------------------------
@@ -368,7 +365,7 @@ isr_mouse_handler:
 .done:
 	; update la position du curseur sur l'écran
 	; en ce moment c'est commented out (debug)
-	call 	cga_cursor_move
+	call 	cga_mouse_cursor_move
 .done_eoi:
 	mov 	al, 0x20
 	out 	i8259_SLAVE_CMD, al      					; EOI PIC esclave

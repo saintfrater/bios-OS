@@ -203,13 +203,6 @@ endless:
 	mov		ax, [BDA_MOUSE + mouse.y]
 	call 	print_word_hex
 
-	mov		al,' '
-	call	cga_putc
-
-	xor		ah,ah
-	mov		al, [BDA_MOUSE + mouse.blinker]
-	call 	print_word_hex
-
 	jmp		endless
 
 
