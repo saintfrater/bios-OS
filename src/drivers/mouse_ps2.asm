@@ -66,6 +66,9 @@ mouse_reset:
 
 	; experiemntal
 	mov		byte  [fs:BDA_MOUSE + mouse.wheel],0
+
+	; debug
+	mov		byte  [fs:BDA_MOUSE + mouse.blinker],0
 	ret
 
 ; ------------------------------------------------------------
@@ -85,6 +88,7 @@ mouse_init:
 	call	ps2_wait_ready_write
 	mov 	al, I8042_CMD_DIS_MOUSE 	; Disable Mouse
 	out 	i8042_PS2_CTRL, al
+
 	; Vider tout ce qui traîne
 	call	ps2_flush_output
 	; Activer le port souris (AUX)
@@ -283,6 +287,8 @@ isr_mouse_handler:
 	; lire un octet depuis le contrôleur et le stocker dans le buffer
 	in  	al, i8042_PS2_DATA   						; lire octet souris
 
+	inc		byte [BDA_MOUSE + mouse.blinker]
+
 	movzx 	bx, byte [BDA_MOUSE + mouse.idx]
 	mov 	byte [BDA_MOUSE + mouse.buffer + bx], al
 	inc		byte [BDA_MOUSE + mouse.idx]
@@ -322,6 +328,32 @@ isr_mouse_handler:
 	mov		ah,0xff										; y est négatif
 .y_pos:
 	sub		[BDA_MOUSE + mouse.y], ax
+
+	; --- CLAMPING X ---
+    ; Check minimum (0)
+    cmp     word [fs:BDA_MOUSE + mouse.x], 0
+    jge     .check_x_max
+    mov     word [fs:BDA_MOUSE + mouse.x], 0
+    jmp     .done_x
+.check_x_max:
+    ; Check maximum (e.g., 639 for graphics, or pixel width)
+    cmp     word [fs:BDA_MOUSE + mouse.x], GFX_WIDTH-1 ; Replace with variable or define
+    jle     .done_x
+    mov     word [fs:BDA_MOUSE + mouse.x], GFX_WIDTH-1
+.done_x:
+
+    ; --- CLAMPING Y ---
+    ; Check minimum (0)
+    cmp     word [fs:BDA_MOUSE + mouse.y], 0
+    jge     .check_y_max
+    mov     word [fs:BDA_MOUSE + mouse.y], 0
+    jmp     .done_y
+.check_y_max:
+    ; Check maximum
+    cmp     word [fs:BDA_MOUSE + mouse.y], GFX_HEIGHT-1 ; Replace with variable or define
+    jle     .done_y
+    mov     word [fs:BDA_MOUSE + mouse.y], GFX_HEIGHT-1
+.done_y:
 
 	; check si il y a un 4eme byte a traiter
 	mov 	al, [BDA_MOUSE + mouse.packetlen]

@@ -58,6 +58,7 @@ struc  mouse
         .buffer         resb    4       ; i8042 input buffer                         0..3
         .idx            resb    1       ; index in the buffer                        4
         .packetlen      resb    1       ; max buffer len (3 ou 4)                    5
+        .blinker        resb    1       ;
 
         .status         resb    1       ; mouse status (button etc)                  6
         .wheel          resb    1       ; if a packet size is 4; experimental        7
@@ -85,11 +86,7 @@ struc   gfx
         .cur_y          resw    1
         .cur_offset     resw    1       ; offset calculé pour le prochain caractère
         .cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
-;         .cur_xbyte      resb    1       ; x>>3 (0..79)
         .cur_shift      resb    1       ; x&7 (0..7)
-;         .cur_parity     resb    1
-;        .cur_color      resb    1       ; 0 = texte en noir, autre = texte en blanc
-;         .cur_trans      resb    1       ; 0 = fond transparent, autre = fond inversé .txt_color
         .cur_mode       resb    1       ;
 endstruc
 
