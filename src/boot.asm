@@ -26,7 +26,6 @@
 ; configuration du bios
 ;
 ; ---------------------------------------------------------------------------
-%define 	DEBUG_PORT	0xe9		; 0x402 ou 0xe9
 
 ; initial stack
 %define 	STACK_SEG   0x0800		; segment de base
@@ -45,25 +44,15 @@ section     .text
 %include	"./common/cursor.asm"
 
 ; definition du BDA
-%include 	"./bda.asm"
+%include 	"./common/bda.asm"
 
-; %include 	"./services/macros.asm"
 %include 	"./common/debug_cga.asm"
 %include	"./drivers/gfx_cgam.asm"
+%include	"./services/gui_lib.asm"
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
 %include 	"./services/generic.asm"
-%include	"./services/gui_window.asm"
-
-err_vganok	db	'VGA Not Initialized',0
-
-cpt_txt		db 	'0123456789A123456789B123456789C123456789D123456789E123456789F123456789G123456789',0
-helloworld	db 	'Hello World !',0
-
-W_T			db	'1 - TEXT WHITE - TRANSPARENT',0
-B_T 		db 	'2 - TEXT BLACK - TRANSPARENT',0
-W_B 		db 	'3 - TEXT WHITE - ON BLACK',0
-B_W 		db 	'4 - TEXT BLACK - ON WHITE',0
+; %include	"./services/gui_window.asm"
 
 reset:
 	cli
@@ -111,7 +100,12 @@ reset:
 	push	cs
 	pop		ds
 
-	GUI		WINDOW, 50,50,250,100,helloworld
+setup_gui:
+    ; Initialiser le segment de données correct pour le texte du bouton
+    mov     ax, cs  ; ou DS selon où sont tes chaines
+    mov     [btn_quit + widget.text_seg], ax
+
+	; GUI		WINDOW, 50,50,250,100,helloworld
 
 	; GFX		RECTANGLE_DRAW, 50,50,250,100,0
 
@@ -126,6 +120,25 @@ reset:
 	mov		ax,BDA_DATA_SEG
 	mov		ds,ax
 endless:
+
+	; 1. Récupérer souris
+    mov     ax, [BDA_MOUSE + mouse.x]
+    mov     cx, ax                      ; CX = Souris X
+    mov     ax, [BDA_MOUSE + mouse.y]
+    mov     dx, ax                      ; DX = Souris Y
+    mov     bl, [BDA_MOUSE + mouse.status] ; BL = Boutons
+
+    ; 2. Gérer le bouton
+    mov     si, btn_quit                ; SI pointe sur l'objet
+    call    gui_update_button           ; Met à jour l'état et redessine si besoin
+
+    ; 3. Vérifier si cliqué (AL = 1)
+    cmp     al, 1
+    je      action_quitter
+
+    ; 4. Afficher le curseur souris (Important : après avoir dessiné le bouton)
+	;    GFX     MOUSE_MOVE
+
 	GFX		TXT_MODE, GFX_TXT_BLACK
 	GFX		GOTOXY, 0, 180
 
@@ -138,6 +151,10 @@ endless:
 	call 	print_word_hex
 
 	jmp		endless
+
+action_quitter:
+	hlt
+	jmp		action_quitter
 
 
 ; -----------------------------------------------------------
@@ -157,6 +174,21 @@ timer_isr:
 
 	pop		ax
 	iret
+
+; Déclaration d'un bouton "Quitter"
+btn_quit:
+    istruc widget
+        at widget.x,        dw 10
+        at widget.y,        dw 10
+        at widget.w,        dw 80
+        at widget.h,        dw 20
+        at widget.state,    db GUI_STATE_NORMAL
+        at widget.text_ofs, dw str_quit
+        at widget.text_seg, dw 0 ; Sera rempli au runtime (CS ou DS)
+        at widget.id,       db 1
+    iend
+
+str_quit db "QUITTER", 0
 
 ; ------------------------------------------------------------------
 ; Padding jusqu'au reset vector

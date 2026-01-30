@@ -73,10 +73,10 @@ draw_window_source:
     mov     bp, sp
 
     ; --- Arguments ---
-    %define .x      word [bp+4]
-    %define .y      word [bp+6]
-    %define .w      word [bp+8]
-    %define .h      word [bp+10]
+    %define .xa      word [bp+4]
+    %define .ya      word [bp+6]
+    %define .wa      word [bp+8]
+    %define .ha      word [bp+10]
     %define .title  word [bp+12]
 
     pusha
@@ -89,19 +89,19 @@ draw_window_source:
     ; ----------------------------------------------------
     ; On dessine un rectangle noir décalé de +1,+1
     ; x1+1, y1+1, x2+1, y2+1 -> NOIR
-    mov     ax, .x
-    add     ax, .w
+    mov     ax, .xa
+    add     ax, .wa
     inc     ax          ; x2 + 1
     mov     bx, ax      ; BX = right limit
 
-    mov     ax, .y
-    add     ax, .h
+    mov     ax, .ya
+    add     ax, .ha
     inc     ax          ; y2 + 1
     mov     dx, ax      ; DX = bottom limit
 
-    mov     ax, .x
+    mov     ax, .xa
     inc     ax          ; x1 + 1
-    mov     cx, .y
+    mov     cx, .ya
     inc     cx          ; y1 + 1
 
     ; Appel cga_fill_rect(x+1, y+1, x+w+1, y+h+1, BLACK)
@@ -118,17 +118,17 @@ draw_window_source:
     ; ----------------------------------------------------
     ; On dessine un rectangle BLANC par dessus l'ombre
     ; Cela crée le corps et "découpe" l'ombre pour ne laisser que le bord visible.
-    mov     bx, .x
-    add     bx, .w      ; BX = x2
-    mov     dx, .y
-    add     dx, .h      ; DX = y2
+    mov     bx, .xa
+    add     bx, .wa      ; BX = x2
+    mov     dx, .ya
+    add     dx, .ha      ; DX = y2
 
     ; Remplissage Blanc (Corps)
     push    word 1      ; Couleur 1 (Blanc)
     push    dx
     push    bx
-    push    word .y
-    push    word .x
+    push    word .ya
+    push    word .xa
     call    cga_fill_rect
     add     sp, 10
 
@@ -136,8 +136,8 @@ draw_window_source:
     push    word 0      ; Couleur 0 (Noir)
     push    dx
     push    bx
-    push    word .y
-    push    word .x
+    push    word .ya
+    push    word .xa
     call    cga_draw_rect
     add     sp, 10
 
@@ -148,13 +148,13 @@ draw_window_source:
     %define TITLE_HEIGHT 18
 
     ; Dessiner la ligne de séparation sous le titre
-    mov     cx, .y
+    mov     cx, .ya
     add     cx, TITLE_HEIGHT
 
     push    word 0      ; Couleur Noir
     push    cx          ; Y de la ligne
     push    bx          ; X2 (largeur fenêtre)
-    push    word .x     ; X1
+    push    word .xa    ; X1
     call    cga_line_horizontal
     add     sp, 8
 
@@ -162,11 +162,11 @@ draw_window_source:
     ; On dessine une ligne noire une ligne sur deux à l'intérieur du titre
     ; De y+1 à y+17, step 2
 
-    mov     si, .y
+    mov     si, .ya
     inc     si          ; Commence à y+1
     inc     si          ; Premier trait noir à y+2 (laissons 1px blanc sous le cadre haut)
 
-    mov     di, .y
+    mov     di, .ya
     add     di, TITLE_HEIGHT
     dec     di          ; Fin juste avant la ligne de séparation
 
@@ -177,7 +177,7 @@ draw_window_source:
     push    word 0      ; Noir
     push    si          ; Y courant
     push    bx          ; X2
-    push    word .x     ; X1
+    push    word .xa    ; X1
     call    cga_line_horizontal
     add     sp, 8
 
@@ -191,9 +191,9 @@ draw_window_source:
     ; Petit carré blanc à gauche avec contour noir
     ; Position: x+6, y+4, taille 9x9 (exemple)
 
-    mov     cx, .x
+    mov     cx, .xa
     add     cx, 6       ; Box X1
-    mov     dx, .y
+    mov     dx, .ya
     add     dx, 4       ; Box Y1
 
     mov     si, cx
@@ -236,9 +236,9 @@ draw_window_source:
 
     .calc_center:
     ; b) Calcul X Centré = X_win + (W_win/2) - (Len * 8 / 2)
-    mov     ax, .w
+    mov     ax, .wa
     shr     ax, 1       ; W / 2
-    add     ax, .x      ; Centre de la fenêtre
+    add     ax, .xa      ; Centre de la fenêtre
 
     mov     bx, cx      ; Sauver Len
     shl     cx, 2       ; Len * 4 (car Len * 8 / 2 = Len * 4)
@@ -249,7 +249,7 @@ draw_window_source:
     mov     cx, ax      ; Text X start
     sub     cx, 4       ; Padding gauche (Rect X1)
 
-    mov     dx, .y
+    mov     dx, .ya
     add     dx, 2       ; Rect Y1 (juste sous le cadre haut)
 
     push    bx          ; Sauve longueur char pour plus tard
@@ -261,7 +261,7 @@ draw_window_source:
     add     si, ax
     add     si, 4       ; Padding droite (Rect X2)
 
-    mov     di, .y
+    mov     di, .ya
     add     di, TITLE_HEIGHT
     dec     di          ; Rect Y2 (juste au dessus ligne séparation)
 
@@ -282,7 +282,7 @@ draw_window_source:
 
     ; GFX GOTOXY (X, Y) -> Y centré dans la barre de titre
     ; Centre barre ~9px. Font 8px. Y = Win_Y + 5
-    mov     dx, .y
+    mov     dx, .ya
     add     dx, 5
 
     ; Note: GFX GOTOXY utilise des arguments pile, attention à l'ordre API
@@ -319,10 +319,10 @@ draw_window:
     mov     bp, sp
 
     ; --- Arguments ---
-    %define .x      word [bp+4]
-    %define .y      word [bp+6]
-    %define .w      word [bp+8]
-    %define .h      word [bp+10]
+    %define .xa      word [bp+4]
+    %define .ya      word [bp+6]
+    %define .wa      word [bp+8]
+    %define .ha      word [bp+10]
     %define .title  word [bp+12]
     ; ---- Variables Locales ---
 
@@ -332,19 +332,19 @@ draw_window:
     ; ----------------------------------------------------
     ; On dessine un rectangle noir décalé de +1,+1
     ; x1+1, y1+1, x2+1, y2+1 -> NOIR
-    mov     ax, .x
-    add     ax, .w
+    mov     ax, .xa
+    add     ax, .wa
     inc     ax          ; x2 + 1
     mov     bx, ax      ; BX = right limit
 
-    mov     ax, .y
-    add     ax, .h
+    mov     ax, .ya
+    add     ax, .ha
     inc     ax          ; y2 + 1
     mov     dx, ax      ; DX = bottom limit
 
-    mov     ax, .x
+    mov     ax, .xa
     inc     ax          ; x1 + 1
-    mov     cx, .y
+    mov     cx, .ya
     inc     cx          ; y1 + 1
 
     GFX     RECTANGLE_DRAW, ax, cx, bx, dx, 0

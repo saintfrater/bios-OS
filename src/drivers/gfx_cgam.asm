@@ -215,8 +215,8 @@ cga_set_charpos:
     mov     bp, sp
 
     ; --- Définition des arguments ---
-    %define .x      word [bp+4]
-    %define .y      word [bp+6]
+    %define .x     word [bp+4]
+    %define .y     word [bp+6]
 
     pusha
     push    fs
@@ -260,6 +260,10 @@ cga_set_charpos:
     mov     [fs:BDA_GFX + gfx.cur_offset], bx
 
     pop     fs
+
+    ; clean defs
+    %undef  .x
+    %undef  .y
     popa
     leave
     ret
@@ -460,6 +464,11 @@ cga_putpixel:
 	and     byte [es:di], ah
 
     .done:
+
+    ; clean defs
+    %undef  .x
+    %undef  .y
+    %undef  .color
     popa
     leave
 	ret
@@ -491,6 +500,10 @@ cga_getpixel:
 
 	pop     es
 	pop     di
+
+    ; clean defs
+    %undef  .x
+    %undef  .y
     leave
 	ret
 
@@ -592,6 +605,12 @@ cga_line_vertical:
     call    cga_mouse_show
 
     pop     es
+
+    ; clean defs
+    %undef  .x
+    %undef  .y1
+    %undef  .y2
+    %undef  .color
     popa
     leave                       ; Leave gère le 'mov sp, bp / pop bp'
     ret
@@ -735,6 +754,11 @@ cga_line_horizontal:
     .done:
     call    cga_mouse_show
     pop     es
+
+    ; clean defs
+    %undef  .x1
+    %undef  .x2
+    %undef  .y
     popa
     leave
     ret
@@ -787,6 +811,10 @@ cga_draw_rect:
     GFX     LINE_VERT, .x1, .y1, .y2, .color
     GFX     LINE_VERT, .x2, .y1, .y2, .color
 
+    ; clean defs
+    %undef  .x1
+    %undef  .y1
+    %undef  .x2
     popa
     leave
     ret
@@ -938,6 +966,11 @@ cga_fill_rect:
 
     call    cga_mouse_show
     pop     es
+
+    ; clean defs
+    %undef  .x1
+    %undef  .y1
+    %undef  .x2
     popa
     leave
     ret

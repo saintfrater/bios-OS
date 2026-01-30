@@ -20,6 +20,7 @@
 ;  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;
 ; =============================================================================
+%define 	DEBUG_PORT	0xe9		; 0x402 ou 0xe9
 
 debug_puts:
 .next:

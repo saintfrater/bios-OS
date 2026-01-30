@@ -24,7 +24,7 @@
 ; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/informations/bios_data_area
 ;
 
-%define BDA_SEGMENT		0x0040			; segment BDA
+%define BDA_SEGMENT		    0x0040			    ; segment BDA
 
 ; custom vars
 %define BDA_INFO_MEM_SIZE	0x0014		        ; Memory size in Kbytes
@@ -46,34 +46,33 @@
 %define BKG_TOTAL_BYTES         (BKG_TOTAL_DWORDS * 4)            ; 64
 
 struc  mouse
-        .buffer         resb    4       ; i8042 input buffer
-        .idx            resb    1       ; index in the buffer
-        .packetlen      resb    1       ; max buffer len (3 ou 4)
-        .status         resb    1       ; mouse status (button etc)
-        .wheel          resb    1       ; if a packet size is 4; experimental
-        .x              resw    1       ;
-        .y              resw    1       ;
-        ; cursor management
-        .cur_x          resw    1       ; preservation des x,y du background
-        .cur_y          resw    1       ;
-        .cur_addr_start resw    1       ; adresse de départ de la sauvegarde
-
-        .cur_drawing    resb    1       ;
-        .cur_counter    resb    1       ; compteur de fois que le curseur a été caché (0 = visible, <0 = invisible)
-        .cur_seg        resw    1       ; segment / offset of the pointer
-        .cur_ofs        resw    1       ;
-        .bkg_saved      resb    1       ; background saved
-        alignb                  4       ; alignement 4 bytes
-        .bkg_buffer     resd    16      ; buffer for saved background
+    .buffer         resb    4       ; i8042 input buffer
+    .idx            resb    1       ; index in the buffer
+    .packetlen      resb    1       ; max buffer len (3 ou 4)
+    .status         resb    1       ; mouse status (button etc)
+    .wheel          resb    1       ; if a packet size is 4; experimental
+    .x              resw    1       ;
+    .y              resw    1       ;
+    ; cursor management
+    .cur_x          resw    1       ; preservation des x,y du background
+    .cur_y          resw    1       ;
+    .cur_addr_start resw    1       ; adresse de départ de la sauvegarde
+    .cur_drawing    resb    1       ;
+    .cur_counter    resb    1       ; compteur de fois que le curseur a été caché (0 = visible, <0 = invisible)
+    .cur_seg        resw    1       ; segment / offset of the pointer
+    .cur_ofs        resw    1       ;
+    .bkg_saved      resb    1       ; background saved
+    alignb                  4       ; alignement 4 bytes
+    .bkg_buffer     resd    16      ; buffer for saved background
 endstruc
 
 struc   gfx
-        .cur_x          resw    1       ; x,y en pixel
-        .cur_y          resw    1
-        .cur_offset     resw    1       ; offset calculé pour le prochain caractère
-        .cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
-        .cur_shift      resb    1       ; x&7 (0..7)
-        .cur_mode       resb    1       ;
+    .cur_x          resw    1       ; x,y en pixel
+    .cur_y          resw    1
+    .cur_offset     resw    1       ; offset calculé pour le prochain caractère
+    .cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
+    .cur_shift      resb    1       ; x&7 (0..7)
+    .cur_mode       resb    1       ;
 endstruc
 
 %define BDA_MOUSE               0x0000
