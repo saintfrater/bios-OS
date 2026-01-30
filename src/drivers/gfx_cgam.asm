@@ -46,8 +46,25 @@
 %define GFX_TXT_WHITE               00000010b
 %define GFX_TXT_BLACK               00000011b
 
-%macro GFX_DRV  1-*
+%macro GFX_DRV  1
     call word [cs:graph_driver + ((%1)*2)]
+%endmacro
+
+%macro GFX 1-*
+    ; %1 est l'index de la fonction
+    ; On itère sur les arguments suivants en sens inverse (Convention C)
+
+    %rep %0 - 1       ; Répéter pour (Nombre d'args - 1)
+        %rotate -1    ; Prend le dernier argument
+        push %1       ; L'empile
+    %endrep
+
+    %rotate -1        ; On revient au premier argument (l'index de fonction)
+    call word [cs:graph_driver + ((%1)*2)]
+
+    ; Nettoyage de la pile (Convention CDECL: l'appelant nettoie)
+    ; Chaque argument = 2 octets (1 word).
+    add sp, (%0 - 1) * 2
 %endmacro
 
 ; ------------------------------------------------------------
@@ -55,38 +72,36 @@
 ; Cette table doit être située au début du driver pour être
 ; accessible par la GUI à des offsets fixes.
 ; ------------------------------------------------------------
-%define	GFX_INIT		0
+%define	INIT		    0
 %define GFX_PUTPIXEL	1
 %define GFX_GETPIXEL 	2
-%define GFX_GOTOXY		3
-%define GFX_PUTCH       4
-%define GFX_WRITE       5
-%define GFX_CRS_UPDATE  6
+%define GOTOXY		    3
+%define TXT_MODE        4
+%define PUTCH           5
+%define WRITE           6
+%define GFX_CRS_UPDATE  7
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
 ;
-; Pour appeler une fonction du driver depuis votre GUI :
-; 1. Définissez l'adresse de base du driver (ex: GFX_DRIVER_BASE)
-; 2. Utilisez un call indirect via l'offset de la table.
+; GFX FUNCTION, Arg1, Arg2, Arg3
 ;
-; Exemple en ASM pour remplir un rectangle :
-;    call [GFX_DRIVER_BASE + 9]  ; Appelle gfx_fill_rect
+; GFX GFX_PUTPIXEL, 320, 100, 1
 ;
-; Cette méthode isole totalement votre bibliothèque GUI du driver.
 ; Si vous changez le code du driver, tant que la table au début
 ; ne change pas d'ordre, la GUI n'a pas besoin d'être recompilée.
 ; ------------------------------------------------------------
 
 graph_driver:
-        dw cga_init                 ; init de la carte graphique
-        dw cga_putpixel             ; dessin d'un pixel
-        dw cga_getpixel             ; lecture d'un pixel
-        dw cga_set_charpos          ; gotoxy
-        dw cga_putc                 ; dessin d'un caractère
-        dw cga_write                ; dessin d'une chaine de caractère
- 		dw cga_mouse_cursor_move    ; déplacement du curseur
-        dw cga_line_vertical        ; dessin d'une ligne verticale
+    dw cga_init                 ; init de la carte graphique
+    dw cga_putpixel             ; dessin d'un pixel
+    dw cga_getpixel             ; lecture d'un pixel
+    dw cga_set_charpos          ; gotoxy
+    dw cga_set_writemode        ; mode texte
+    dw cga_putc                 ; dessin d'un caractère
+    dw cga_write                ; dessin d'une chaine de caractère
+ 	dw cga_mouse_cursor_move    ; déplacement du curseur
+    dw cga_line_vertical        ; dessin d'une ligne verticale
 
 
 ;    jmp gfx_fill_rect       ; Remplissage rectangle (Nouveau)
@@ -105,19 +120,6 @@ graph_driver:
 
         xchg    ah,al
 %endmacro
-
-%macro GFX_WRITE_MODE 1
-        push    fs
-
-        push    BDA_DATA_SEG
-        pop     fs
-
-        mov     byte [fs:BDA_GFX + gfx.cur_mode], %1
-
-        pop     fs
-        pop     ax
-%endmacro
-
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ;
@@ -172,6 +174,24 @@ cga_calc_addr:
 	pop     cx
 	ret
 
+cga_set_writemode:
+    push    bp
+    mov     bp, sp
+
+    push    fs
+    push    ax
+    mov     ax, BDA_DATA_SEG
+    mov     fs,ax
+
+    mov     ax, word arg1
+
+    mov     byte [fs:BDA_GFX + gfx.cur_mode], al
+
+    pop     ax
+    pop     fs
+    leave
+    ret
+
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos
 ; In : CX = x (pixels), DX = y (pixels)
@@ -181,6 +201,9 @@ cga_calc_addr:
 ;  - stocke aussi shift = x&7
 ; ---------------------------------------------------------------------------
 cga_set_charpos:
+    push    bp
+    mov     bp, sp
+
     pusha
     push    fs
 
@@ -188,6 +211,9 @@ cga_set_charpos:
     mov     fs,ax
 
     ; store x,y en pixel
+    mov     cx, word arg1
+    mov     dx, word arg2
+
     mov     [fs:BDA_GFX + gfx.cur_x], cx
     mov     [fs:BDA_GFX + gfx.cur_y], dx
 
@@ -221,6 +247,7 @@ cga_set_charpos:
 
     pop     fs
     popa
+    leave
     ret
 
 ; ---------------------------------------------------------------------------
@@ -256,6 +283,10 @@ get_glyph_offset:
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
 cga_putc:
+    push    bp
+    mov     bp, sp
+    sub     sp, 2               ; variable locale
+
     pusha
     push    fs
     push    es
@@ -265,6 +296,8 @@ cga_putc:
     mov     bx, BDA_DATA_SEG
     mov     fs, bx
 
+    mov     ax, [bp+4]          ; arg1
+
     call    get_glyph_offset
 
     ; Base offset VRAM pour la scanline Y
@@ -272,7 +305,8 @@ cga_putc:
     mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
     mov     ch, [fs:BDA_GFX + gfx.cur_mode]
     mov     cl, [fs:BDA_GFX + gfx.cur_shift]
-    mov     bp,4
+
+    mov     word [bp-2], 4
 
     .row_loop:
     ; gestion du fond de texte
@@ -331,7 +365,7 @@ cga_putc:
     .next:
     add     di,CGA_STRIDE
 
-    dec     bp
+    dec     word [bp-2]
     jnz     .row_loop
 
     ; Avancer curseur d'un caractère (8 pixels)
@@ -341,23 +375,32 @@ cga_putc:
     pop     es
     pop     fs
     popa
+    leave
     ret
 
 ;
 ; write string from [DS:SI] to screen
 ;
 cga_write:
+    push    bp
+    mov     bp, sp
     push    ax
+
+    mov     ax, arg1
+    mov     ds, ax
+    mov     si, arg2
 
     .loops:
     lodsb
     cmp     al,0
     je      .done
+    push    ax
     call    cga_putc
     jmp     .loops
 
     .done:
     pop     ax
+    leave
     ret
 
 ; ------------------------------------------------------------
@@ -486,9 +529,18 @@ cga_getpixel_fast:
 
 ; ------------------------------------------------------------
 ; cga_line_vertical
-; Dessine une ligne de (AX, BX) à (AX, DX) cl: color
+; Dessine une ligne x, y0, y1, color
 ; ------------------------------------------------------------
 cga_line_vertical:
+    push    bp
+    mov     bp, sp
+
+    ; --- Définition des arguments ---
+    %define .x      word [bp+4]
+    %define .y1     word [bp+6]
+    %define .y2     word [bp+8]
+    %define .color  byte [bp+10] ; (Attention à l'alignement sur pile)
+
     pusha
     push    es
 
@@ -498,6 +550,9 @@ cga_line_vertical:
 
     call    cga_mouse_hide
 
+    mov     bx, .y1
+    mov     dx, .y2
+
     ; Ordonner Y (BX < DX)
     cmp     bx, dx
     jle     .y_sorted
@@ -505,11 +560,11 @@ cga_line_vertical:
     .y_sorted:
 
     ; Calculer l'adresse du premier point (X, Y_Start)
-    push    dx              ; Sauve Y_Fin
-    push    cx              ; Sauve Couleur
+;    push    dx              ; Sauve Y_Fin
+;    push    cx              ; Sauve Couleur
 
-    mov     cx, ax          ; CX = X (pour cga_calc_addr)
-    mov     dx, bx          ; DX = Y_Start (pour cga_calc_addr)
+    mov     cx, arg1        ; CX = X (pour cga_calc_addr)
+    mov     dx, arg3        ; DX = Y_Start (pour cga_calc_addr)
     call    cga_calc_addr   ; Return: DI=Offset, AH=BitMask (ex: 00100000)
 
     pop     cx              ; Récup Couleur

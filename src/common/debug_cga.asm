@@ -64,7 +64,7 @@ print_word_hex:
     mov     dx, ax
     mov     cx, 4               ; 4 caractères hex dans un mot de 16 bits
 
-.next_digit:
+    .next_digit:
     ; On veut afficher les bits 12-15 d'abord.
     ; L'astuce est de faire une rotation à gauche de 4 bits.
     ; Le quartet de poids fort se retrouve en bas (bits 0-3).
@@ -75,8 +75,12 @@ print_word_hex:
 
     call    nibble_to_ascii    ; Convertit AL en caractère ASCII
 
-    call    cga_putc           ; Affiche le caractère
-
+;    call    cga_putc           ; Affiche le caractère
+    xor     bx, bx
+    mov     bl, al
+    push    bx
+    call    cga_putc
+    add     sp, 2
     loop    .next_digit        ; Répète 4 fois
 
     popa

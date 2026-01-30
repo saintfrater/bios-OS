@@ -24,6 +24,16 @@
 ; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/informations/bios_data_area
 ;
 
+; Définition globale des parametres
+%define arg1  [bp+4]
+%define arg2  [bp+6]
+%define arg3  [bp+8]
+%define arg4  [bp+10]
+%define arg5  [bp+12]
+%define arg6  [bp+14]
+%define arg7  [bp+16]
+%define arg8  [bp+18]
+
 %define BDA_SEGMENT		0x0040			; segment BDA
 
 ; custom vars

@@ -102,85 +102,44 @@ reset:
 	sti
 
 	; on active le mode graphique
-	GFX_DRV	GFX_INIT
+	GFX		INIT
 
-	mov		cx, 290
-	mov		dx, 80
-	GFX_DRV	GFX_GOTOXY
+	GFX		GOTOXY, 290, 80
+	GFX		TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
 
-	GFX_WRITE_MODE GFX_TXT_WHITE_TRANSPARENT
+	GFX		WRITE, cs, W_T
 
-	push	cs
-	pop		ds
-	mov		si, W_T
-	GFX_DRV	GFX_WRITE
+	GFX		GOTOXY, 290, 90
+	GFX		TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+	GFX 	WRITE, cs, B_T
 
-	mov		cx, 290
-	mov		dx, 90
-	GFX_DRV	GFX_GOTOXY
+	GFX		GOTOXY, 290, 100
+	GFX 	TXT_MODE, GFX_TXT_WHITE
+	GFX 	WRITE, cs, W_B
 
-	GFX_WRITE_MODE GFX_TXT_BLACK_TRANSPARENT
-
-	push	cs
-	pop		ds
-	mov		si, B_T
-	GFX_DRV	GFX_WRITE
-
-	mov		cx, 290
-	mov		dx, 100
-	GFX_DRV	GFX_GOTOXY
-
-	GFX_WRITE_MODE GFX_TXT_WHITE
-
-	push	cs
-	pop		ds
-	mov		si, W_B
-	GFX_DRV	GFX_WRITE
-
-	mov		cx, 290
-	mov		dx, 110
-	GFX_DRV	GFX_GOTOXY
-
-	GFX_WRITE_MODE GFX_TXT_BLACK
-
-	push	cs
-	pop		ds
-	mov		si, B_W
-	GFX_DRV	GFX_WRITE
+	GFX		GOTOXY, 290, 110
+	GFX  	TXT_MODE, GFX_TXT_BLACK
+	GFX 	WRITE, cs, B_W
 
 	; call 	mouse_reset
 	call	mouse_init
 
-	GFX_WRITE_MODE GFX_TXT_BLACK
+	GFX  	TXT_MODE, GFX_TXT_BLACK
+	GFX		GOTOXY, 0, 0
+	GFX 	WRITE, cs, cpt_txt
 
-	xor		cx,cx
-	mov		dx,0
-	GFX_DRV	GFX_GOTOXY
+	GFX		TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
+	GFX		GOTOXY, 8,8
+	GFX		WRITE, cs, helloworld
 
-	push	cs
-	pop		ds
-	mov		si, cpt_txt
-	GFX_DRV	GFX_WRITE
-
-	GFX_WRITE_MODE GFX_TXT_WHITE_TRANSPARENT
-
-	mov		cx,8
-	mov		dx,8
-	GFX_DRV	GFX_GOTOXY
-
-	mov		si, helloworld
-	GFX_DRV	GFX_WRITE
+	GFX		GFX_CRS_UPDATE
 
 	mov		cx,8
 	mov		dx,24
-	GFX_WRITE_MODE 0
-
-	GFX_DRV	GFX_CRS_UPDATE
-
 .loopshift:
-	GFX_DRV	GFX_GOTOXY
-	mov		si, helloworld
-	GFX_DRV	GFX_WRITE
+	GFX		GOTOXY, cx, dx
+	GFX		WRITE, cs, helloworld
+
 	add		dx,8
 	inc		cx
 	cmp		cx,16
@@ -189,16 +148,13 @@ reset:
 	mov		ax,BDA_DATA_SEG
 	mov		ds,ax
 endless:
-	GFX_WRITE_MODE GFX_TXT_BLACK
-	xor 	cx,cx
-	mov		dx,180
-	GFX_DRV	GFX_GOTOXY
+	GFX		TXT_MODE, GFX_TXT_BLACK
+	GFX		GOTOXY, 0, 180
 
 	mov		ax, [BDA_MOUSE + mouse.x]
 	call 	print_word_hex
 
-	mov		al,' '
-	call	cga_putc
+	GFX		PUTCH, ' '
 
 	mov		ax, [BDA_MOUSE + mouse.y]
 	call 	print_word_hex
