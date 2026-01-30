@@ -77,8 +77,8 @@
 %define WRITE           6
 %define LINE_VERT       7
 %define LINE_HORIZ      8
-%define DRAW_RECT       9
-%define FILL_RECT       10
+%define RECTANGLE_DRAW  9
+%define RECTANGLE_FILL  10
 %define MOUSE_HIDE      11
 %define MOUSE_SHOW      12
 %define MOUSE_MOVE      13
@@ -109,12 +109,6 @@ graph_driver:
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
-
-
-
-;    jmp gfx_fill_rect       ; Remplissage rectangle (Nouveau)
-;    jmp gfx_invert_rect     ; Offset +12: Inversion (Nouveau pour Menus)
-;    jmp gfx_draw_hline      ; Offset +15: Ligne horizontale rapide (Nouveau)
 
 %include "./common/cursor.asm"
 %include "./common/chartable.asm"
@@ -643,25 +637,21 @@ cga_line_horizontal:
     .x_sorted:
 
     ; 2. Calculer l'adresse de départ
-    ; On a besoin de l'adresse de l'octet contenant AX.
-    ; AX (X_Start) et BX (X_End) sont conservés.
-
     mov     cx, ax          ; CX = X_Start pour cga_calc_addr
     mov     dx, .y          ; DX = Y
 
-    push    bx              ; Sauvegarde X_End [1]
-    call    cga_calc_addr   ; DI = Offset VRAM, AH = BitMask (on ne servira pas de AH ici)
-    pop     bx              ; Récupère X_End [1]
+    push    bx              ; Sauve X_End
+    push    ax              ; <--- AJOUT CRITIQUE : Sauve X_Start (AX)
+    call    cga_calc_addr   ; DI = Offset VRAM (AX est détruit ici !)
+    pop     ax              ; <--- RESTAURATION : On récupère le bon X1
+    pop     bx              ; Restaure X_End
 
     ; 3. Préparer la couleur
-    mov     dl, .color      ; DL = Couleur (0 ou 1)
+    mov     dl, .color      ; DL = Couleur
 
     ; --- ANALYSE DES OCTETS ---
-    ; Index Octet Début = X1 >> 3
-    ; Index Octet Fin   = X2 >> 3
-
     mov     si, ax
-    shr     si, 3           ; SI = Index octet start
+    shr     si, 3           ; SI = Index octet start (Calcul correct maintenant)
 
     mov     cx, bx
     shr     cx, 3           ; CX = Index octet end
@@ -675,30 +665,26 @@ cga_line_horizontal:
     ; ============================================
 
     ; --- A. PARTIE GAUCHE (Start) ---
-    ; On doit dessiner du bit (AX&7) jusqu'au bit 0 (droite de l'octet)
-    ; Masque = 0xFF >> (AX & 7)
-
     push    cx              ; Sauve Index End
     mov     cx, ax
     and     cx, 7           ; CL = X1 % 8
     mov     dh, 0xFF
-    shr     dh, cl          ; DH = Masque Gauche (ex: 00111111)
+    shr     dh, cl          ; DH = Masque Gauche
 
-    call    .apply_mask     ; Applique DH sur [ES:DI] selon couleur DL
+    call    .apply_mask     ; Applique DH sur [ES:DI]
 
     inc     di              ; Octet suivant
     inc     si              ; Index suivant
     pop     cx              ; Restaure Index End
 
     ; --- B. PARTIE CENTRALE (Full Bytes) ---
-    ; Tant que SI < CX, on remplit tout l'octet
     cmp     si, cx
-    jge     .do_right_part  ; Si on a atteint le dernier octet, on saute
+    jge     .do_right_part
 
-    mov     al, 0x00        ; Couleur Noir par défaut
+    mov     al, 0x00        ; Noir
     cmp     dl, 0
     jz      .fill_loop
-    mov     al, 0xFF        ; Couleur Blanc
+    mov     al, 0xFF        ; Blanc
 
     .fill_loop:
     mov     byte [es:di], al
@@ -709,54 +695,49 @@ cga_line_horizontal:
 
     .do_right_part:
     ; --- C. PARTIE DROITE (End) ---
-    ; On doit dessiner du bit 7 jusqu'au bit (BX&7)
-    ; Masque = ~(0xFF >> ((BX & 7) + 1))
-
     mov     cx, bx
     and     cx, 7
-    inc     cx              ; +1 car on veut inclure le pixel
+    inc     cx
     mov     dh, 0xFF
     shr     dh, cl
-    not     dh              ; DH = Masque Droite (ex: 11100000)
+    not     dh              ; DH = Masque Droite
 
     call    .apply_mask
     jmp     .done
 
     ; ============================================
-    ; CAS SINGLE BYTE (Début et Fin dans le même octet)
+    ; CAS SINGLE BYTE
     ; ============================================
     .single_byte:
-    ; Masque Gauche = 0xFF >> (X1 & 7)
+    ; Masque Gauche
     mov     cx, ax
     and     cx, 7
     mov     dh, 0xFF
     shr     dh, cl
 
-    ; Masque Droite = ~(0xFF >> ((X2 & 7) + 1))
+    ; Masque Droite
     mov     cx, bx
     and     cx, 7
     inc     cx
-    mov     ah, 0xFF        ; Utilise AH temporaire
+    mov     ah, 0xFF
     shr     ah, cl
     not     ah
 
-    ; Intersection des masques
-    and     dh, ah          ; DH = Masque Final (ex: 00011100)
-
+    ; Intersection
+    and     dh, ah
     call    .apply_mask
     jmp     .done
 
-    ; --- Helper local : Applique le masque DH sur [ES:DI] ---
-    ; Entrée : DH = Masque, DL = Couleur, DI = Adresse
+    ; --- Helper local ---
     .apply_mask:
     cmp     dl, 0
     jz      .apply_black
-    or      byte [es:di], dh    ; Blanc : OR
+    or      byte [es:di], dh
     ret
     .apply_black:
     not     dh
-    and     byte [es:di], dh    ; Noir : AND ~Masque
-    not     dh                  ; Restaure le masque (optionnel si non réutilisé)
+    and     byte [es:di], dh
+    not     dh
     ret
 
     .done:
@@ -808,37 +789,11 @@ cga_draw_rect:
     ; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
     ; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
 
-    ; Haut (x1,y1 -> x2,y1)
-    push    word .color
-    push    word .y1
-    push    word .x2
-    push    word .x1
-    call    cga_line_horizontal
-    add     sp, 8
+    GFX     LINE_HORIZ, .x1, .x2, .y1, .color
+    GFX     LINE_HORIZ, .x1, .x2, .y2, .color
 
-    ; Bas (x1,y2 -> x2,y2)
-    push    word .color
-    push    word .y2
-    push    word .x2
-    push    word .x1
-    call    cga_line_horizontal
-    add     sp, 8
-
-    ; Gauche (x1,y1 -> x1,y2)
-    push    word .color
-    push    word .y2
-    push    word .y1
-    push    word .x1
-    call    cga_line_vertical
-    add     sp, 8
-
-    ; Droite (x2,y1 -> x2,y2)
-    push    word .color
-    push    word .y2
-    push    word .y1
-    push    word .x2
-    call    cga_line_vertical
-    add     sp, 8
+    GFX     LINE_VERT, .x1, .y1, .y2, .color
+    GFX     LINE_VERT, .x2, .y1, .y2, .color
 
     popa
     leave

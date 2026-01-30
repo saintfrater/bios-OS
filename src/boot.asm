@@ -104,52 +104,24 @@ reset:
 
 	; on active le mode graphique
 	GFX		INIT
-
-	; DEMO
-
-	GFX		GOTOXY, 290, 80
-	GFX		TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
-
-	GFX		WRITE, cs, W_T
-
-	GFX		GOTOXY, 290, 90
-	GFX		TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-	GFX 	WRITE, cs, B_T
-
-	GFX		GOTOXY, 290, 100
-	GFX 	TXT_MODE, GFX_TXT_WHITE
-	GFX 	WRITE, cs, W_B
-
-	GFX		GOTOXY, 290, 110
-	GFX  	TXT_MODE, GFX_TXT_BLACK
-	GFX 	WRITE, cs, B_W
-
-	; call 	mouse_reset
 	call	mouse_init
-
-	GFX  	TXT_MODE, GFX_TXT_BLACK
-	GFX		GOTOXY, 0, 0
-	GFX 	WRITE, cs, cpt_txt
-
-	GFX		TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
-	GFX		GOTOXY, 8,8
-	GFX		WRITE, cs, helloworld
-
 	GFX		MOUSE_MOVE
+	GFX		MOUSE_SHOW
 
-	GFX 	LINE_VERT, 55, 30, 147, 1
-	GFX 	LINE_VERT, 54, 31, 148, 0
+	push	cs
+	pop		ds
 
-	mov		cx,8
-	mov		dx,24
-.loopshift:
-	GFX		GOTOXY, cx, dx
-	GFX		WRITE, cs, helloworld
+	GUI		WINDOW, 50,50,250,100,helloworld
 
-	add		dx,8
-	inc		cx
-	cmp		cx,16
-	jbe		.loopshift
+	; GFX		RECTANGLE_DRAW, 50,50,250,100,0
+
+	;GFX		LINE_VERT, 50, 50, 100, 0
+	;GFX		LINE_VERT, 300, 50, 100, 0
+
+	;GFX		LINE_HORIZ, 50, 300, 50, 0
+	;GFX		LINE_HORIZ, 50, 300, 100, 0
+
+
 
 	mov		ax,BDA_DATA_SEG
 	mov		ds,ax

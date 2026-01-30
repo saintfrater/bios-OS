@@ -56,7 +56,7 @@
 ; ------------------------------------------------------------
 
 gui_driver:
-    dw  draw_white
+    dw  draw_window
 
 ; =============================================================================
 ; Fonction : draw_window
@@ -68,7 +68,7 @@ gui_driver:
 ;   Arg4 : Hauteur (Word)
 ;   Arg5 : Pointeur vers titre (DS:Offset) (Word)
 ; =============================================================================
-draw_window:
+draw_window_source:
     push    bp
     mov     bp, sp
 
@@ -118,7 +118,6 @@ draw_window:
     ; ----------------------------------------------------
     ; On dessine un rectangle BLANC par dessus l'ombre
     ; Cela crée le corps et "découpe" l'ombre pour ne laisser que le bord visible.
-
     mov     bx, .x
     add     bx, .w      ; BX = x2
     mov     dx, .y
@@ -309,6 +308,46 @@ draw_window:
     push    word 6      ; ID WRITE
     call    cga_write
     add     sp, 6
+
+    popa
+    leave
+    ret
+
+
+draw_window:
+    push    bp
+    mov     bp, sp
+
+    ; --- Arguments ---
+    %define .x      word [bp+4]
+    %define .y      word [bp+6]
+    %define .w      word [bp+8]
+    %define .h      word [bp+10]
+    %define .title  word [bp+12]
+    ; ---- Variables Locales ---
+
+    pusha
+    ; ----------------------------------------------------
+    ; Ombre Portée (Drop Shadow)
+    ; ----------------------------------------------------
+    ; On dessine un rectangle noir décalé de +1,+1
+    ; x1+1, y1+1, x2+1, y2+1 -> NOIR
+    mov     ax, .x
+    add     ax, .w
+    inc     ax          ; x2 + 1
+    mov     bx, ax      ; BX = right limit
+
+    mov     ax, .y
+    add     ax, .h
+    inc     ax          ; y2 + 1
+    mov     dx, ax      ; DX = bottom limit
+
+    mov     ax, .x
+    inc     ax          ; x1 + 1
+    mov     cx, .y
+    inc     cx          ; y1 + 1
+
+    GFX     RECTANGLE_DRAW, ax, cx, bx, dx, 0
 
     popa
     leave
