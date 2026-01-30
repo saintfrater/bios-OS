@@ -53,6 +53,7 @@ section     .text
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
 %include 	"./services/generic.asm"
+%include	"./services/gui_window.asm"
 
 err_vganok	db	'VGA Not Initialized',0
 
@@ -104,6 +105,8 @@ reset:
 	; on active le mode graphique
 	GFX		INIT
 
+	; DEMO
+
 	GFX		GOTOXY, 290, 80
 	GFX		TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
 
@@ -132,7 +135,10 @@ reset:
 	GFX		GOTOXY, 8,8
 	GFX		WRITE, cs, helloworld
 
-	GFX		GFX_CRS_UPDATE
+	GFX		MOUSE_MOVE
+
+	GFX 	LINE_VERT, 55, 30, 147, 1
+	GFX 	LINE_VERT, 54, 31, 148, 0
 
 	mov		cx,8
 	mov		dx,24

@@ -251,6 +251,6 @@ Ce projet est avant tout un **laboratoire d’apprentissage et d’exploration**
 🚧 **Work in progress**
 Designed for experimentation, learning, and documentation.
 
-parcourez l'[API ](/doc/API.md) pour plus d'informations
+parcourez l'[API](/doc/API.md) pour plus d'informations
 
 ---

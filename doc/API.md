@@ -1,4 +1,9 @@
-# BDA (Bios Data Area) Custom
+# API
+
+  * [CGA](/doc/CGA.md) controleur graphique
+
+
+## BDA (Bios Data Area) Custom
 
 Le projet utilise une extension de la BDA standard IBM PC.
 
@@ -17,3 +22,4 @@ Le projet utilise une extension de la BDA standard IBM PC.
     0800:0000 : Stack (0x8000 - 0x18000 approx) ou Code (selon boot.asm).
 
     B800:0000 : VRAM CGA.
+

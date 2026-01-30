@@ -46,10 +46,6 @@
 %define GFX_TXT_WHITE               00000010b
 %define GFX_TXT_BLACK               00000011b
 
-%macro GFX_DRV  1
-    call word [cs:graph_driver + ((%1)*2)]
-%endmacro
-
 %macro GFX 1-*
     ; %1 est l'index de la fonction
     ; On itère sur les arguments suivants en sens inverse (Convention C)
@@ -79,7 +75,13 @@
 %define TXT_MODE        4
 %define PUTCH           5
 %define WRITE           6
-%define GFX_CRS_UPDATE  7
+%define LINE_VERT       7
+%define LINE_HORIZ      8
+%define DRAW_RECT       9
+%define FILL_RECT       10
+%define MOUSE_HIDE      11
+%define MOUSE_SHOW      12
+%define MOUSE_MOVE      13
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -100,8 +102,14 @@ graph_driver:
     dw cga_set_writemode        ; mode texte
     dw cga_putc                 ; dessin d'un caractère
     dw cga_write                ; dessin d'une chaine de caractère
- 	dw cga_mouse_cursor_move    ; déplacement du curseur
     dw cga_line_vertical        ; dessin d'une ligne verticale
+    dw cga_line_horizontal      ; dessin d'une ligne horizontale
+    dw cga_draw_rect            ; dessin d'un rectangle
+    dw cga_fill_rect            ; dessin d'un rectangle plein
+    dw cga_mouse_hide           ; déplacement du curseur
+    dw cga_mouse_show           ; déplacement du curseur
+ 	dw cga_mouse_cursor_move    ; déplacement du curseur
+
 
 
 ;    jmp gfx_fill_rect       ; Remplissage rectangle (Nouveau)
@@ -154,24 +162,26 @@ cga_calc_addr:
 	; si y est impaire, DI+=0x2000
 	; DI = (y>>1)*80 + (x>>3) + (y&1)*0x2000
 	mov	    ax, dx
-	shr 	ax, 1                  ; ax = y/2
+	shr 	ax, 1              ; ax = y/2
 	mov     di, ax
-	shl  	di, 4                  ; (y/2)*16
-	shl     ax, 6                  ; (y/2)*64
-	add     di, ax                 ; *80
+	shl  	di, 4              ; (y/2)*16
+	shl     ax, 6              ; (y/2)*64
+	add     di, ax             ; *80
+
 	mov     ax, cx
-	shr     ax, 3
-	add     di, ax
-	test    dl, 1
-	jz      .even
-	add     di, CGA_ODD_BANK
-    .even:
-	; masque bit = 0x80 >> (x&7)
-	push	cx
-	and     cl, 7
-	mov     ah, 080h
-	shr     ah, cl
-	pop     cx
+	shr     ax, 3              ; x / 3
+	add     di, ax             ; di = offset banque paire
+
+    mov     bx, dx
+    and     bx, 1              ; BX = 0 ou 1
+    neg     bx                 ; BX = 0 ou 0xFFFF (-1)
+    and     bx, 0x2000         ; BX = 0 ou 0x2000 (CGA_ODD_BANK)
+    add     di, bx             ; Application de l'offset
+
+    ; calcul du masque du pixel
+    and     cl, 7
+    mov     ah, 0x80
+    shr     ah, cl
 	ret
 
 ; ---------------------------------------------------------------------------
@@ -293,17 +303,20 @@ get_glyph_offset:
     ret
 
 ; ---------------------------------------------------------------------------
-; cga_putc_unalign
-; In : AL = char (ASCII)
-; Uses: FS:BDA_GFX + gfx.cur_* (offset, add_ofs, shift, mode)
-; Notes:
+; cga_putc_unalign (car)
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
 cga_putc:
     push    bp
     mov     bp, sp
-    sub     sp, 2               ; variable locale
+    sub     sp, 2               ; 1 word variable locale
+
+    ; --- Définition des arguments ---
+    %define .car    word [bp+4]
+
+    ; --- Définition des variables locales ---
+    %define .cpt    word [bp-2]
 
     pusha
     push    fs
@@ -314,7 +327,7 @@ cga_putc:
     mov     bx, BDA_DATA_SEG
     mov     fs, bx
 
-    mov     ax, [bp+4]          ; arg1
+    mov     ax, .car
 
     call    get_glyph_offset
 
@@ -324,7 +337,7 @@ cga_putc:
     mov     ch, [fs:BDA_GFX + gfx.cur_mode]
     mov     cl, [fs:BDA_GFX + gfx.cur_shift]
 
-    mov     word [bp-2], 4
+    mov     .cpt, 4
 
     .row_loop:
     ; gestion du fond de texte
@@ -383,7 +396,7 @@ cga_putc:
     .next:
     add     di,CGA_STRIDE
 
-    dec     word [bp-2]
+    dec     .cpt
     jnz     .row_loop
 
     ; Avancer curseur d'un caractère (8 pixels)
@@ -404,9 +417,13 @@ cga_write:
     mov     bp, sp
     push    ax
 
-    mov     ax, arg1
+        ; --- Définition des arguments ---
+    %define .txt_seg   word [bp+4]
+    %define .txt_ofs   word [bp+6]
+
+    mov     ax, .txt_seg
     mov     ds, ax
-    mov     si, arg2
+    mov     si, .txt_ofs
 
     .loops:
     lodsb
@@ -422,6 +439,7 @@ cga_write:
     ret
 
 ; ------------------------------------------------------------
+; cga_putpixel (x,y,color)
 ; Dessine un pixel, accès VRAM direct.
 ;
 ;   CX = x (0..639)
@@ -429,11 +447,22 @@ cga_write:
 ;   ES = Target Segment (usually VIDEO_SEG)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
-cga_local_putpixel:
-	call   	cga_calc_addr
+cga_putpixel:
+    push    bp
+    mov     bp, sp
+
+        ; --- Définition des arguments ---
+    %define .x      word [bp+4]
+    %define .y      word [bp+6]
+    %define .color  byte [bp+8]
+
+    pusha
+    mov     cx, .x
+    mov     dx, .y
+    call    cga_calc_addr
 
 	; write
-	cmp     bl, 0
+	cmp     .color, 0
 	je    	.clear
 
     .set:
@@ -445,56 +474,38 @@ cga_local_putpixel:
 	and     byte [es:di], ah
 
     .done:
+    popa
+    leave
 	ret
 
 ; ------------------------------------------------------------
-; Dessine un pixel, accès VRAM direct.
+; cga_getpixel (x,y)
+; Lit un pixel, accès VRAM direct.
 ;
-;   CX = x (0..639)
-;   DX = y (0..199)
-;   BL = color (0=black, !=0=white)
-; ------------------------------------------------------------
-cga_putpixel:
-	push	ax
-	push  	di
-	push    es
-	mov		ax,	VIDEO_SEG
-	mov		es,ax
-	call   	cga_calc_addr
-
-	; write
-	cmp  	bl, 0
-	je    	.clear
-
-    .set:
-	or   	byte [es:di], ah
-	jmp     .done
-
-    .clear:
-	not     ah
-	and     byte [es:di], ah
-
-    .done:
-	pop 	es
-	pop   	di
-	pop		ax
-	ret
-
-; ------------------------------------------------------------
-; Lit un pixel (CX=x, DX=y)
 ; Out: AL=0/1
 ; ------------------------------------------------------------
 cga_getpixel:
-	push    	di
-	push    	es
+    push    bp
+    mov     bp, sp
 
-	call    	cga_calc_addr
-	mov     	al, [es:di]
-	and     	al, ah
-	setnz   	al
+        ; --- Définition des arguments ---
+    %define .x      word [bp+4]
+    %define .y      word [bp+6]
 
-	pop     	es
-	pop     	di
+	push   	di
+	push   	es
+
+    mov     cx, .x
+    mov     dx, .y
+
+	call    cga_calc_addr
+	mov     al, [es:di]
+	and     al, ah
+	setnz   al
+
+	pop     es
+	pop     di
+    leave
 	ret
 
 ; ------------------------------------------------------------
@@ -514,39 +525,12 @@ cga_background:
 	rep		stosd
 	ret
 
+
+
+
 ; ------------------------------------------------------------
-; Dessine un pixel, en [ES:DI] accès VRAM direct.
+; cga_line_vertical (x, y0, y1, color)
 ;
-;   CX = x (0..639)
-;   DX = y (0..199)
-;   BL = color (0=black, !=0=white)
-; ------------------------------------------------------------
-cga_putpixel_fast:
-	cmp  	bl, 0
-	je    	.clear
-
-    .set:
-	or      byte [es:di], ah
-	jmp     .done
-
-    .clear:
-	not     ah
-	and     byte [es:di], ah
-    .done:
-	ret
-
-; ------------------------------------------------------------
-; Lit un pixel, en [ES:DI] accès VRAM direct.
-;
-; ------------------------------------------------------------
-cga_getpixel_fast:
-	mov     al, [es:di]
-	and     al, ah
-	setnz   al
-	ret
-
-; ------------------------------------------------------------
-; cga_line_vertical
 ; Dessine une ligne x, y0, y1, color
 ; ------------------------------------------------------------
 cga_line_vertical:
@@ -557,223 +541,470 @@ cga_line_vertical:
     %define .x      word [bp+4]
     %define .y1     word [bp+6]
     %define .y2     word [bp+8]
-    %define .color  byte [bp+10] ; (Attention à l'alignement sur pile)
+    %define .color  byte [bp+10]
 
     pusha
     push    es
 
-    ; Setup ES = Video Segment (0xB800)
-    mov     si, VIDEO_SEG
-    mov     es, si
+    ; Setup ES = Video Segment
+    mov     ax, VIDEO_SEG       ; Utiliser AX plutot que SI pour setup ES
+    mov     es, ax
 
     call    cga_mouse_hide
 
     mov     bx, .y1
     mov     dx, .y2
 
-    ; Ordonner Y (BX < DX)
+    ; 1. Ordonner Y (BX = Debut, DX = Fin)
     cmp     bx, dx
     jle     .y_sorted
     xchg    bx, dx
     .y_sorted:
 
-    ; Calculer l'adresse du premier point (X, Y_Start)
-;    push    dx              ; Sauve Y_Fin
-;    push    cx              ; Sauve Couleur
+    ; 2. Calculer la hauteur MAINTENANT (avant que DX/BX ne soient modifiés)
+    sub     dx, bx              ; DX = Hauteur - 1
+    inc     dx                  ; DX = Hauteur en pixels
+    push    dx                  ; Sauvegarde de la hauteur (compteur) sur la pile [1]
 
-    mov     cx, arg1        ; CX = X (pour cga_calc_addr)
-    mov     dx, arg3        ; DX = Y_Start (pour cga_calc_addr)
-    call    cga_calc_addr   ; Return: DI=Offset, AH=BitMask (ex: 00100000)
+    ; 3. Calculer l'adresse de départ
+    mov     cx, .x              ; CX = X
+    mov     dx, bx              ; DX = Y_Start (Argument pour cga_calc_addr)
+    call    cga_calc_addr       ; DI = Offset, AH = Masque Bit
 
-    pop     cx              ; Récup Couleur
-    pop     dx              ; Récup Y_Fin (dans DX)
+    ; 4. Préparer les registres pour la boucle
+    mov     al, ah              ; AL = Masque
+    not     al                  ; AL = ~Masque (pour effacer/noir)
 
-    ; Préparer le masque inverse pour le cas "Noir" (AND)
-    mov     al, ah          ; AL = Masque (00100000)
-    not     al              ; AL = ~Masque (11011111)
+    ; Charger la couleur (CORRECTION BUG COULEUR)
+    mov     cl, .color          ; On charge la couleur dans CL maintenant
 
-    ; BX sert maintenant de compteur courant, on a Y_Fin dans DX
-    ; Utilisons BP comme compteur de hauteur.
-
-    sub     dx, bx          ; DX = Hauteur - 1 (delta)
-    inc     dx              ; DX = Nombre de pixels à dessiner
+    ; Récupérer le compteur de hauteur
+    pop     dx                  ; DX = Hauteur restaurée [1]
 
     .v_loop:
-    cmp     cl, 0
+    cmp     cl, 0               ; Test de la couleur (CL)
     jz      .draw_black
 
     .draw_white:
-    or      byte [es:di], ah    ; Allumer le bit
+    or      byte [es:di], ah    ; Allumer le bit (AH)
     jmp     .next_line
 
     .draw_black:
-    and     byte [es:di], al    ; Eteindre le bit
+    and     byte [es:di], al    ; Eteindre le bit (AL)
 
     .next_line:
-    ; --- Logique Next Line CGA (Optimisée) ---
-    xor     di, 0x2000          ; Flip banque (Pair <-> Impair)
-    test    di, 0x2000          ; Si on est passé à 0x2000 (Impair), on a juste descendu de 1 ligne visuelle
-    jnz     .skip_add           ; C'est bon.
-    add     di, 80              ; Si on revient à 0x0000 (Pair), on doit avancer de 80 octets
+    ; --- Logique Next Line CGA ---
+    xor     di, 0x2000          ; Bascule banque 0 <-> 1
+    test    di, 0x2000          ; Si on est passé à la banque 1 (0x2000)
+    jnz     .skip_add           ; On a visuellement descendu d'une ligne, c'est bon.
+    add     di, 80              ; Si on revient banque 0, il faut avancer de 80 octets.
     .skip_add:
 
-    dec     dx
+    dec     dx                  ; Décrémenter le compteur de hauteur
     jnz     .v_loop
 
     call    cga_mouse_show
 
     pop     es
     popa
+    leave                       ; Leave gère le 'mov sp, bp / pop bp'
     ret
+
 ; ------------------------------------------------------------
 ; cga_line_horizontal
-; Dessine une ligne de (AX, DX) à (BX, DX) CL: color
+; Dessine une ligne horizontale de (x1, y) à (x2, y)
 ; ------------------------------------------------------------
 cga_line_horizontal:
+    push    bp
+    mov     bp, sp
+
+    ; --- Définition des arguments ---
+    %define .x1     word [bp+4]
+    %define .x2     word [bp+6]
+    %define .y      word [bp+8]
+    %define .color  byte [bp+10]
+
     pusha
     push    es
 
+    ; Setup ES = Video Segment
+    mov     ax, VIDEO_SEG
+    mov     es, ax
+
     call    cga_mouse_hide
 
-    mov     si, VIDEO_SEG
-    mov     es, si
+    mov     ax, .x1
+    mov     bx, .x2
 
-    ; 1. Ordonner X (AX < BX)
+    ; 1. Ordonner X (AX = Gauche, BX = Droite)
     cmp     ax, bx
     jle     .x_sorted
     xchg    ax, bx
-
     .x_sorted:
-    ; Calculer l'adresse de départ
-    ; On a besoin de l'adresse de l'octet de AX.
-    push    cx              ; Sauve Couleur
-    push    bx              ; Sauve X_Fin
 
-    mov     cx, ax          ; CX = X_Start
-    ; DX est déjà Y
-    call    cga_calc_addr   ; DI = Offset du premier byte
-                            ; AH = Masque du bit précis (pas utile pour le remplissage, on recalculera)
+    ; 2. Calculer l'adresse de départ
+    ; On a besoin de l'adresse de l'octet contenant AX.
+    ; AX (X_Start) et BX (X_End) sont conservés.
 
-    pop     bx              ; Récup X_Fin
-    pop     cx              ; Récup Couleur (CL)
+    mov     cx, ax          ; CX = X_Start pour cga_calc_addr
+    mov     dx, .y          ; DX = Y
+
+    push    bx              ; Sauvegarde X_End [1]
+    call    cga_calc_addr   ; DI = Offset VRAM, AH = BitMask (on ne servira pas de AH ici)
+    pop     bx              ; Récupère X_End [1]
+
+    ; 3. Préparer la couleur
+    mov     dl, .color      ; DL = Couleur (0 ou 1)
 
     ; --- ANALYSE DES OCTETS ---
-    ; Start Byte Index = AX >> 3
-    ; End Byte Index   = BX >> 3
+    ; Index Octet Début = X1 >> 3
+    ; Index Octet Fin   = X2 >> 3
 
-    mov     si, ax          ; SI = X_Start
-    shr     si, 3           ; Byte index start
+    mov     si, ax
+    shr     si, 3           ; SI = Index octet start
 
-    mov     bp, bx          ; BP = X_Fin
-    shr     bp, 3           ; Byte index end
+    mov     cx, bx
+    shr     cx, 3           ; CX = Index octet end
 
-    ; Cas spécial : Tout tient dans le même octet ?
-    cmp     si, bp
+    ; Cas spécial : Tout dans le même octet ?
+    cmp     si, cx
     je      .single_byte
 
     ; ============================================
-    ; CAS MULTI-BYTE
+    ; CAS MULTI-BYTE (Gauche -> Milieu -> Droite)
     ; ============================================
 
-    ; --- 1. Gérer l'octet de GAUCHE (Start) ---
+    ; --- A. PARTIE GAUCHE (Start) ---
     ; On doit dessiner du bit (AX&7) jusqu'au bit 0 (droite de l'octet)
     ; Masque = 0xFF >> (AX & 7)
 
-    push    cx              ; Save couleur
+    push    cx              ; Sauve Index End
     mov     cx, ax
-    and     cx, 7           ; X % 8
-    mov     al, 0xFF
-    shr     al, cl          ; AL = Masque Gauche (ex: si X%8=2, 00111111)
-    pop     cx              ; Restore couleur
+    and     cx, 7           ; CL = X1 % 8
+    mov     dh, 0xFF
+    shr     dh, cl          ; DH = Masque Gauche (ex: 00111111)
 
-    call    .apply_mask_at_di ; Applique AL sur [ES:DI] selon CL
+    call    .apply_mask     ; Applique DH sur [ES:DI] selon couleur DL
 
     inc     di              ; Octet suivant
     inc     si              ; Index suivant
+    pop     cx              ; Restaure Index End
 
-    ; --- 2. Gérer le MILIEU (Full Bytes) ---
-    ; Tant que SI < BP, on remplit tout l'octet
-    jmp     .check_middle
+    ; --- B. PARTIE CENTRALE (Full Bytes) ---
+    ; Tant que SI < CX, on remplit tout l'octet
+    cmp     si, cx
+    jge     .do_right_part  ; Si on a atteint le dernier octet, on saute
 
-    .loop_middle:
-    cmp     cl, 0
-    jz      .middle_black
-    mov     byte [es:di], 0xFF  ; Blanc total
-    jmp     .middle_next
+    mov     al, 0x00        ; Couleur Noir par défaut
+    cmp     dl, 0
+    jz      .fill_loop
+    mov     al, 0xFF        ; Couleur Blanc
 
-    .middle_black:
-    mov     byte [es:di], 0x00  ; Noir total
-
-    .middle_next:
+    .fill_loop:
+    mov     byte [es:di], al
     inc     di
     inc     si
+    cmp     si, cx
+    jl      .fill_loop
 
-    .check_middle:
-    cmp     si, bp
-    jl      .loop_middle    ; Continue tant qu'on n'est pas au dernier octet
-
-    ; Gérer l'octet de DROITE (End) ---
+    .do_right_part:
+    ; --- C. PARTIE DROITE (End) ---
     ; On doit dessiner du bit 7 jusqu'au bit (BX&7)
     ; Masque = ~(0xFF >> ((BX & 7) + 1))
-    ; Ex: Si Fin%8 = 0 (1 pixel), shift 1 -> 01111111, NOT -> 10000000. Correct.
 
-    push    cx
     mov     cx, bx
     and     cx, 7
-    inc     cx              ; Nb de pixels à garder à gauche
-    mov     al, 0xFF
-    shr     al, cl          ; Masque des pixels à IGNORER (droite)
-    not     al              ; Masque des pixels à DESSINER (gauche)
-    pop     cx
+    inc     cx              ; +1 car on veut inclure le pixel
+    mov     dh, 0xFF
+    shr     dh, cl
+    not     dh              ; DH = Masque Droite (ex: 11100000)
 
-    call    .apply_mask_at_di
+    call    .apply_mask
     jmp     .done
 
     ; ============================================
     ; CAS SINGLE BYTE (Début et Fin dans le même octet)
     ; ============================================
     .single_byte:
-    ; Masque Start = 0xFF >> (AX & 7)
-    push    cx
+    ; Masque Gauche = 0xFF >> (X1 & 7)
     mov     cx, ax
     and     cx, 7
-    mov     ah, 0xFF
-    shr     ah, cl          ; AH = Masque départ (ex: 00011111)
+    mov     dh, 0xFF
+    shr     dh, cl
 
-    ; Masque End (Pixels à garder jusqu'à BX)
-    ; On veut garder les pixels de 7 jusqu'à BX&7
-    ; Astuce: Masque Combiné = MasqueStart AND MasqueEnd
-
+    ; Masque Droite = ~(0xFF >> ((X2 & 7) + 1))
     mov     cx, bx
     and     cx, 7
     inc     cx
-    mov     al, 0xFF
-    shr     al, cl
-    not     al              ; AL = Masque Fin (ex: 11110000)
+    mov     ah, 0xFF        ; Utilise AH temporaire
+    shr     ah, cl
+    not     ah
 
-    and     al, ah          ; Intersection des deux masques
-    pop     cx
+    ; Intersection des masques
+    and     dh, ah          ; DH = Masque Final (ex: 00011100)
 
-    call    .apply_mask_at_di
+    call    .apply_mask
     jmp     .done
 
-    ; --- Helper interne : Applique le masque AL à l'adresse DI selon couleur CL ---
-    .apply_mask_at_di:
-    cmp     cl, 0
+    ; --- Helper local : Applique le masque DH sur [ES:DI] ---
+    ; Entrée : DH = Masque, DL = Couleur, DI = Adresse
+    .apply_mask:
+    cmp     dl, 0
     jz      .apply_black
-    or      [es:di], al     ; Blanc: OR Masque
+    or      byte [es:di], dh    ; Blanc : OR
     ret
-
     .apply_black:
-    not     al              ; Noir: AND ~Masque
-    and     [es:di], al
+    not     dh
+    and     byte [es:di], dh    ; Noir : AND ~Masque
+    not     dh                  ; Restaure le masque (optionnel si non réutilisé)
     ret
 
     .done:
+    call    cga_mouse_show
+    pop     es
+    popa
+    leave
+    ret
+
+; ------------------------------------------------------------
+; cga_draw_rect
+; Dessine un rectangle vide (contour)
+; Entrée : x1, y1, x2, y2, color
+; ------------------------------------------------------------
+cga_draw_rect:
+    push    bp
+    mov     bp, sp
+
+    ; Arguments
+    %define .x1     word [bp+4]
+    %define .y1     word [bp+6]
+    %define .x2     word [bp+8]
+    %define .y2     word [bp+10]
+    %define .color  word [bp+12] ; word pour l'alignement pile (mais on utilise byte)
+
+    pusha
+
+    ; 1. Ordonner X (x1 < x2)
+    mov     ax, .x1
+    mov     bx, .x2
+    cmp     ax, bx
+    jle     .x_ok
+    xchg    ax, bx
+    mov     .x1, ax
+    mov     .x2, bx
+    .x_ok:
+
+    ; 2. Ordonner Y (y1 < y2)
+    mov     ax, .y1
+    mov     bx, .y2
+    cmp     ax, bx
+    jle     .y_ok
+    xchg    ax, bx
+    mov     .y1, ax
+    mov     .y2, bx
+    .y_ok:
+
+    ; 3. Dessiner les 4 lignes
+    ; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
+    ; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
+
+    ; Haut (x1,y1 -> x2,y1)
+    push    word .color
+    push    word .y1
+    push    word .x2
+    push    word .x1
+    call    cga_line_horizontal
+    add     sp, 8
+
+    ; Bas (x1,y2 -> x2,y2)
+    push    word .color
+    push    word .y2
+    push    word .x2
+    push    word .x1
+    call    cga_line_horizontal
+    add     sp, 8
+
+    ; Gauche (x1,y1 -> x1,y2)
+    push    word .color
+    push    word .y2
+    push    word .y1
+    push    word .x1
+    call    cga_line_vertical
+    add     sp, 8
+
+    ; Droite (x2,y1 -> x2,y2)
+    push    word .color
+    push    word .y2
+    push    word .y1
+    push    word .x2
+    call    cga_line_vertical
+    add     sp, 8
+
+    popa
+    leave
+    ret
+
+; ------------------------------------------------------------
+; cga_fill_rect
+; Dessine un rectangle plein
+; Entrée : x1, y1, x2, y2, color
+; ------------------------------------------------------------
+cga_fill_rect:
+    push    bp
+    mov     bp, sp
+
+    %define .x1     word [bp+4]
+    %define .y1     word [bp+6]
+    %define .x2     word [bp+8]
+    %define .y2     word [bp+10]
+    %define .color  byte [bp+12]
+
+    pusha
+    push    es
+
+    ; Setup ES
+    mov     ax, VIDEO_SEG
+    mov     es, ax
+
+    call    cga_mouse_hide
+
+    ; 1. Tri des coordonnées
+    mov     ax, .x1
+    mov     bx, .x2
+    cmp     ax, bx
+    jle     .x_sorted
+    xchg    ax, bx
+    mov     .x1, ax
+    mov     .x2, bx
+    .x_sorted:
+
+    mov     ax, .y1
+    mov     bx, .y2
+    cmp     ax, bx
+    jle     .y_sorted
+    xchg    ax, bx
+    mov     .y1, ax
+    mov     .y2, bx
+    .y_sorted:
+
+    ; Calculer hauteur
+    sub     bx, ax          ; BX = y2 - y1
+    inc     bx              ; BX = hauteur
+    mov     dx, bx          ; DX = Compteur de hauteur
+
+    ; 2. Calculer l'adresse de départ (Haut-Gauche)
+    mov     cx, .x1         ; CX = x1
+    mov     dx, .y1         ; DX = y1
+    push    dx              ; Sauve Y1 (car cga_calc_addr peut modifier DX/BX selon implémentation)
+
+    ; Note: cga_calc_addr attend CX=x, DX=y
+    call    cga_calc_addr   ; DI = Offset début ligne
+
+    pop     bx              ; Récupère Y1 dans BX (pour savoir si pair/impair)
+
+    ; 3. Préparer les masques gauche/droite (comme Line Horizontal)
+    ; Masque Gauche
+    mov     cx, .x1
+    and     cx, 7
+    mov     dh, 0xFF
+    shr     dh, cl          ; DH = Masque Gauche
+
+    ; Masque Droite
+    mov     cx, .x2
+    and     cx, 7
+    inc     cx
+    mov     ah, 0xFF
+    shr     ah, cl
+    not     ah              ; AH = Masque Droite
+
+    ; Index octets
+    mov     si, .x1
+    shr     si, 3           ; SI = Index start byte
+    mov     cx, .x2
+    shr     cx, 3           ; CX = Index end byte
+
+    ; Récupérer la hauteur (Y2 - Y1 + 1)
+    mov     bp, .y2
+    sub     bp, .y1
+    inc     bp              ; BP = Hauteur (Loop counter)
+
+    ; Sauvegarder l'état pair/impair initial
+    ; Si Y1 est impair, le premier saut de ligne doit être "vers le haut" (-0x2000 + 80)
+    ; ou plus simplement : on gère le flip 0x2000 à chaque ligne.
+
+    ; --- BOUCLE VERTICALE ---
+    .row_loop:
+        push    di              ; Sauve le début de la ligne actuelle
+        push    si              ; Sauve index byte start
+
+        ; --- Remplissage Horizontal (copié de line_horizontal) ---
+
+        ; Cas Single Byte
+        cmp     si, cx
+        je      .single_byte_row
+
+        ; Partie Gauche
+        mov     al, dh          ; Masque Gauche
+        call    .apply_mask_fill
+        inc     di
+        inc     si
+
+        ; Partie Centrale
+        jmp     .check_mid
+        .mid_loop:
+            cmp     byte .color, 0
+            je      .blk
+            mov     byte [es:di], 0xFF
+            jmp     .nxt
+            .blk:
+            mov     byte [es:di], 0x00
+            .nxt:
+            inc     di
+            inc     si
+        .check_mid:
+            cmp     si, cx
+            jl      .mid_loop
+
+        ; Partie Droite
+        mov     al, ah          ; Masque Droite
+        call    .apply_mask_fill
+        jmp     .row_done
+
+        .single_byte_row:
+        mov     al, dh
+        and     al, ah          ; Intersection masques
+        call    .apply_mask_fill
+
+        .row_done:
+        pop     si
+        pop     di              ; Restaure début de ligne
+
+        ; --- Passage à la ligne suivante (Logique CGA optimisée) ---
+        xor     di, 0x2000      ; Flip banque
+        test    di, 0x2000
+        jnz     .bank_switch_ok ; Si on passe de 0->1, on a descendu d'une ligne visuelle
+        add     di, 80          ; Si on passe de 1->0, on remonte, donc faut ajouter 80
+        .bank_switch_ok:
+
+        dec     bp
+        jnz     .row_loop
 
     call    cga_mouse_show
     pop     es
     popa
+    leave
+    ret
+
+; Helper local pour Fill Rect
+; AL = Masque, .color = couleur
+.apply_mask_fill:
+    cmp     byte .color, 0
+    jz      .ap_black
+    or      byte [es:di], al
+    ret
+.ap_black:
+    not     al
+    and     byte [es:di], al
     ret
 ;
 ; ------------------------------------------------------------
