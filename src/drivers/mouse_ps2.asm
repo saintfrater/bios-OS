@@ -356,7 +356,7 @@ isr_mouse_handler:
 	; check si il y a un 4eme byte a traiter
 	mov 	al, [BDA_MOUSE + mouse.packetlen]
 	cmp		al,4
-	jne		.done_eoi
+	jne		.done
 
 	; si packetlen = 4, gérer la molette; experimental et non fonctionnel
 	movsx	ax, byte [BDA_MOUSE + mouse.buffer+3]		; delta Wheel

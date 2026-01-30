@@ -41,8 +41,8 @@
 section     .text
     bits	16
 
-;%include	"./common/chartable.asm"
-;%include	"./common/cursor.asm"
+%include	"./common/chartable.asm"
+%include	"./common/cursor.asm"
 
 ; definition du BDA
 %include 	"./bda.asm"

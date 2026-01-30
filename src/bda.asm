@@ -35,15 +35,6 @@
 %define BDA_VIDEO_COLUMNS	0x004A
 %define BDA_VIDEO_BUF_SIZE	0x004C
 %define BDA_VIDEO_OFS_PAGE	0x004E
-
-; keyboard related information
-%define BDA_KBD_HEAD            0x0080      ; byte
-%define BDA_KBD_TAIL            0x0081      ; byte
-%define BDA_KBD_FLAGS           0x0082      ; byte: bit0=shift, bit1=ctrl, bit2=alt, bit3=caps, bit4=ext(E0)
-%define BDA_KBD_BUF             0x0090      ; buffer circulaire (par ex 32 entrées *2 = 64 bytes)
-
-%define KBD_BUF_MASK            0x1F        ; 32 entrées => index 0..31
-
 ;
 ; information relative à la souris
 ;

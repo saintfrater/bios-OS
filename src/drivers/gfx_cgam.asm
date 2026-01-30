@@ -32,10 +32,6 @@
 %define CGA_STRIDE      80
 %define CGA_ODD_BANK    0x2000
 
-; décommenter cette constante si vous voulez un mode aligné/non alligné différent
-; sinon le code utilisé sera toujours "shifted"
-; %define FULL_MODE_ALLIGNED          1
-
 ;
 ; bit : descr
 ;  0  : text color : 0=black, 1=white
@@ -109,10 +105,6 @@ graph_driver:
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
-
-%include "./common/cursor.asm"
-%include "./common/chartable.asm"
-
 ;
 ; convert al -> AX aligned with "cl"
 %macro ALING_BYTE 0
