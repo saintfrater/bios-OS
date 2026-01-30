@@ -55,7 +55,7 @@ mouse_reset:
 	mov		word  [fs:BDA_MOUSE + mouse.x],497			; vous pouvez aussi préciser le centre
 	mov		word  [fs:BDA_MOUSE + mouse.y],5	    	; vous pouvez aussi préciser le centre
 
-	mov		byte  [fs:BDA_MOUSE + mouse.cur_visible], 1
+	mov		byte  [fs:BDA_MOUSE + mouse.cur_counter], 0
 	mov     word  [fs:BDA_MOUSE + mouse.cur_x], 0
 	mov     word  [fs:BDA_MOUSE + mouse.cur_y], 0
 	mov 	byte  [fs:BDA_MOUSE + mouse.cur_drawing], 0

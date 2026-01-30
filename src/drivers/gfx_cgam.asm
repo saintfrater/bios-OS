@@ -73,8 +73,8 @@
 ; accessible par la GUI à des offsets fixes.
 ; ------------------------------------------------------------
 %define	INIT		    0
-%define GFX_PUTPIXEL	1
-%define GFX_GETPIXEL 	2
+%define PUTPIXEL	    1
+%define GETPIXEL 	    2
 %define GOTOXY		    3
 %define TXT_MODE        4
 %define PUTCH           5
@@ -174,16 +174,30 @@ cga_calc_addr:
 	pop     cx
 	ret
 
+; ---------------------------------------------------------------------------
+; gfx_set_writemode (mode)
+;  Défini le mode d'écriture :
+;
+; bit : descr
+;  0  : text color : 0=black, 1=white
+;  1  : transparent : 1=apply background attribut
+;
+; si le mode n'est pas transparent, la couleur de fond
+; est l'inverse de la couleur du texte
+; ---------------------------------------------------------------------------
 cga_set_writemode:
     push    bp
     mov     bp, sp
+
+    ; --- Définition des arguments ---
+    %define .mode   word [bp+4]
 
     push    fs
     push    ax
     mov     ax, BDA_DATA_SEG
     mov     fs,ax
 
-    mov     ax, word arg1
+    mov     ax, .mode
 
     mov     byte [fs:BDA_GFX + gfx.cur_mode], al
 
@@ -193,7 +207,7 @@ cga_set_writemode:
     ret
 
 ; ---------------------------------------------------------------------------
-; gfx_set_charpos
+; gfx_set_charpos (x,y)
 ; In : CX = x (pixels), DX = y (pixels)
 ; Out: variables DS:GFX_CUR_*
 ; Notes:
@@ -204,6 +218,10 @@ cga_set_charpos:
     push    bp
     mov     bp, sp
 
+    ; --- Définition des arguments ---
+    %define .x      word [bp+4]
+    %define .y      word [bp+6]
+
     pusha
     push    fs
 
@@ -211,8 +229,8 @@ cga_set_charpos:
     mov     fs,ax
 
     ; store x,y en pixel
-    mov     cx, word arg1
-    mov     dx, word arg2
+    mov     cx, .x
+    mov     dx, .y
 
     mov     [fs:BDA_GFX + gfx.cur_x], cx
     mov     [fs:BDA_GFX + gfx.cur_y], dx

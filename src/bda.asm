@@ -78,11 +78,9 @@ struc  mouse
         .cur_addr_start resw    1       ; adresse de départ de la sauvegarde
 
         .cur_drawing    resb    1       ;
-        .cur_visible    resb    1       ;
         .cur_counter    resb    1       ; compteur de fois que le curseur a été caché (0 = visible, <0 = invisible)
         .cur_seg        resw    1       ; segment / offset of the pointer
         .cur_ofs        resw    1       ;
-        .cur_mask       resb    1       ; pixels mask (bit per pixel)
         .bkg_saved      resb    1       ; background saved
         alignb                  4       ; alignement 4 bytes
         .bkg_buffer     resd    16      ; buffer for saved background
