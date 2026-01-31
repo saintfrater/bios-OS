@@ -306,14 +306,15 @@ isr_mouse_handler:
 
 	; debut du décodage des données
 	mov 	bl, [BDA_MOUSE + mouse.buffer]				; status
-	mov 	al,bl
-	; --- BOUTONS (Optionnel mais recommandé) ---
+
+	; --- BOUTONS ---
+	mov 	al,bl										; extraction des boutons
     and     al, 00000111b       ; Bits 0, 1, 2 = Gauche, Droite, Milieu
     mov 	[BDA_MOUSE + mouse.status], al
 
 	xor 	ax,ax
 	mov 	al, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
-	test	bl,00010000b								; signe X
+	test	bl,00010000b								; signe X (4eme bit)
 	jz		.x_pos
 	mov		ah,0xff										; X est négatif
 .x_pos:
@@ -321,7 +322,7 @@ isr_mouse_handler:
 
 	xor 	ax,ax
 	mov		al, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
-	test	bl,00100000b								; signe Y
+	test	bl,00100000b								; signe Y (5eme bit)
 	jz		.y_pos
 	mov		ah,0xff										; y est négatif
 .y_pos:

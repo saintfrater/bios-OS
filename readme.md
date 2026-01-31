@@ -22,7 +22,7 @@ The project is intentionally educational, experimental, and minimalist.
   - No reuse of existing BIOS code
   - Minimal but functional implementation
   - Compatible with QEMU
-  - Target architecture: **8086 → 80486**
+  - Target architecture: **i386+**
 
 - **Boot directly from ROM**
   - No DOS, no bootloader, no disk dependency
@@ -145,7 +145,7 @@ Le projet est volontairement **éducatif, expérimental et minimaliste**.
   - Aucun code BIOS existant réutilisé
   - Implémentation minimale mais fonctionnelle
   - Compatible avec QEMU
-  - Architecture ciblée : **8086 jusqu’au 486**
+  - Architecture ciblée : **i386+**
 
 - **Démarrer directement depuis la ROM**
   - Sans DOS, sans bootloader, sans disque

@@ -837,13 +837,13 @@ cga_fill_rect:
     pusha
     push    es
 
-    ; Setup ES
     mov     ax, VIDEO_SEG
     mov     es, ax
 
     call    cga_mouse_hide
 
-    ; 1. Tri des coordonnées
+    ; --- 1. Tri des coordonnées (X et Y) ---
+    ; Tri X
     mov     ax, .x1
     mov     bx, .x2
     cmp     ax, bx
@@ -853,6 +853,7 @@ cga_fill_rect:
     mov     .x2, bx
     .x_sorted:
 
+    ; Tri Y
     mov     ax, .y1
     mov     bx, .y2
     cmp     ax, bx
@@ -862,35 +863,35 @@ cga_fill_rect:
     mov     .y2, bx
     .y_sorted:
 
-    ; Calculer hauteur
-    sub     bx, ax          ; BX = y2 - y1
-    inc     bx              ; BX = hauteur
-    mov     dx, bx          ; DX = Compteur de hauteur
+    ; --- 2. Calcul de la hauteur ---
+    mov     bx, .y2
+    sub     bx, .y1
+    inc     bx              ; BX = Hauteur finale
+    push    bx              ; SAUVEGARDER LA HAUTEUR SUR LA PILE [STACK A]
+                            ; (Car on va utiliser BX dans cga_calc_addr ou juste après)
 
-    ; 2. Calculer l'adresse de départ (Haut-Gauche)
-    mov     cx, .x1         ; CX = x1
-    mov     dx, .y1         ; DX = y1
-    push    dx              ; Sauve Y1 (car cga_calc_addr peut modifier DX/BX selon implémentation)
+    ; --- 3. Calcul adresse de départ ---
+    mov     cx, .x1
+    mov     dx, .y1
 
-    ; Note: cga_calc_addr attend CX=x, DX=y
+    ; Note: cga_calc_addr attend CX=x, DX=y et retourne DI
+    ; Si cga_calc_addr modifie BX, la sauvegarde [STACK A] est vitale.
     call    cga_calc_addr   ; DI = Offset début ligne
 
-    pop     bx              ; Récupère Y1 dans BX (pour savoir si pair/impair)
-
-    ; 3. Préparer les masques gauche/droite (comme Line Horizontal)
-    ; Masque Gauche
+    ; --- 4. Préparer les masques ---
+    ; Masque Gauche (DH)
     mov     cx, .x1
     and     cx, 7
     mov     dh, 0xFF
-    shr     dh, cl          ; DH = Masque Gauche
+    shr     dh, cl
 
-    ; Masque Droite
+    ; Masque Droite (AH)
     mov     cx, .x2
     and     cx, 7
     inc     cx
     mov     ah, 0xFF
     shr     ah, cl
-    not     ah              ; AH = Masque Droite
+    not     ah
 
     ; Index octets
     mov     si, .x1
@@ -898,35 +899,32 @@ cga_fill_rect:
     mov     cx, .x2
     shr     cx, 3           ; CX = Index end byte
 
-    ; Récupérer la hauteur (Y2 - Y1 + 1)
-    mov     bp, .y2
-    sub     bp, .y1
-    inc     bp              ; BP = Hauteur (Loop counter)
-
-    ; Sauvegarder l'état pair/impair initial
-    ; Si Y1 est impair, le premier saut de ligne doit être "vers le haut" (-0x2000 + 80)
-    ; ou plus simplement : on gère le flip 0x2000 à chaque ligne.
+    ; --- 5. Récupérer la hauteur dans un registre sûr ---
+    pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
+                            ; BX est maintenant notre compteur de boucle.
+                            ; BP reste intact, donc .color est accessible !
 
     ; --- BOUCLE VERTICALE ---
     .row_loop:
-        push    di              ; Sauve le début de la ligne actuelle
-        push    si              ; Sauve index byte start
+        push    di          ; Sauve début ligne
+        push    si          ; Sauve index byte
 
-        ; --- Remplissage Horizontal (copié de line_horizontal) ---
+        ; --- Remplissage Horizontal ---
 
-        ; Cas Single Byte
+        ; Cas Single Byte (Start == End)
         cmp     si, cx
         je      .single_byte_row
 
         ; Partie Gauche
-        mov     al, dh          ; Masque Gauche
+        mov     al, dh
         call    .apply_mask_fill
         inc     di
         inc     si
 
-        ; Partie Centrale
+        ; Partie Centrale (Boucle tant que SI < CX)
         jmp     .check_mid
         .mid_loop:
+            ; Ici BP est valide, donc .color est correct
             cmp     byte .color, 0
             je      .blk
             mov     byte [es:di], 0xFF
@@ -941,42 +939,36 @@ cga_fill_rect:
             jl      .mid_loop
 
         ; Partie Droite
-        mov     al, ah          ; Masque Droite
+        mov     al, ah
         call    .apply_mask_fill
         jmp     .row_done
 
         .single_byte_row:
         mov     al, dh
-        and     al, ah          ; Intersection masques
+        and     al, ah      ; Intersection des masques
         call    .apply_mask_fill
 
         .row_done:
         pop     si
-        pop     di              ; Restaure début de ligne
+        pop     di
 
-        ; --- Passage à la ligne suivante (Logique CGA optimisée) ---
-        xor     di, 0x2000      ; Flip banque
+        ; --- Passage ligne suivante (CGA Bank Switch) ---
+        xor     di, 0x2000
         test    di, 0x2000
-        jnz     .bank_switch_ok ; Si on passe de 0->1, on a descendu d'une ligne visuelle
-        add     di, 80          ; Si on passe de 1->0, on remonte, donc faut ajouter 80
+        jnz     .bank_switch_ok
+        add     di, 80
         .bank_switch_ok:
 
-        dec     bp
+        dec     bx          ; On décrémente BX (Hauteur) au lieu de BP
         jnz     .row_loop
 
     call    cga_mouse_show
     pop     es
 
-    ; clean defs
-    %undef  .x1
-    %undef  .y1
-    %undef  .x2
     popa
     leave
     ret
 
-; Helper local pour Fill Rect
-; AL = Masque, .color = couleur
 .apply_mask_fill:
     cmp     byte .color, 0
     jz      .ap_black
@@ -986,6 +978,14 @@ cga_fill_rect:
     not     al
     and     byte [es:di], al
     ret
+
+    ; Nettoyage des defines
+    %undef  .x1
+    %undef  .y1
+    %undef  .x2
+    %undef  .y2
+    %undef  .color
+
 ;
 ; ------------------------------------------------------------
 ; GESTION DU CURSEUR

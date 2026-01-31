@@ -100,62 +100,67 @@ reset:
 	push	cs
 	pop		ds
 
-setup_gui:
-    ; Initialiser le segment de données correct pour le texte du bouton
-    mov     ax, cs  ; ou DS selon où sont tes chaines
-    mov     [btn_quit + widget.text_seg], ax
+    ; Init du système GUI
+    call    gui_init_system
 
-	; GUI		WINDOW, 50,50,250,100,helloworld
-
-	; GFX		RECTANGLE_DRAW, 50,50,250,100,0
-
-	;GFX		LINE_VERT, 50, 50, 100, 0
-	;GFX		LINE_VERT, 300, 50, 100, 0
-
-	;GFX		LINE_HORIZ, 50, 300, 50, 0
-	;GFX		LINE_HORIZ, 50, 300, 100, 0
+	; GFX		RECTANGLE_FILL, 50, 50, 100, 30, 1
 
 
+ 	call	build_interface
 
-	mov		ax,BDA_DATA_SEG
-	mov		ds,ax
-endless:
+main_loop:
+    ; 2. Moteur GUI (Gère tout : Loop, HitTest, Draw, Callbacks)
+    ; DS pointe déjà sur GUI_RAM_SEG
+    call    gui_process_all
 
-	; 1. Récupérer souris
-    mov     ax, [BDA_MOUSE + mouse.x]
-    mov     cx, ax                      ; CX = Souris X
-    mov     ax, [BDA_MOUSE + mouse.y]
-    mov     dx, ax                      ; DX = Souris Y
-    mov     bl, [BDA_MOUSE + mouse.status] ; BL = Boutons
+    ; 3. Afficher souris
+    ; GFX     MOUSE_MOVE
 
-    ; 2. Gérer le bouton
-    mov     si, btn_quit                ; SI pointe sur l'objet
-    call    gui_update_button           ; Met à jour l'état et redessine si besoin
+    jmp     main_loop
 
-    ; 3. Vérifier si cliqué (AL = 1)
-    cmp     al, 1
-    je      action_quitter
+; --- Callbacks (Fonctions appelées par le moteur) ---
+on_click_quit:
+    hlt
+    jmp     on_click_quit
 
-    ; 4. Afficher le curseur souris (Important : après avoir dessiné le bouton)
-	;    GFX     MOUSE_MOVE
 
-	GFX		TXT_MODE, GFX_TXT_BLACK
-	GFX		GOTOXY, 0, 180
+build_interface:
+    ; --- CRÉATION DYNAMIQUE DES BOUTONS ---
+    ; On reste dans CS pour lire les arguments,
+    ; mais on configure DS=GUI_RAM_SEG pour l'allocation
 
-	mov		ax, [BDA_MOUSE + mouse.x]
-	call 	print_word_hex
+    ; Créer Bouton 1 "QUITTER"
+    call    gui_alloc_widget        ; Retourne SI = Pointeur nouveau slot
+    jc     .mem_full
 
-	GFX		PUTCH, ' '
+    ; Remplir les propriétés
+    mov     word [gs:si +  widget.x], 10
+    mov     word [gs:si +  widget.y], 10
+    mov     word [gs:si +  widget.w], 80
+    mov     word [gs:si +  widget.h], 20
+    mov     word [gs:si +  widget.text_ofs], str_quit
+    mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
+    mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
 
-	mov		ax, [BDA_MOUSE + mouse.y]
-	call 	print_word_hex
+    ; Créer Bouton 2 "HELLO"
+    call    gui_alloc_widget
+    jc      .mem_full
 
-	jmp		endless
+    mov     word [gs:si +  widget.x], 100
+    mov     word [gs:si +  widget.y], 10
+    mov     word [gs:si +  widget.w], 80
+    mov     word [gs:si +  widget.h], 20
+    mov     word [gs:si +  widget.text_ofs], str_hello
+    mov     word [gs:si +  widget.text_seg], cs
+    ; Pas de callback
 
-action_quitter:
-	hlt
-	jmp		action_quitter
+.mem_full:
+	ret
 
+
+; --- Données ROM ---
+str_quit  db "QUITTER", 0
+str_hello db "HELLO", 0
 
 ; -----------------------------------------------------------
 ; timer ISR (IRQ -> INT)
@@ -174,21 +179,6 @@ timer_isr:
 
 	pop		ax
 	iret
-
-; Déclaration d'un bouton "Quitter"
-btn_quit:
-    istruc widget
-        at widget.x,        dw 10
-        at widget.y,        dw 10
-        at widget.w,        dw 80
-        at widget.h,        dw 20
-        at widget.state,    db GUI_STATE_NORMAL
-        at widget.text_ofs, dw str_quit
-        at widget.text_seg, dw 0 ; Sera rempli au runtime (CS ou DS)
-        at widget.id,       db 1
-    iend
-
-str_quit db "QUITTER", 0
 
 ; ------------------------------------------------------------------
 ; Padding jusqu'au reset vector
