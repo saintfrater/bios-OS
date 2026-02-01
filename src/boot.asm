@@ -102,10 +102,6 @@ reset:
 
     ; Init du système GUI
     call    gui_init_system
-
-	; GFX		RECTANGLE_FILL, 50, 50, 100, 30, 1
-
-
  	call	build_interface
 
 main_loop:
@@ -147,7 +143,7 @@ build_interface:
     jc      .mem_full
 
     mov     word [gs:si +  widget.x], 100
-    mov     word [gs:si +  widget.y], 10
+    mov     word [gs:si +  widget.y], 50
     mov     word [gs:si +  widget.w], 80
     mov     word [gs:si +  widget.h], 20
     mov     word [gs:si +  widget.text_ofs], str_hello

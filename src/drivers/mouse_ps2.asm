@@ -136,6 +136,9 @@ mouse_init:
     mov 	ah,IRQ_ENABLED
     mov 	al, 12
     call	pic_set_irq_mask
+	mov		ah,IRQ_ENABLED
+	mov		al, 2
+	call	pic_set_irq_mask
 	sti
 	pop		ax
 	pop		ds

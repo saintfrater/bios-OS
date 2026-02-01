@@ -31,16 +31,28 @@
 %define GUI_STATE_PRESSED   3           ; Clic enfoncé
 %define GUI_STATE_DISABLED  4           ; Grisé
 
+; --- Event mask ---
+%define EVENT_NONE              00000000b
+%define EVENT_HOVER             00000001b
+%define EVENT_LEFT_CLICK        00000010b
+%define EVENT_RIGHT_CLICK       00000100b
+%define EVENT_MIDDLE_CLICK      00001000b
+%define EVENT_LEFT_RELEASE      00010000b
+%define EVENT_RIGHT_RELEASE     00100000b
+%define EVENT_ENTER             10000000b
+
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
     .state      resb 1      ; État (0=libre, >0=utilisé)
     .user_id    resb 1      ; ID unique utilisateur
+    .updated    resb 1      ; widget a-t-il été modifié ?
     .x          resw 1      ; Position X
     .y          resw 1      ; Position Y
     .w          resw 1      ; Largeur
     .h          resw 1      ; Hauteur
     .text_ofs   resw 1      ; Offset du texte
     .text_seg   resw 1      ; Segment du texte
+    .event      resb 1      ; found events (0 = none)
     .event_click      resw 1      ; adresse de la fonction "on click"
 ;    .event_hover      resw 1      ; adresse de la fonction "on hover"
 ;    .event_release    resw 1      ; adresse de la fonction "on release"
@@ -110,7 +122,8 @@ gui_alloc_widget:
 
 .found:
     ; On initialise le slot trouvé
-    mov     byte [gs:si + widget.state], GUI_STATE_NORMAL ; Marquer comme occupé
+    mov     byte [gs:si + widget.state], GUI_STATE_NORMAL   ; Marquer comme occupé
+    mov     byte [gs:si + widget.updated], 0                ; doit etre dessiné
 
     ; Reset des champs critiques pour éviter les déchets
     mov     word [gs:si + widget.event_click], 0
@@ -134,9 +147,9 @@ gui_free_widget:
     mov     ax, GUI_RAM_SEG
     mov     es, ax
 
-    xor     di, di
+    mov     di, si
     mov     cx, (widget_size)
-    shl     cx, 2           ; cx / 4
+    shr     cx, 2           ; cx / 4
     xor     eax, eax
     rep     stosd          ; Remplit tout de 0
 
@@ -163,6 +176,7 @@ gui_free_widget:
 ; -----------------------------------------------------------------------------
 gui_process_all:
     pusha
+    push    ds
     push    gs
 
     mov     ax, BDA_DATA_SEG
@@ -183,13 +197,9 @@ gui_process_all:
     cmp     byte [gs:si + widget.state], GUI_STATE_FREE
     je      .next_widget
 
-    ; mov     ah, [gs:si + widget.state] ; AH = Ancien état du widget
-
     ; --- Logique Widget ---
-    ;push    bx                      ; Sauver état boutons souris
-    push    ax
+    push    bx                      ; Sauver état boutons souris
     call    gui_update_logic        ; Vérifier collision/clic
-    ;pop     ax
 
     ; Si AL=1 (Clic relâché validé), exécuter le callback
     cmp     al, 1
@@ -209,6 +219,8 @@ gui_process_all:
     pop     bx                      ; Restaurer boutons
 
     ; Dessiner (si l'état a changé ou pour refresh)
+    ;cmp     byte [gs:si + widget.updated], 0
+    ;je      .next_widget
     call    gui_draw_single_widget
 
     .next_widget:
@@ -216,6 +228,7 @@ gui_process_all:
     dec     di
     jnz     .loop_widgets
 
+    pop     gs
     pop     ds
     popa
     ret
@@ -233,6 +246,8 @@ gui_update_logic:
     cmp     byte [gs:si + widget.state], GUI_STATE_DISABLED
     je      .done
 
+    mov     byte [gs:si + widget.event], 0       ; no event found]
+
     ; --- Hit Test ---
     cmp     cx, [gs:si + widget.x]
     jl      .miss
@@ -248,16 +263,31 @@ gui_update_logic:
     cmp     dx, bp
     jg      .miss
 
+    mov     [gs:si + widget.updated], 0     ; request update
+
+    ; reset "enter" event
+    and     byte [gs:si + widget.event], ~EVENT_ENTER
+
+    ; --- on est au moins dans le widget ---
+    test    byte [gs:si + widget.event], EVENT_HOVER
+    jz      .not_entering
+    ; entering the widget
+    or      byte [gs:si + widget.event], EVENT_ENTER
+    .not_entering:
+    or      byte [gs:si + widget.event], EVENT_HOVER
+
     ; --- Hit: Souris sur le widget ---
     test    bl, 1           ; Clic gauche ?
     jz      .released
 
     ; Clic enfoncé
     mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    or      byte [gs:si + widget.event], EVENT_LEFT_CLICK
     jmp     .done
 
     .released:
     ; Bouton relâché. Était-il pressé avant ?
+    and     byte [gs:si + widget.event], ~EVENT_LEFT_CLICK
     cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
     jne     .hover
 
@@ -272,6 +302,8 @@ gui_update_logic:
 
     .miss:
     mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
+    and     byte [gs:si + widget.event], ~EVENT_HOVER
+
     .done:
     ret
 
@@ -285,34 +317,32 @@ gui_draw_single_widget:
     mov     cx, [gs:si + widget.w]
     mov     dx, [gs:si + widget.h]
 
+    inc     [gs:si + widget.updated]           ; dessiné
     ; Calcul X2, Y2
-    mov     di, ax
-    add     di, cx
-    mov     bp, bx
-    add     bp, dx
+    add     cx, ax
+    add     dx, bx
 
     ; Dispatch selon état
-    mov     al, [gs:si + widget.state]
-    cmp     al, GUI_STATE_PRESSED
+    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
     je      .paint_pressed
-    cmp     al, GUI_STATE_HOVER
+    cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
     je      .paint_hover
 
     .paint_normal:
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 1   ; Blanc
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0   ; Bord Noir
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 1   ; Blanc
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
     GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
     jmp     .text
 
     .paint_hover:
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 1
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 1   ; Blanc
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
     ; Effet gras
     inc     ax
     inc     bx
-    dec     di
-    dec     bp
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0
+    dec     cx
+    dec     dx
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
 
     ; Restauration coords pour le texte
     mov     ax, [gs:si + widget.x]
@@ -320,7 +350,7 @@ gui_draw_single_widget:
     jmp     .text_setup
 
     .paint_pressed:
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 0   ; Noir
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 0   ; Noir
     GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
     jmp     .text
 
@@ -369,213 +399,4 @@ gui_draw_single_widget:
 
     pop     si
     popa
-    ret
-
-
-
-; =============================================================================
-; Fonction : gui_draw_button
-; Description : Dessine un bouton selon son état (.state)
-; Entrée : SI = Pointeur vers la structure widget (DS:SI)
-; =============================================================================
-gui_draw_button:
-    pusha
-
-    ; Charger les propriétés depuis la structure
-    mov     ax, [gs:si + widget.x]
-    mov     bx, [gs:si + widget.y]
-    mov     cx, [gs:si + widget.w]
-    mov     dx, [gs:si + widget.h]
-
-    ; Calculer X2 et Y2 pour le rectangle
-    mov     di, ax      ; X1
-    add     di, cx      ; X2 = X + W
-    mov     bp, bx      ; Y1
-    add     bp, dx      ; Y2 = Y + H
-
-    ; Vérifier l'état
-    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    je      .draw_pressed
-
-    cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
-    je      .draw_hover
-
-    cmp     byte [gs:si + widget.state], GUI_STATE_DISABLED
-    je      .draw_disabled
-
-    .draw_normal:
-    ; Fond BLANC, Bordure NOIRE, Texte NOIR
-    ; 1. Effacer le fond (Rectangle plein blanc) -> On triche, on dessine un rect plein blanc
-    ; Note: GFX RECTANGLE_FILL utilise une couleur 0 ou 1. 1 = Blanc.
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 1   ; Fond blanc
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0   ; Bordure noire
-
-    ; Configuration texte : Noir sur Transparent
-    GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-    jmp     .draw_text
-
-    .draw_hover:
-    ; Comme normal, mais bordure plus épaisse ou autre effet
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 1
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0
-
-    ; Effet "Gras" sur le cadre (on dessine un 2eme rectangle à l'intérieur)
-    inc     ax
-    inc     bx
-    dec     di
-    dec     bp
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0
-
-    ; Restaurer les coords pour le texte
-    mov     ax, [gs:si + widget.x]
-    mov     bx, [gs:si + widget.y]
-    mov     di, ax
-    add     di, [gs:si + widget.w]
-
-    GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-    jmp     .draw_text
-
-    .draw_pressed:
-    ; Fond NOIR, Texte BLANC (Inversé)
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 0   ; Fond Noir
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 1   ; Bordure Blanche (optionnel)
-
-    ; Configuration texte : Blanc sur Noir (ou transparent sur fond noir)
-    GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
-    jmp     .draw_text
-
-    .draw_disabled:
-    ; Fond Blanc, Bordure en pointillé (difficile sans support pointillé),
-    ; on va faire simple : Bordure noire, mais on n'écrit pas le texte ou texte gris ?
-    ; Pour CGA mono, "Disabled" = Texte normal mais cadre incomplet ou hachuré.
-    ; Faisons simple : Cadre normal, mais texte non affiché ou "..."
-    GFX     RECTANGLE_FILL, ax, bx, di, bp, 1
-    GFX     RECTANGLE_DRAW, ax, bx, di, bp, 0
-    jmp     .done   ; Pas de texte pour montrer qu'il est désactivé
-
-    .draw_text:
-    ; --- Centrage du texte ---
-    ; Calcul simple : PosX = BoutonX + (LargeurBouton - (LenChaine * 8)) / 2
-    ; Calcul simple : PosY = BoutonY + (HauteurBouton - 8) / 2
-
-    push    si
-    ; 1. Calculer longueur chaine
-    mov     es, [gs:si + widget.text_seg]
-    mov     di, [gs:si + widget.text_ofs]
-    xor     cx, cx
-
-    .strlen:
-    cmp     byte [es:di], 0
-    je      .calc_pos
-    inc     cx
-    inc     di
-    jmp     .strlen
-
-    .calc_pos:
-    ; CX = Longueur chaine
-    shl     cx, 3           ; CX * 8 (largeur en pixels du texte)
-
-    mov     ax, [gs:si + widget.w]
-    sub     ax, cx          ; Marge horizontale totale
-    shr     ax, 1           ; Diviser par 2
-    add     ax, [gs:si + widget.x] ; X final
-
-    mov     bx, [gs:si + widget.h]
-    sub     bx, 8           ; Hauteur fonte (8px)
-    shr     bx, 1           ; Diviser par 2
-    add     bx, [gs:si + widget.y] ; Y final
-
-    ; 2. Dessiner
-    GFX     GOTOXY, ax, bx
-
-    mov     dx, [gs:si + widget.text_seg]
-    mov     ax, [gs:si + widget.text_ofs]
-    GFX     WRITE, dx, ax
-
-    pop     si
-
-    .done:
-    popa
-    ret
-
-; =============================================================================
-; Fonction : gui_update_button
-; Description : Met à jour l'état du bouton en fonction de la souris
-; Entrée :
-;   SI = Pointeur vers widget
-;   CX = Mouse X
-;   DX = Mouse Y
-;   BL = Mouse Status (Bit 0 = Clic gauche)
-; Sortie :
-;   AL = 1 si le bouton vient d'être cliqué (Relâché), 0 sinon
-; =============================================================================
-gui_update_button:
-    push    bx
-    push    cx
-    push    dx
-
-    xor     ax, ax          ; AL = Return value (0)
-
-    ; Si désactivé, on ne fait rien
-    cmp     byte [gs:si + widget.state], GUI_STATE_DISABLED
-    je      .quit
-
-    ; 1. Test de collision (Hit Test)
-    ; X >= Widget.X ?
-    cmp     cx, [gs:si + widget.x]
-    jl      .no_hit
-
-    ; X <= Widget.X + Widget.W ?
-    mov     di, [gs:si + widget.x]
-    add     di, [gs:si + widget.w]
-    cmp     cx, di
-    jg      .no_hit
-
-    ; Y >= Widget.Y ?
-    cmp     dx, [gs:si + widget.y]
-    jl      .no_hit
-
-    ; Y <= Widget.Y + Widget.H ?
-    mov     di, [gs:si + widget.y]
-    add     di, [gs:si + widget.h]
-    cmp     dx, di
-    jg      .no_hit
-
-    ; --- HIT ! La souris est sur le bouton ---
-
-    ; Test du clic (BL bit 0)
-    test    bl, 1
-    jz      .hovering
-
-    ; -> Clic maintenu
-    mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    jmp     .draw_update
-
-.hovering:
-    ; Souris dessus, mais pas de clic
-    ; Si on était en PRESSED juste avant, c'est un "CLICK" valide (Relâchement)
-    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    jne     .just_hover
-
-    ; C'est un click valide !
-    mov     al, 1           ; Return CLICKED
-    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
-    jmp     .draw_update
-
-.just_hover:
-    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
-    jmp     .draw_update
-
-.no_hit:
-    ; Souris en dehors
-    mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
-
-.draw_update:
-    ; Appelle la fonction de dessin pour mettre à jour le visuel
-    call    gui_draw_button
-
-.quit:
-    pop     dx
-    pop     cx
-    pop     bx
     ret

@@ -402,14 +402,14 @@ cga_putc:
 ;
 ; write string from [DS:SI] to screen
 ;
+; --- Définition des arguments ---
+%define .txt_seg   word [bp+4]
+%define .txt_ofs   word [bp+6]
 cga_write:
     push    bp
     mov     bp, sp
     push    ax
-
-        ; --- Définition des arguments ---
-    %define .txt_seg   word [bp+4]
-    %define .txt_ofs   word [bp+6]
+    push    ds
 
     mov     ax, .txt_seg
     mov     ds, ax
@@ -424,9 +424,12 @@ cga_write:
     jmp     .loops
 
     .done:
+    pop     ds
     pop     ax
     leave
     ret
+%undef  .txt_seg
+%undef  .txt_ofs
 
 ; ------------------------------------------------------------
 ; cga_putpixel (x,y,color)
@@ -437,14 +440,14 @@ cga_write:
 ;   ES = Target Segment (usually VIDEO_SEG)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
+; --- Définition des arguments ---
+%define .x      word [bp+4]
+%define .y      word [bp+6]
+%define .color  byte [bp+8]
 cga_putpixel:
     push    bp
     mov     bp, sp
 
-        ; --- Définition des arguments ---
-    %define .x      word [bp+4]
-    %define .y      word [bp+6]
-    %define .color  byte [bp+8]
 
     pusha
     mov     cx, .x
@@ -464,14 +467,13 @@ cga_putpixel:
 	and     byte [es:di], ah
 
     .done:
-
-    ; clean defs
-    %undef  .x
-    %undef  .y
-    %undef  .color
     popa
     leave
 	ret
+; clean defs
+%undef  .x
+%undef  .y
+%undef  .color
 
 ; ------------------------------------------------------------
 ; cga_getpixel (x,y)
@@ -1258,7 +1260,12 @@ cga_cursor_draw:
     mov     eax, 0xFFFFFFFF
     mov     ax, [gs:si]             ; masque AND
     xchg    al, ah                  ; Redresser pour l'ordre des pixels CGA
-    bswap   eax
+    ;bswap   eax                    ; equivalence i386+
+    xchg    ah, al                  ; Échange les octets de poids faible (AL <-> AH)
+    rol     eax, 16                 ; Bascule les 16 bits de poids fort vers le bas
+    xchg    ah, al                  ; Échange les nouveaux octets de poids faible
+    ; fin bswap eax equivalence i386+
+
     ror     eax, cl
 
     or      eax, [esp+2]            ; Force les bits clippés à 1 (garde le fond)
@@ -1266,8 +1273,10 @@ cga_cursor_draw:
     ; --- MASQUE XOR (EBX) ---
     xor     ebx, ebx
     mov     bx, [gs:si+32]          ; masque XOR
-    xchg    bl, bh
-    bswap   ebx
+    ;xchg    bl, bh
+    ;bswap   ebx
+    rol     ebx, 16
+    xchg    bh, bl
     ror     ebx, cl
 
     mov     edx, [esp+2]            ; charge le masque de protection
@@ -1277,10 +1286,18 @@ cga_cursor_draw:
 
     ; --- LECTURE ET MODIFICATION (EDX) ---
     mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
-    bswap   edx
+    ; bswap   edx
+    xchg    dh, dl
+    rol     edx, 16
+    xchg    dh, dl
+
     and     edx, eax            ; application du masque AND (AX)
     xor     edx, ebx            ; application du masque XOR (BX)
-    bswap   edx
+    ; bswap   edx
+    xchg    dh, dl
+    rol     edx, 16
+    xchg    dh, dl
+
     mov     [es:di], edx        ; ecriture du résultat
 
     ; --- GESTION DES BANQUES ---
