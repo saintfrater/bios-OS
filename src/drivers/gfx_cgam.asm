@@ -1176,6 +1176,7 @@ cga_cursor_draw:
     pushad
     push    ds
     push    es
+    push    gs
 
     mov     ax, BDA_DATA_SEG
     mov     ds, ax
@@ -1316,6 +1317,7 @@ cga_cursor_draw:
     pop     esi
 
     .exit_total:
+    pop     gs
     pop     es
     pop     ds
     popad

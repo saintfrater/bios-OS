@@ -150,6 +150,19 @@ build_interface:
     mov     word [gs:si +  widget.text_seg], cs
     ; Pas de callback
 
+    ; Créer Slider (Drag)
+    call    gui_alloc_widget
+    jc      .mem_full
+    mov     word [gs:si + widget.x], 10
+    mov     word [gs:si + widget.y], 100
+    mov     word [gs:si + widget.w], 20
+    mov     word [gs:si + widget.h], 20
+    mov     word [gs:si + widget.text_ofs], str_drag
+    mov     word [gs:si + widget.text_seg], cs
+    mov     byte [gs:si + widget.drag_mode], 1      ; Horizontal
+    mov     word [gs:si + widget.drag_min], 10
+    mov     word [gs:si + widget.drag_max], 200
+
 .mem_full:
 	ret
 
@@ -157,6 +170,7 @@ build_interface:
 ; --- Données ROM ---
 str_quit  db "QUITTER", 0
 str_hello db "HELLO", 0
+str_drag  db "->", 0
 
 ; -----------------------------------------------------------
 ; timer ISR (IRQ -> INT)

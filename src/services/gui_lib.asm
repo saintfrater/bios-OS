@@ -44,8 +44,8 @@
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
     .state      resb 1      ; État (0=libre, >0=utilisé)
+    .oldstate   resb 1      ; widget a-t-il été modifié ?
     .user_id    resb 1      ; ID unique utilisateur
-    .updated    resb 1      ; widget a-t-il été modifié ?
     .x          resw 1      ; Position X
     .y          resw 1      ; Position Y
     .w          resw 1      ; Largeur
@@ -54,6 +54,10 @@ struc widget
     .text_seg   resw 1      ; Segment du texte
     .event      resb 1      ; found events (0 = none)
     .event_click      resw 1      ; adresse de la fonction "on click"
+    .drag_mode        resb 1      ; 0=None, 1=Horiz, 2=Vert
+    .drag_min         resw 1      ; Limite Min
+    .drag_max         resw 1      ; Limite Max
+    .drag_anchor      resw 1      ; Offset souris au clic
 ;    .event_hover      resw 1      ; adresse de la fonction "on hover"
 ;    .event_release    resw 1      ; adresse de la fonction "on release"
 ;    .event_disable    resw 1      ; adresse de la fonction "on disable"
@@ -95,8 +99,8 @@ gui_init_system:
 ; gui_alloc_widget
 ; Cherche un slot vide et retourne son adresse
 ; Sortie :
-;   - Succès : CF=0 (Carry Clear), DS:SI = Offset du widget
-;   - Echec  : CF=1 (Carry Set),  DS:SI = Indéfini (ou 0)
+;   - Succès : CF=0 (Carry Clear), GS:SI = Offset du widget
+;   - Echec  : CF=1 (Carry Set),  GS:SI = Indéfini (ou 0)
 ; -----------------------------------------------------------------------------
 gui_alloc_widget:
     push    ax
@@ -123,7 +127,7 @@ gui_alloc_widget:
 .found:
     ; On initialise le slot trouvé
     mov     byte [gs:si + widget.state], GUI_STATE_NORMAL   ; Marquer comme occupé
-    mov     byte [gs:si + widget.updated], 0                ; doit etre dessiné
+    mov     byte [gs:si + widget.oldstate], 0                ; doit etre dessiné
 
     ; Reset des champs critiques pour éviter les déchets
     mov     word [gs:si + widget.event_click], 0
@@ -153,7 +157,7 @@ gui_free_widget:
     xor     eax, eax
     rep     stosd          ; Remplit tout de 0
 
-    mov     byte [gs:si + widget.state], GUI_STATE_FREE
+    mov     byte [es:si + widget.state], GUI_STATE_FREE
     ; On efface visuellement le widget (optionnel, remplit de blanc)
     ; Pour l'instant on le marque juste libre, il sera redessiné par-dessus.
 
@@ -178,13 +182,6 @@ gui_process_all:
     pusha
     push    ds
     push    gs
-
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
-
-    mov     cx, [BDA_MOUSE + mouse.x]
-    mov     dx, [BDA_MOUSE + mouse.y]
-    mov     bl, [BDA_MOUSE + mouse.status]
 
     mov     ax, GUI_RAM_SEG
     mov     gs, ax
@@ -218,9 +215,13 @@ gui_process_all:
     .no_action:
     pop     bx                      ; Restaurer boutons
 
+    mov     al, byte [gs:si + widget.oldstate]
+    mov     ah, byte [gs:si + widget.state]
+
     ; Dessiner (si l'état a changé ou pour refresh)
-    ;cmp     byte [gs:si + widget.updated], 0
-    ;je      .next_widget
+
+    cmp     al,ah
+    je      .next_widget            ; Si != 0, le widget est à jour, on passe.
     call    gui_draw_single_widget
 
     .next_widget:
@@ -241,39 +242,49 @@ gui_process_all:
 ; Entrée : SI=Widget, CX=MouseX, DX=MouseY, BL=Buttons
 ; Sortie : AL=1 si Clicked, 0 sinon. Met à jour [gs:si].state
 gui_update_logic:
-    xor     ax, ax
+    push    ds
+    mov     ax, BDA_DATA_SEG
+    mov     ds, ax
 
-    cmp     byte [gs:si + widget.state], GUI_STATE_DISABLED
+    mov     al, byte [gs:si + widget.state]
+    cmp     al, GUI_STATE_DISABLED
     je      .done
 
-    mov     byte [gs:si + widget.event], 0       ; no event found]
+    xor     ax, ax
+
+    ; les macros peuvent modifer les registres cx, dx & bx
+    mov     cx, [BDA_MOUSE + mouse.x]
+    mov     dx, [BDA_MOUSE + mouse.y]
+
+    mov     byte [gs:si + widget.event], 0      ; no event found]
 
     ; --- Hit Test ---
     cmp     cx, [gs:si + widget.x]
-    jl      .miss
-    mov     bp, [gs:si + widget.x]
-    add     bp, [gs:si + widget.w]
-    cmp     cx, bp
-    jg      .miss
+    jl      .miss                               ; mouse.x < widget.x ?
+    mov     bx, [gs:si + widget.x]
+    add     bx, [gs:si + widget.w]
+    cmp     cx, bx
+    jg      .miss                               ; mouse.x >= widget.x ?
 
     cmp     dx, [gs:si + widget.y]
-    jl      .miss
-    mov     bp, [gs:si + widget.y]
-    add     bp, [gs:si + widget.h]
-    cmp     dx, bp
-    jg      .miss
-
-    mov     [gs:si + widget.updated], 0     ; request update
-
-    ; reset "enter" event
-    and     byte [gs:si + widget.event], ~EVENT_ENTER
+    jl      .miss                               ; mouse.y < widget.y ?
+    mov     bx, [gs:si + widget.y]
+    add     bx, [gs:si + widget.h]
+    cmp     dx, bx
+    jg      .miss                               ; mouse.y >= widget.y ?
 
     ; --- on est au moins dans le widget ---
-    test    byte [gs:si + widget.event], EVENT_HOVER
-    jz      .not_entering
-    ; entering the widget
+    ; Pour savoir si on vient d'entrer (ENTER), on regarde l'état PRÉCÉDENT (avant ce frame).
+    ; Si l'état n'était ni HOVER ni PRESSED, c'est qu'on vient d'arriver.
+    cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
+    je      .already_hover
+    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    je      .already_hover
+
+    ; Nouvel arrivant
     or      byte [gs:si + widget.event], EVENT_ENTER
-    .not_entering:
+
+    .already_hover:
     or      byte [gs:si + widget.event], EVENT_HOVER
 
     ; --- Hit: Souris sur le widget ---
@@ -283,6 +294,16 @@ gui_update_logic:
     ; Clic enfoncé
     mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
     or      byte [gs:si + widget.event], EVENT_LEFT_CLICK
+
+    ; Calcul de l'ancrage pour le drag (Mouse - WidgetPos)
+    mov     ax, cx
+    sub     ax, [gs:si + widget.x]
+    mov     [gs:si + widget.drag_anchor], ax    ; Save X anchor
+    cmp     byte [gs:si + widget.drag_mode], 2
+    jne     .done
+    mov     ax, dx
+    sub     ax, [gs:si + widget.y]
+    mov     [gs:si + widget.drag_anchor], ax    ; Save Y anchor
     jmp     .done
 
     .released:
@@ -301,15 +322,71 @@ gui_update_logic:
     jmp     .done
 
     .miss:
+    ; Si on n'est plus dessus, mais qu'on l'était avant (HOVER/PRESSED), il faut redessiner !
+    cmp     byte [gs:si + widget.state], GUI_STATE_NORMAL
+    je      .done                           ; Déjà normal, rien à faire
+
     mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
     and     byte [gs:si + widget.event], ~EVENT_HOVER
+    jmp     .done
+
+.logic_pressed:
+    ; Si le bouton est relâché, on sort du mode Drag/Pressed
+    test    bl, 1
+    jz      .released   ; On saute vers la logique de relâchement standard (HitTest)
+
+    ; --- LOGIQUE DE DÉPLACEMENT ---
+    cmp     byte [gs:si + widget.drag_mode], 1
+    je      .drag_h
+    cmp     byte [gs:si + widget.drag_mode], 2
+    je      .drag_v
+    jmp     .done
+
+.drag_h:
+    mov     ax, cx
+    sub     ax, [gs:si + widget.drag_anchor]    ; X = MouseX - Anchor
+    ; Clamp Min
+    cmp     ax, [gs:si + widget.drag_min]
+    jge     .chk_max_h
+    mov     ax, [gs:si + widget.drag_min]
+.chk_max_h:
+    ; Clamp Max
+    cmp     ax, [gs:si + widget.drag_max]
+    jle     .apply_pos
+    mov     ax, [gs:si + widget.drag_max]
+    jmp     .apply_pos
+
+.drag_v:
+    mov     ax, dx
+    sub     ax, [gs:si + widget.drag_anchor]    ; Y = MouseY - Anchor
+    ; Clamp (Simplifié, on pourrait ajouter drag_min_y)
+    ; Ici on utilise les mêmes champs min/max pour l'axe choisi
+    jmp     .apply_pos
+
+.apply_pos:
+    ; Mise à jour position (si changement)
+    cmp     byte [gs:si + widget.drag_mode], 1
+    je      .upd_x
+    mov     [gs:si + widget.y], ax
+    jmp     .force_redraw
+.upd_x:
+    mov     [gs:si + widget.x], ax
+.force_redraw:
+    mov     byte [gs:si + widget.oldstate], 255 ; Force le redessin
 
     .done:
+    pop     ds
     ret
 
 ; (Interne) Dessine le widget pointé par SI
 gui_draw_single_widget:
     pusha
+
+    mov     al, [gs:si + widget.state]
+    cmp     al, [gs:si + widget.oldstate]
+    je      .done
+
+    mov     [gs:si + widget.oldstate], al       ; marque comme à jour
 
     ; Chargement coords
     mov     ax, [gs:si + widget.x]
@@ -317,7 +394,6 @@ gui_draw_single_widget:
     mov     cx, [gs:si + widget.w]
     mov     dx, [gs:si + widget.h]
 
-    inc     [gs:si + widget.updated]           ; dessiné
     ; Calcul X2, Y2
     add     cx, ax
     add     dx, bx
@@ -361,7 +437,6 @@ gui_draw_single_widget:
 
     .text:
     ; --- Centrage Texte (Simplifié) ---
-    push    si
     mov     es, [gs:si + widget.text_seg]
     mov     di, [gs:si + widget.text_ofs]
     xor     cx, cx
@@ -397,6 +472,6 @@ gui_draw_single_widget:
     mov     ax, [gs:si + widget.text_ofs]
     GFX     WRITE, dx, ax
 
-    pop     si
+    .done:
     popa
     ret
