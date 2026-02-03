@@ -137,6 +137,7 @@ build_interface:
     mov     word [gs:si +  widget.text_ofs], str_quit
     mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
     mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_BUTTON
 
     ; Créer Bouton 2 "HELLO"
     call    gui_alloc_widget
@@ -148,6 +149,7 @@ build_interface:
     mov     word [gs:si +  widget.h], 20
     mov     word [gs:si +  widget.text_ofs], str_hello
     mov     word [gs:si +  widget.text_seg], cs
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_BUTTON
     ; Pas de callback
 
     ; Créer Slider (Drag)
@@ -159,6 +161,7 @@ build_interface:
     mov     word [gs:si + widget.h], 20
     mov     word [gs:si + widget.text_ofs], str_drag
     mov     word [gs:si + widget.text_seg], cs
+    mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
     mov     byte [gs:si + widget.drag_mode], 1      ; Horizontal
     mov     word [gs:si + widget.drag_min], 10
     mov     word [gs:si + widget.drag_max], 200
@@ -181,7 +184,8 @@ timer_isr:
 	push    fs
 	mov     ax,BDA_DATA_SEG
 	mov		fs,ax
-; 		inc		byte [fs:BDA_TIMER]
+; exemple de fonctionnement:
+; 	inc		byte [fs:BDA_TIMER]
 
 	mov		al, PIC_EOI            ; EOI master
 	out		i8259_MASTER_CMD, al
@@ -209,5 +213,3 @@ reset_vector:
 builddate:
 	db 		'06/01/2026'
 	times 		16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)
-
-

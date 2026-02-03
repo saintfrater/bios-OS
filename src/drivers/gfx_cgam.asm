@@ -114,6 +114,17 @@ graph_driver:
 
         xchg    ah,al
 %endmacro
+
+; =============================================================================
+;  SECTION : PATTERNS & FILL
+; =============================================================================
+
+align 8
+pattern_black       dq 0x0000000000000000
+pattern_gray_dark   dq 0xDDFF77FFDDFF77FF
+pattern_gray_mid    dq 0xDD77DD77DD77DD77
+pattern_gray_light  dq 0xAA55AA55AA55AA55
+pattern_white       dq 0xFFFFFFFFFFFFFFFF
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ;
@@ -312,6 +323,8 @@ cga_putc:
     push    fs
     push    es
 
+    call    cga_mouse_hide      ; Protection souris
+
     mov     bx, VIDEO_SEG
     mov     es, bx
     mov     bx, BDA_DATA_SEG
@@ -393,6 +406,8 @@ cga_putc:
     inc     word [fs:BDA_GFX + gfx.cur_offset]
     add     word [fs:BDA_GFX + gfx.cur_x], 8
 
+    call    cga_mouse_show      ; Restauration souris
+
     pop     es
     pop     fs
     popa
@@ -447,9 +462,8 @@ cga_write:
 cga_putpixel:
     push    bp
     mov     bp, sp
-
-
     pusha
+    call    cga_mouse_hide      ; Protection souris
     mov     cx, .x
     mov     dx, .y
     call    cga_calc_addr
@@ -467,6 +481,7 @@ cga_putpixel:
 	and     byte [es:di], ah
 
     .done:
+    call    cga_mouse_show      ; Restauration souris
     popa
     leave
 	ret
@@ -526,24 +541,18 @@ cga_background:
 	rep		stosd
 	ret
 
-
-
-
 ; ------------------------------------------------------------
 ; cga_line_vertical (x, y0, y1, color)
 ;
 ; Dessine une ligne x, y0, y1, color
 ; ------------------------------------------------------------
+%define .x      word [bp+4]
+%define .y1     word [bp+6]
+%define .y2     word [bp+8]
+%define .color  byte [bp+10]
 cga_line_vertical:
     push    bp
     mov     bp, sp
-
-    ; --- Définition des arguments ---
-    %define .x      word [bp+4]
-    %define .y1     word [bp+6]
-    %define .y2     word [bp+8]
-    %define .color  byte [bp+10]
-
     pusha
     push    es
 
@@ -607,30 +616,26 @@ cga_line_vertical:
     call    cga_mouse_show
 
     pop     es
-
-    ; clean defs
-    %undef  .x
-    %undef  .y1
-    %undef  .y2
-    %undef  .color
     popa
     leave                       ; Leave gère le 'mov sp, bp / pop bp'
     ret
-
+; clean defs
+%undef  .x
+%undef  .y1
+%undef  .y2
+%undef  .color
 ; ------------------------------------------------------------
 ; cga_line_horizontal
 ; Dessine une ligne horizontale de (x1, y) à (x2, y)
 ; ------------------------------------------------------------
+; --- Définition des arguments ---
+%define .x1     word [bp+4]
+%define .x2     word [bp+6]
+%define .y      word [bp+8]
+%define .color  byte [bp+10]
 cga_line_horizontal:
     push    bp
     mov     bp, sp
-
-    ; --- Définition des arguments ---
-    %define .x1     word [bp+4]
-    %define .x2     word [bp+6]
-    %define .y      word [bp+8]
-    %define .color  byte [bp+10]
-
     pusha
     push    es
 
@@ -756,31 +761,27 @@ cga_line_horizontal:
     .done:
     call    cga_mouse_show
     pop     es
-
-    ; clean defs
-    %undef  .x1
-    %undef  .x2
-    %undef  .y
     popa
     leave
     ret
-
+; clean defs
+%undef  .x1
+%undef  .x2
+%undef  .y
 ; ------------------------------------------------------------
 ; cga_draw_rect
 ; Dessine un rectangle vide (contour)
 ; Entrée : x1, y1, x2, y2, color
 ; ------------------------------------------------------------
+; Arguments
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .color  word [bp+12] ; word pour l'alignement pile (mais on utilise byte)
 cga_draw_rect:
     push    bp
     mov     bp, sp
-
-    ; Arguments
-    %define .x1     word [bp+4]
-    %define .y1     word [bp+6]
-    %define .x2     word [bp+8]
-    %define .y2     word [bp+10]
-    %define .color  word [bp+12] ; word pour l'alignement pile (mais on utilise byte)
-
     pusha
 
     ; 1. Ordonner X (x1 < x2)
@@ -803,6 +804,8 @@ cga_draw_rect:
     mov     .y2, bx
     .y_ok:
 
+    call    cga_mouse_hide
+
     ; 3. Dessiner les 4 lignes
     ; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
     ; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
@@ -813,29 +816,35 @@ cga_draw_rect:
     GFX     LINE_VERT, .x1, .y1, .y2, .color
     GFX     LINE_VERT, .x2, .y1, .y2, .color
 
-    ; clean defs
-    %undef  .x1
-    %undef  .y1
-    %undef  .x2
+    call    cga_mouse_show
     popa
     leave
     ret
+; clean defs
+%undef  .x1
+%undef  .y1
+%undef  .x2
+%undef  .y2
+%undef  .color
 
 ; ------------------------------------------------------------
 ; cga_fill_rect
 ; Dessine un rectangle plein
-; Entrée : x1, y1, x2, y2, color
+; Entrée : x1, y1, x2, y2, pattern_offset (CS:Offset)
 ; ------------------------------------------------------------
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .pat    word [bp+12]
+
+; Variable locale pour l'index du motif (y % 8)
+%define .pat_idx word [bp-2]
+
 cga_fill_rect:
     push    bp
     mov     bp, sp
-
-    %define .x1     word [bp+4]
-    %define .y1     word [bp+6]
-    %define .x2     word [bp+8]
-    %define .y2     word [bp+10]
-    %define .color  byte [bp+12]
-
+    sub     sp, 2           ; Reserve espace pour .pat_idx
     pusha
     push    es
 
@@ -864,6 +873,11 @@ cga_fill_rect:
     mov     .y1, ax
     mov     .y2, bx
     .y_sorted:
+
+    ; --- Init Pattern Index ---
+    mov     ax, .y1
+    and     ax, 7
+    mov     .pat_idx, ax
 
     ; --- 2. Calcul de la hauteur ---
     mov     bx, .y2
@@ -904,12 +918,23 @@ cga_fill_rect:
     ; --- 5. Récupérer la hauteur dans un registre sûr ---
     pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
                             ; BX est maintenant notre compteur de boucle.
-                            ; BP reste intact, donc .color est accessible !
-
     ; --- BOUCLE VERTICALE ---
     .row_loop:
         push    di          ; Sauve début ligne
         push    si          ; Sauve index byte
+
+        ; --- Récupérer le byte du motif pour cette ligne ---
+        push    bx
+        mov     bx, .pat_idx
+        push    si
+        mov     si, .pat
+        mov     dl, [cs:si + bx]    ; DL = Pattern Byte
+        pop     si
+        pop     bx
+
+        ; Incrémenter index motif pour la prochaine ligne
+        inc     word .pat_idx
+        and     word .pat_idx, 7
 
         ; --- Remplissage Horizontal ---
 
@@ -926,14 +951,7 @@ cga_fill_rect:
         ; Partie Centrale (Boucle tant que SI < CX)
         jmp     .check_mid
         .mid_loop:
-            ; Ici BP est valide, donc .color est correct
-            cmp     byte .color, 0
-            je      .blk
-            mov     byte [es:di], 0xFF
-            jmp     .nxt
-            .blk:
-            mov     byte [es:di], 0x00
-            .nxt:
+            mov     byte [es:di], dl
             inc     di
             inc     si
         .check_mid:
@@ -971,24 +989,23 @@ cga_fill_rect:
     leave
     ret
 
-.apply_mask_fill:
-    cmp     byte .color, 0
-    jz      .ap_black
-    or      byte [es:di], al
-    ret
-.ap_black:
+    ; helper
+    .apply_mask_fill:
+    push    ax
     not     al
     and     byte [es:di], al
+    pop     ax
+    and     al, dl              ; Motif masqué
+    or      byte [es:di], al    ; Applique
     ret
+; Nettoyage des defines
+%undef  .x1
+%undef  .y1
+%undef  .x2
+%undef  .y2
+%undef  .pat_idx
 
-    ; Nettoyage des defines
-    %undef  .x1
-    %undef  .y1
-    %undef  .x2
-    %undef  .y2
-    %undef  .color
-
-;
+; -----------------------------------------------------------------------------
 ; ------------------------------------------------------------
 ; GESTION DU CURSEUR
 ; ------------------------------------------------------------

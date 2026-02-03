@@ -31,6 +31,11 @@
 %define GUI_STATE_PRESSED   3           ; Clic enfoncé
 %define GUI_STATE_DISABLED  4           ; Grisé
 
+; --- Types de Widgets ---
+%define WIDGET_TYPE_BUTTON      0
+%define WIDGET_TYPE_SLIDER      1
+%define WIDGET_TYPE_LABEL       2
+
 ; --- Event mask ---
 %define EVENT_NONE              00000000b
 %define EVENT_HOVER             00000001b
@@ -44,6 +49,7 @@
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
     .state      resb 1      ; État (0=libre, >0=utilisé)
+    .type       resb 1      ; Type (0=Button, 1=Slider...)
     .oldstate   resb 1      ; widget a-t-il été modifié ?
     .user_id    resb 1      ; ID unique utilisateur
     .x          resw 1      ; Position X
@@ -127,6 +133,7 @@ gui_alloc_widget:
 .found:
     ; On initialise le slot trouvé
     mov     byte [gs:si + widget.state], GUI_STATE_NORMAL   ; Marquer comme occupé
+    mov     byte [gs:si + widget.type], WIDGET_TYPE_BUTTON  ; Type par défaut
     mov     byte [gs:si + widget.oldstate], 0                ; doit etre dessiné
 
     ; Reset des champs critiques pour éviter les déchets
@@ -330,7 +337,7 @@ gui_update_logic:
     and     byte [gs:si + widget.event], ~EVENT_HOVER
     jmp     .done
 
-.logic_pressed:
+    .logic_pressed:
     ; Si le bouton est relâché, on sort du mode Drag/Pressed
     test    bl, 1
     jz      .released   ; On saute vers la logique de relâchement standard (HitTest)
@@ -342,36 +349,36 @@ gui_update_logic:
     je      .drag_v
     jmp     .done
 
-.drag_h:
+    .drag_h:
     mov     ax, cx
     sub     ax, [gs:si + widget.drag_anchor]    ; X = MouseX - Anchor
     ; Clamp Min
     cmp     ax, [gs:si + widget.drag_min]
     jge     .chk_max_h
     mov     ax, [gs:si + widget.drag_min]
-.chk_max_h:
+    .chk_max_h:
     ; Clamp Max
     cmp     ax, [gs:si + widget.drag_max]
     jle     .apply_pos
     mov     ax, [gs:si + widget.drag_max]
     jmp     .apply_pos
 
-.drag_v:
+    .drag_v:
     mov     ax, dx
     sub     ax, [gs:si + widget.drag_anchor]    ; Y = MouseY - Anchor
     ; Clamp (Simplifié, on pourrait ajouter drag_min_y)
     ; Ici on utilise les mêmes champs min/max pour l'axe choisi
     jmp     .apply_pos
 
-.apply_pos:
+    .apply_pos:
     ; Mise à jour position (si changement)
     cmp     byte [gs:si + widget.drag_mode], 1
     je      .upd_x
     mov     [gs:si + widget.y], ax
     jmp     .force_redraw
-.upd_x:
+    .upd_x:
     mov     [gs:si + widget.x], ax
-.force_redraw:
+    .force_redraw:
     mov     byte [gs:si + widget.oldstate], 255 ; Force le redessin
 
     .done:
@@ -384,7 +391,7 @@ gui_draw_single_widget:
 
     mov     al, [gs:si + widget.state]
     cmp     al, [gs:si + widget.oldstate]
-    je      .done
+    je      .skip_draw
 
     mov     [gs:si + widget.oldstate], al       ; marque comme à jour
 
@@ -398,6 +405,13 @@ gui_draw_single_widget:
     add     cx, ax
     add     dx, bx
 
+;     GFX     MOUSE_HIDE                          ; éviter que la souris ne laisse des traces
+
+    ; Dispatch selon le type
+    cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+    je      .draw_slider
+    ; Par défaut (Button, Label...) -> continue vers .paint_normal/pressed
+
     ; Dispatch selon état
     cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
     je      .paint_pressed
@@ -405,13 +419,13 @@ gui_draw_single_widget:
     je      .paint_hover
 
     .paint_normal:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 1   ; Blanc
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
     GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
     GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
     jmp     .text
 
     .paint_hover:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 1   ; Blanc
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid ; pattern_white
     GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
     ; Effet gras
     inc     ax
@@ -426,7 +440,13 @@ gui_draw_single_widget:
     jmp     .text_setup
 
     .paint_pressed:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, 0   ; Noir
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_black
+    GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
+    jmp     .text
+
+    .draw_slider:
+    ; Dessin spécifique Slider (Inverse vidéo pour l'exemple)
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 1   ; Bord Blanc
     GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
     jmp     .text
 
@@ -473,5 +493,6 @@ gui_draw_single_widget:
     GFX     WRITE, dx, ax
 
     .done:
+    .skip_draw:
     popa
     ret
