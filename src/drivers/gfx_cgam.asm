@@ -118,13 +118,14 @@ graph_driver:
 ; =============================================================================
 ;  SECTION : PATTERNS & FILL
 ; =============================================================================
-
 align 8
 pattern_black       dq 0x0000000000000000
 pattern_gray_dark   dq 0xDDFF77FFDDFF77FF
 pattern_gray_mid    dq 0xDD77DD77DD77DD77
 pattern_gray_light  dq 0xAA55AA55AA55AA55
+pattern_white_light dq 0x8800220088002200
 pattern_white       dq 0xFFFFFFFFFFFFFFFF
+
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ;

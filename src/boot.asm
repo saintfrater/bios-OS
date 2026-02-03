@@ -157,14 +157,17 @@ build_interface:
     jc      .mem_full
     mov     word [gs:si + widget.x], 10
     mov     word [gs:si + widget.y], 100
-    mov     word [gs:si + widget.w], 20
+    mov     word [gs:si + widget.w], 150
     mov     word [gs:si + widget.h], 20
     mov     word [gs:si + widget.text_ofs], str_drag
     mov     word [gs:si + widget.text_seg], cs
     mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-    mov     byte [gs:si + widget.drag_mode], 1      ; Horizontal
-    mov     word [gs:si + widget.drag_min], 10
-    mov     word [gs:si + widget.drag_max], 200
+    mov     byte [gs:si + widget.attr_mode], 1      ; Horizontal
+    mov     word [gs:si + widget.attr_min], 10      ; X Min
+    mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
+    mov     word [gs:si + widget.attr_val], 10      ; Position initiale
+    mov     byte [gs:si + widget.thumb_pct], 15     ; Curseur fait 15% de la largeur
+;     mov     word [gs:si + widget.event_drag], on_drag_slider
 
 .mem_full:
 	ret

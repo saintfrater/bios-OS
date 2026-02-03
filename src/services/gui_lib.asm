@@ -36,16 +36,6 @@
 %define WIDGET_TYPE_SLIDER      1
 %define WIDGET_TYPE_LABEL       2
 
-; --- Event mask ---
-%define EVENT_NONE              00000000b
-%define EVENT_HOVER             00000001b
-%define EVENT_LEFT_CLICK        00000010b
-%define EVENT_RIGHT_CLICK       00000100b
-%define EVENT_MIDDLE_CLICK      00001000b
-%define EVENT_LEFT_RELEASE      00010000b
-%define EVENT_RIGHT_RELEASE     00100000b
-%define EVENT_ENTER             10000000b
-
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
     .state      resb 1      ; État (0=libre, >0=utilisé)
@@ -58,16 +48,20 @@ struc widget
     .h          resw 1      ; Hauteur
     .text_ofs   resw 1      ; Offset du texte
     .text_seg   resw 1      ; Segment du texte
-    .event      resb 1      ; found events (0 = none)
     .event_click      resw 1      ; adresse de la fonction "on click"
-    .drag_mode        resb 1      ; 0=None, 1=Horiz, 2=Vert
-    .drag_min         resw 1      ; Limite Min
-    .drag_max         resw 1      ; Limite Max
-    .drag_anchor      resw 1      ; Offset souris au clic
 ;    .event_hover      resw 1      ; adresse de la fonction "on hover"
 ;    .event_release    resw 1      ; adresse de la fonction "on release"
 ;    .event_disable    resw 1      ; adresse de la fonction "on disable"
 ;    .event_enable     resw 1      ; adresse de la fonction "on enable"
+    .event_drag       resw 1      ; adresse de la fonction "on drag"
+
+    .attr_mode        resb 1      ; 0=None, 1=Horiz, 2=Vert
+    .attr_min         resw 1      ; Valeur/Position Min
+    .attr_max         resw 1      ; Valeur/Position Max
+    .attr_val         resw 1      ; Valeur/Position Actuelle
+    .attr_anchor      resw 1      ; Offset interne pour le drag
+    .thumb_pct        resb 1      ; Taille du curseur en % (1-100)
+
     alignb      2           ; Alignement mémoire pour performance
 endstruc
 
@@ -90,10 +84,9 @@ gui_init_system:
     mov     es, ax
 
     xor     di, di
-    mov     cx, (widget_size * GUI_MAX_WIDGETS)
-    shl     cx, 2           ; cx / 4
-    xor     eax, eax
-    rep     stosd          ; Remplit tout de 0
+    mov     cx, (widget_size * GUI_MAX_WIDGETS) / 2
+    xor     ax, ax
+    rep     stosw          ; Plus sûr en mode 16 bits pour l'alignement
 
     pop     di
     pop     es
@@ -138,6 +131,8 @@ gui_alloc_widget:
 
     ; Reset des champs critiques pour éviter les déchets
     mov     word [gs:si + widget.event_click], 0
+    mov     word [gs:si + widget.event_drag], 0
+    mov     byte [gs:si + widget.thumb_pct], 10     ; 10% par défaut
 
     clc                             ; Clear Carry Flag
 .done:
@@ -192,6 +187,13 @@ gui_process_all:
 
     mov     ax, GUI_RAM_SEG
     mov     gs, ax
+
+    ; Charger l'état de la souris pour toute la passe
+    push    ds
+    mov     ax, BDA_DATA_SEG
+    mov     ds, ax
+    mov     bl, [BDA_MOUSE + mouse.status]
+    pop     ds
 
     mov     si, 0                   ; Pointeur début tableau
     mov     di, GUI_MAX_WIDGETS     ; Compteur
@@ -263,8 +265,6 @@ gui_update_logic:
     mov     cx, [BDA_MOUSE + mouse.x]
     mov     dx, [BDA_MOUSE + mouse.y]
 
-    mov     byte [gs:si + widget.event], 0      ; no event found]
-
     ; --- Hit Test ---
     cmp     cx, [gs:si + widget.x]
     jl      .miss                               ; mouse.x < widget.x ?
@@ -280,52 +280,15 @@ gui_update_logic:
     cmp     dx, bx
     jg      .miss                               ; mouse.y >= widget.y ?
 
-    ; --- on est au moins dans le widget ---
-    ; Pour savoir si on vient d'entrer (ENTER), on regarde l'état PRÉCÉDENT (avant ce frame).
-    ; Si l'état n'était ni HOVER ni PRESSED, c'est qu'on vient d'arriver.
-    cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
-    je      .already_hover
-    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    je      .already_hover
+    ; Dispatch selon le type
+    cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+    je      .call_slider_logic
 
-    ; Nouvel arrivant
-    or      byte [gs:si + widget.event], EVENT_ENTER
-
-    .already_hover:
-    or      byte [gs:si + widget.event], EVENT_HOVER
-
-    ; --- Hit: Souris sur le widget ---
-    test    bl, 1           ; Clic gauche ?
-    jz      .released
-
-    ; Clic enfoncé
-    mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    or      byte [gs:si + widget.event], EVENT_LEFT_CLICK
-
-    ; Calcul de l'ancrage pour le drag (Mouse - WidgetPos)
-    mov     ax, cx
-    sub     ax, [gs:si + widget.x]
-    mov     [gs:si + widget.drag_anchor], ax    ; Save X anchor
-    cmp     byte [gs:si + widget.drag_mode], 2
-    jne     .done
-    mov     ax, dx
-    sub     ax, [gs:si + widget.y]
-    mov     [gs:si + widget.drag_anchor], ax    ; Save Y anchor
+    call    gui_logic_button
     jmp     .done
 
-    .released:
-    ; Bouton relâché. Était-il pressé avant ?
-    and     byte [gs:si + widget.event], ~EVENT_LEFT_CLICK
-    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
-    jne     .hover
-
-    ; Clic validé !
-    mov     al, 1
-    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
-    jmp     .done
-
-    .hover:
-    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+    .call_slider_logic:
+    call    gui_logic_slider
     jmp     .done
 
     .miss:
@@ -333,56 +296,125 @@ gui_update_logic:
     cmp     byte [gs:si + widget.state], GUI_STATE_NORMAL
     je      .done                           ; Déjà normal, rien à faire
 
+    ; Cas particulier : si c'est un slider en cours de drag, on continue la logique
+    cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+    jne     .reset_state
+    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    je      .call_slider_logic
+
+    .reset_state:
     mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
-    and     byte [gs:si + widget.event], ~EVENT_HOVER
-    jmp     .done
+    xor     ax, ax
 
-    .logic_pressed:
-    ; Si le bouton est relâché, on sort du mode Drag/Pressed
-    test    bl, 1
-    jz      .released   ; On saute vers la logique de relâchement standard (HitTest)
+    .done:
+    pop     ds
+    ret
 
+; --- Logique spécifique Bouton ---
+gui_logic_button:
+    test    bl, 1           ; Clic gauche ?
+    jz      .released
+
+    ; Clic enfoncé
+    mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    xor     ax, ax
+    ret
+
+    .released:
+    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    jne     .hover
+
+    ; Clic validé !
+    mov     al, 1
+    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+    ret
+
+    .hover:
+    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+    xor     ax, ax
+    ret
+
+; --- Logique spécifique Slider ---
+gui_logic_slider:
+    test    bl, 1           ; Bouton enfoncé ?
+    jz      .released
+
+    ; Si on vient de cliquer (pas encore PRESSED), on initialise l'ancrage
+    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
+    je      .do_drag
+
+    mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
+
+    ; Calcul de l'ancrage
+    mov     ax, cx
+    sub     ax, [gs:si + widget.attr_val]
+    mov     [gs:si + widget.attr_anchor], ax
+    cmp     byte [gs:si + widget.attr_mode], 2
+    jne     .do_drag
+    mov     ax, dx
+    sub     ax, [gs:si + widget.attr_val]
+    mov     [gs:si + widget.attr_anchor], ax
+
+    .do_drag:
     ; --- LOGIQUE DE DÉPLACEMENT ---
-    cmp     byte [gs:si + widget.drag_mode], 1
+    cmp     byte [gs:si + widget.attr_mode], 1
     je      .drag_h
-    cmp     byte [gs:si + widget.drag_mode], 2
+    cmp     byte [gs:si + widget.attr_mode], 2
     je      .drag_v
-    jmp     .done
+    xor     ax, ax
+    ret
 
     .drag_h:
     mov     ax, cx
-    sub     ax, [gs:si + widget.drag_anchor]    ; X = MouseX - Anchor
+    sub     ax, [gs:si + widget.attr_anchor]    ; Nouvelle pos = MouseX - Anchor
     ; Clamp Min
-    cmp     ax, [gs:si + widget.drag_min]
+    cmp     ax, [gs:si + widget.attr_min]
     jge     .chk_max_h
-    mov     ax, [gs:si + widget.drag_min]
+    mov     ax, [gs:si + widget.attr_min]
     .chk_max_h:
     ; Clamp Max
-    cmp     ax, [gs:si + widget.drag_max]
+    cmp     ax, [gs:si + widget.attr_max]
     jle     .apply_pos
-    mov     ax, [gs:si + widget.drag_max]
+    mov     ax, [gs:si + widget.attr_max]
     jmp     .apply_pos
 
     .drag_v:
     mov     ax, dx
-    sub     ax, [gs:si + widget.drag_anchor]    ; Y = MouseY - Anchor
-    ; Clamp (Simplifié, on pourrait ajouter drag_min_y)
-    ; Ici on utilise les mêmes champs min/max pour l'axe choisi
+    sub     ax, [gs:si + widget.attr_anchor]
+    ; Clamp Min
+    cmp     ax, [gs:si + widget.attr_min]
+    jge     .chk_max_v
+    mov     ax, [gs:si + widget.attr_min]
+
+    .chk_max_v:
+    ; Clamp Max
+    cmp     ax, [gs:si + widget.attr_max]
+    jle     .apply_pos
+    mov     ax, [gs:si + widget.attr_max]
     jmp     .apply_pos
 
     .apply_pos:
-    ; Mise à jour position (si changement)
-    cmp     byte [gs:si + widget.drag_mode], 1
-    je      .upd_x
-    mov     [gs:si + widget.y], ax
-    jmp     .force_redraw
-    .upd_x:
-    mov     [gs:si + widget.x], ax
+    cmp     ax, [gs:si + widget.attr_val]
+    je      .no_change
+    mov     [gs:si + widget.attr_val], ax
+
+    ; Appel du callback on_drag
+    cmp     word [gs:si + widget.event_drag], 0
+    je      .force_redraw
+    pusha
+    call    word [gs:si + widget.event_drag]
+    popa
+
     .force_redraw:
     mov     byte [gs:si + widget.oldstate], 255 ; Force le redessin
 
-    .done:
-    pop     ds
+    .no_change:
+    xor     ax, ax
+    ret
+
+    .released:
+    mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+    xor     ax, ax
     ret
 
 ; (Interne) Dessine le widget pointé par SI
@@ -391,7 +423,7 @@ gui_draw_single_widget:
 
     mov     al, [gs:si + widget.state]
     cmp     al, [gs:si + widget.oldstate]
-    je      .skip_draw
+    je      .done
 
     mov     [gs:si + widget.oldstate], al       ; marque comme à jour
 
@@ -405,13 +437,77 @@ gui_draw_single_widget:
     add     cx, ax
     add     dx, bx
 
-;     GFX     MOUSE_HIDE                          ; éviter que la souris ne laisse des traces
-
     ; Dispatch selon le type
     cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-    je      .draw_slider
-    ; Par défaut (Button, Label...) -> continue vers .paint_normal/pressed
+    jne     .not_slider
+    call    draw_slider
+    jmp     .done
 
+    .not_slider:
+    cmp     byte [gs:si + widget.type], WIDGET_TYPE_BUTTON
+    jne     .done
+    call    draw_button
+
+    .done:
+    popa
+    ret
+
+draw_slider:
+    ; 1. Dessiner la piste (Track)
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
+
+    ; 2. Calculer la taille du curseur (Thumb)
+    push    ax                      ; Sauvegarde coords track (X1, Y1, X2, Y2)
+    push    bx
+    push    cx
+    push    dx
+
+    cmp     byte [gs:si + widget.attr_mode], 2
+    je      .calc_v
+
+    ; --- Horizontal ---
+    mov     ax, [gs:si + widget.w]
+    xor     bh, bh
+    mov     bl, [gs:si + widget.thumb_pct]
+    mul     bx
+    mov     bx, 100
+    div     bx                      ; AX = Thumb Width
+
+    mov     bx, [gs:si + widget.y]        ; BX = Y1
+    mov     dx, bx
+    add     dx, [gs:si + widget.h]        ; DX = Y2
+    mov     cx, [gs:si + widget.attr_val] ; CX = X1
+    add     ax, cx                        ; AX = X1 + Width = X2
+    xchg    ax, cx                        ; AX = X1, CX = X2
+    jmp     .draw_thumb
+
+.calc_v:
+    ; --- Vertical ---
+    mov     ax, [gs:si + widget.h]
+    xor     bh, bh
+    mov     bl, [gs:si + widget.thumb_pct]
+    mul     bx
+    mov     bx, 100
+    div     bx                      ; AX = Thumb Height
+
+    mov     bx, [gs:si + widget.attr_val] ; BX = Y1
+    mov     dx, bx
+    add     dx, ax                        ; DX = Y2
+    mov     ax, [gs:si + widget.x]        ; AX = X1
+    mov     cx, ax
+    add     cx, [gs:si + widget.w]        ; CX = X2
+
+.draw_thumb:
+    ; 3. Dessiner le curseur (Thumb)
+    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
+    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
+    add     sp, 8                   ; Nettoyer la pile des push ax..dx
+    GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+    call    draw_text
+    ret
+
+draw_button:
     ; Dispatch selon état
     cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
     je      .paint_pressed
@@ -419,38 +515,40 @@ gui_draw_single_widget:
     je      .paint_hover
 
     .paint_normal:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
-    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
-    GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-    jmp     .text
+        GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
+        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
+        GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+        call    draw_text
+        jmp     .done
 
     .paint_hover:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid ; pattern_white
-    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
-    ; Effet gras
-    inc     ax
-    inc     bx
-    dec     cx
-    dec     dx
-    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
+        GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid ; pattern_white
+        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
+        ; Effet gras
+        inc     ax
+        inc     bx
+        dec     cx
+        dec     dx
+        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
 
-    ; Restauration coords pour le texte
-    mov     ax, [gs:si + widget.x]
-    mov     bx, [gs:si + widget.y]
-    jmp     .text_setup
+        ; Restauration coords pour le texte
+        mov     ax, [gs:si + widget.x]
+        mov     bx, [gs:si + widget.y]
+        call    draw_text
+        jmp     .done
 
     .paint_pressed:
-    GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_black
-    GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
-    jmp     .text
+        GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_black
+        GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
+        ; Recharger les coordonnées car GFX a pu modifier les registres
+        mov     ax, [gs:si + widget.x]
+        mov     bx, [gs:si + widget.y]
+        call    draw_text
 
-    .draw_slider:
-    ; Dessin spécifique Slider (Inverse vidéo pour l'exemple)
-    GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 1   ; Bord Blanc
-    GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
-    jmp     .text
+    .done
+    ret
 
-    .text_setup:
+draw_text:
     ; Petit hack pour recentrer le texte après l'effet gras
     mov     cx, [gs:si + widget.w]
     mov     dx, [gs:si + widget.h]
@@ -474,10 +572,10 @@ gui_draw_single_widget:
     mov     ax, [gs:si + widget.w]
     sub     ax, cx
     shr     ax, 1
-    pop     bx      ; Récupère X original dans BX (oups, on veut ajouter)
-    add     ax, bx  ; X final
+    pop     dx      ; Récupère X original (poussé depuis AX)
+    add     ax, dx  ; AX = X final centré
 
-    push    ax      ; X final prêt
+    push    ax      ; Sauvegarde X final pour GOTOXY
 
     mov     bx, [gs:si + widget.h]
     sub     bx, 8
@@ -491,8 +589,4 @@ gui_draw_single_widget:
     mov     dx, [gs:si + widget.text_seg]
     mov     ax, [gs:si + widget.text_ofs]
     GFX     WRITE, dx, ax
-
-    .done:
-    .skip_draw:
-    popa
     ret
