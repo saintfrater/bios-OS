@@ -135,10 +135,10 @@ build_interface:
     mov     word [gs:si +  widget.w], 80
     mov     word [gs:si +  widget.h], 20
     mov     word [gs:si +  widget.text_ofs], str_quit
-    mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
+    ; mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
     mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
     mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_BUTTON
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
 
     ; Créer Bouton 2 "HELLO"
     call    gui_alloc_widget
@@ -150,7 +150,19 @@ build_interface:
     mov     word [gs:si +  widget.h], 20
     mov     word [gs:si +  widget.text_ofs], str_hello
     mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_BUTTON
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
+
+    ; Créer Bouton 2 "HELLO"
+    call    gui_alloc_widget
+    jc      .mem_full
+
+    mov     word [gs:si +  widget.x], 100
+    mov     word [gs:si +  widget.y], 150
+    mov     word [gs:si +  widget.w], 80
+    mov     word [gs:si +  widget.h], 20
+    mov     word [gs:si +  widget.text_ofs], str_hello
+    mov     word [gs:si +  widget.text_seg], cs
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
     ; Pas de callback
 
     ; Créer Slider (Drag)

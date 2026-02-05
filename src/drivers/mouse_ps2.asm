@@ -55,10 +55,13 @@ mouse_reset:
 	mov		word  [fs:BDA_MOUSE + mouse.x],320			; vous pouvez aussi préciser le centre
 	mov		word  [fs:BDA_MOUSE + mouse.y],100	    	; vous pouvez aussi préciser le centre
 
-	mov		byte  [fs:BDA_MOUSE + mouse.cur_counter], 0
 	mov     word  [fs:BDA_MOUSE + mouse.cur_x], 0
 	mov     word  [fs:BDA_MOUSE + mouse.cur_y], 0
-	mov 	byte  [fs:BDA_MOUSE + mouse.cur_drawing], 0
+
+
+	mov     byte [BDA_MOUSE + mouse.cur_counter], -1 	; Force l'état caché au départ
+    mov     byte [BDA_MOUSE + mouse.cur_drawing], 0  	; Reset du verrou de dessin
+	mov		byte [BDA_MOUSE + mouse.bkg_saved],0		; flag image saved
 
 	mov 	ax, cs
 	mov 	word  [fs:BDA_MOUSE + mouse.cur_seg], ax
@@ -312,7 +315,7 @@ isr_mouse_handler:
 
 	; --- BOUTONS ---
 	mov 	al,bl										; extraction des boutons
-    and     al, 00000111b       ; Bits 0, 1, 2 = Gauche, Droite, Milieu
+    and     al, 00000111b       						; Bits 0, 1, 2 = Gauche, Droite, Milieu
     mov 	[BDA_MOUSE + mouse.status], al
 
 	xor 	ax,ax

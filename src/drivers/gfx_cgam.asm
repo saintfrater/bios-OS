@@ -73,7 +73,7 @@
 %define WRITE           6
 %define LINE_VERT       7
 %define LINE_HORIZ      8
-%define RECTANGLE_DRAW  9
+%define RECTANGLE       9
 %define RECTANGLE_FILL  10
 %define RECTANGLE_ROUND 11
 %define MOUSE_HIDE      12
@@ -90,7 +90,7 @@
 ; Si vous changez le code du driver, tant que la table au début
 ; ne change pas d'ordre, la GUI n'a pas besoin d'être recompilée.
 ; ------------------------------------------------------------
-
+align   2
 graph_driver:
     dw cga_init                 ; init de la carte graphique
     dw cga_putpixel             ; dessin d'un pixel
@@ -107,26 +107,28 @@ graph_driver:
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
-;
-; convert al -> AX aligned with "cl"
-%macro ALING_BYTE 0
-        mov     ah,al
-        xor     al,al
-        shr     ax,cl
-
-        xchg    ah,al
-%endmacro
 
 ; =============================================================================
 ;  SECTION : PATTERNS & FILL
+; https://paulsmith.github.io/classic-mac-patterns/
 ; =============================================================================
-align 8
-pattern_black       dq 0x0000000000000000
-pattern_gray_dark   dq 0xDDFF77FFDDFF77FF
-pattern_gray_mid    dq 0xDD77DD77DD77DD77
-pattern_gray_light  dq 0xAA55AA55AA55AA55
-pattern_white_light dq 0x8800220088002200
-pattern_white       dq 0xFFFFFFFFFFFFFFFF
+;
+; pattern ID
+%define PATTERN_BLACK               0
+%define PATTERN_GRAY_DARK           1
+%define PATTERN_GRAY_MID            2
+%define PATTERN_GRAY_LIGHT          3
+%define PATTERN_WHITE_LIGHT         4
+%define PATTERN_WHITE               5
+
+align   8
+pattern_8x8:
+    dq 0x0000000000000000               ; pattern_black (Tout à 0 = Noir)
+    dq 0x2200880022008800               ; pattern_gray_dark (Majorité de 0)
+    dq 0x2288228822882288               ; pattern_gray_mid
+    dq 0xAA55AA55AA55AA55               ; pattern_gray_light (50/50)
+    dq 0x77DD77DD77DD77DD               ; pattern_white_light (Majorité de 1 = Clair)
+    dq 0xFFFFFFFFFFFFFFFF               ; pattern_white (Tout à 1 = Blanc)
 
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
@@ -141,7 +143,6 @@ cga_init:
 	mov 	ah, 0x00     	                		; AH=00h set video mode
 	mov		al, GFX_MODE
 	int 	0x10
-	mov		byte [BDA_MOUSE + mouse.bkg_saved],0	; flag image saved
 
     ; mov     byte [BDA_GFX + gfx.cur_mode], 1
 	; dessine un background "check-board"
@@ -183,6 +184,7 @@ cga_calc_addr:
     mov     ah, 0x80
     shr     ah, cl
 	ret
+
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_writemode (mode)
@@ -311,6 +313,14 @@ get_glyph_offset:
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
+; convert al -> AX aligned with "cl"
+%macro ALING_BYTE 0
+        mov     ah,al
+        xor     al,al
+        shr     ax,cl
+        xchg    ah,al
+%endmacro
+
 cga_putc:
     push    bp
     mov     bp, sp
@@ -466,6 +476,10 @@ cga_putpixel:
     push    bp
     mov     bp, sp
     pusha
+
+    mov     ax, VIDEO_SEG
+    mov     es, ax
+
     call    cga_mouse_hide      ; Protection souris
     mov     cx, .x
     mov     dx, .y
@@ -513,7 +527,10 @@ cga_getpixel:
     mov     cx, .x
     mov     dx, .y
 
+    mov     ax, VIDEO_SEG
+    mov     es, ax
 	call    cga_calc_addr
+
 	mov     al, [es:di]
 	and     al, ah
 	setnz   al
@@ -839,20 +856,28 @@ cga_draw_rect:
 %define .y1     word [bp+6]
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
-%define .pat    word [bp+12]
+%define .pat_id word [bp+12]
 
 ; Variable locale pour l'index du motif (y % 8)
-%define .pat_idx word [bp-2]
+%define .pat_idx        word [bp-2]
+%define .x_end_idx      word [bp-4]
+%define .pattern_offset word [bp-6]
 
 cga_fill_rect:
     push    bp
     mov     bp, sp
-    sub     sp, 2           ; Reserve espace pour .pat_idx
+    sub     sp, 6           ; Reserve espace pour .pat_idx et .x_end_idx
     pusha
     push    es
 
     mov     ax, VIDEO_SEG
     mov     es, ax
+
+    ; calcul de l'offset de départ du pattern
+    mov     ax, .pat_id
+    shl     ax, 3                           ; * 8
+    add     ax, pattern_8x8
+    mov     .pattern_offset, ax
 
     call    cga_mouse_hide
 
@@ -893,6 +918,7 @@ cga_fill_rect:
     mov     cx, .x1
     mov     dx, .y1
 
+
     ; Note: cga_calc_addr attend CX=x, DX=y et retourne DI
     ; Si cga_calc_addr modifie BX, la sauvegarde [STACK A] est vitale.
     call    cga_calc_addr   ; DI = Offset début ligne
@@ -917,6 +943,7 @@ cga_fill_rect:
     shr     si, 3           ; SI = Index start byte
     mov     cx, .x2
     shr     cx, 3           ; CX = Index end byte
+    mov     .x_end_idx, cx  ; Sauvegarde de l'index de fin pour la boucle horizontale
 
     ; --- 5. Récupérer la hauteur dans un registre sûr ---
     pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
@@ -930,16 +957,13 @@ cga_fill_rect:
         push    bx
         mov     bx, .pat_idx
         push    si
-        mov     si, .pat
+        mov     si, .pattern_offset
         mov     dl, [cs:si + bx]    ; DL = Pattern Byte
         pop     si
         pop     bx
 
-        ; Incrémenter index motif pour la prochaine ligne
-        inc     word .pat_idx
-        and     word .pat_idx, 7
-
         ; --- Remplissage Horizontal ---
+        mov     cx, .x_end_idx  ; Restaurer l'index de fin pour la ligne
 
         ; Cas Single Byte (Start == End)
         cmp     si, cx
@@ -975,6 +999,10 @@ cga_fill_rect:
         pop     si
         pop     di
 
+        ; Incrémenter index motif pour la prochaine ligne
+        inc     word .pat_idx
+        and     word .pat_idx, 7
+
         ; --- Passage ligne suivante (CGA Bank Switch) ---
         xor     di, 0x2000
         test    di, 0x2000
@@ -1008,7 +1036,6 @@ cga_fill_rect:
 %undef  .y2
 %undef  .pat_idx
 
-
 ; ------------------------------------------------------------
 ; cga_draw_rounded_frame
 ; dessiner un cadre arrondi
@@ -1024,9 +1051,9 @@ cga_draw_rounded_frame:
     mov     bp, sp
     pusha
 
- ;   call    cga_mouse_hide
+    call    cga_mouse_hide
 
-    ; Lignes horizontales (raccourcies de 2px de chaque côté)
+    ; Lignes horizontales (raccourcies de 2px pour laisser place à l'arrondi)
     mov     ax, .x1
     add     ax, 2
     mov     bx, .x2
@@ -1034,7 +1061,7 @@ cga_draw_rounded_frame:
     GFX     LINE_HORIZ, ax, bx, .y1, .color
     GFX     LINE_HORIZ, ax, bx, .y2, .color
 
-    ; Lignes verticales (raccourcies de 2px)
+    ; Lignes verticales (raccourcies de 1px en haut et en bas)
     mov     cx, .y1
     add     cx, 2
     mov     dx, .y2
@@ -1042,23 +1069,32 @@ cga_draw_rounded_frame:
     GFX     LINE_VERT, .x1, cx, dx, .color
     GFX     LINE_VERT, .x2, cx, dx, .color
 
-    ; Pixels de coins pour l'arrondi
+    ; Ajout des pixels de transition pour adoucir les coins (chanfrein)
+    mov     ax, .x1
+    inc     ax              ; x1 + 1
+    mov     bx, .y1
+    inc     bx              ; y1 + 1
+    GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-gauche
+
     mov     ax, .x1
     inc     ax
+    mov     bx, .y2
+    dec     bx              ; y2 - 1
+    GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-gauche
+
+    mov     ax, .x2
+    dec     ax              ; x2 - 1
     mov     bx, .y1
-    inc     bx
-    GFX     PUTPIXEL, ax, bx, .color        ; top left
+    inc     bx              ; y1 + 1
+    GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-droite
+
     mov     ax, .x2
     dec     ax
-    GFX     PUTPIXEL, ax, bx, .color        ; Top-right
     mov     bx, .y2
-    dec     bx
-    GFX     PUTPIXEL, ax, bx, .color        ; bottom-right
-    mov     ax, .x1
-    inc     ax
-    GFX     PUTPIXEL, ax, bx, .color        ; bottom-left
+    dec     bx              ; y2 - 1
+    GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-droite
 
-;    call    cga_mouse_show
+    call    cga_mouse_show
 
     popa
     leave
@@ -1082,7 +1118,7 @@ cga_draw_rounded_frame:
 cga_mouse_hide:
     pushf                   ; Sauver l'état des flags (interrupts)
     cli                     ; Désactiver les interruptions (CRITIQUE)
-    push    ax
+    pushad                  ; Sauvegarder TOUS les registres 32-bits
     push    ds
 
     mov     ax, BDA_DATA_SEG
@@ -1095,14 +1131,11 @@ cga_mouse_hide:
     cmp     byte [BDA_MOUSE + mouse.cur_counter], -1
     jne     .skip_restore   ; Si on est à -2, -3... elle est déjà cachée
 
-    ; C'est la transition Visible -> Caché : On efface le curseur
     call    cga_cursor_restorebg
-    ; On marque qu'on ne dessine plus
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 0
 
     .skip_restore:
     pop     ds
-    pop     ax
+    popad
     popf                    ; Restaure les interruptions (STI si elles étaient là)
     ret
 
@@ -1113,7 +1146,7 @@ cga_mouse_hide:
 cga_mouse_show:
     pushf
     cli
-    push    ax
+    pushad
     push    ds
 
     mov     ax, BDA_DATA_SEG
@@ -1133,7 +1166,7 @@ cga_mouse_show:
 
     .skip_draw:
     pop     ds
-    pop     ax
+    popad
     popf
     ret
 
@@ -1143,7 +1176,7 @@ cga_mouse_show:
 ;
 ; ------------------------------------------------------------
 cga_mouse_cursor_move:
-	push    ax
+	pushad
 	push 	ds
 	push 	es
 
@@ -1171,7 +1204,7 @@ cga_mouse_cursor_move:
     .done:
 	pop 	es
 	pop 	ds
-	pop     ax
+	popad
 	ret
 
 ; ------------------------------------------------------------
@@ -1183,7 +1216,9 @@ cga_cursor_savebg:
     cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
     jne     .done
 
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 1
+    push    es
+    mov     ax, VIDEO_SEG
+    mov     es, ax
 
     ; mémoriser position courante (utilisée pour restore)
     mov     cx, [BDA_MOUSE + mouse.x]
@@ -1213,7 +1248,10 @@ cga_cursor_savebg:
     .next_line:
     loop    .row_loop
 
+    pop     es
+
     .done:
+    mov     byte [BDA_MOUSE + mouse.bkg_saved], 1       ; Flag mis à jour après la copie
     ret
 
 ; ------------------------------------------------------------
@@ -1224,7 +1262,9 @@ cga_cursor_restorebg:
     cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
     je      .done
 
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 0
+    push    es
+    mov     ax, VIDEO_SEG
+    mov     es, ax
 
     ; restaurer depuis la dernière position sauvegardée
     mov     di, [BDA_MOUSE + mouse.cur_addr_start]
@@ -1245,7 +1285,9 @@ cga_cursor_restorebg:
     .next_line:
     loop    .row_loop
 
+    pop     es
     .done:
+    mov     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; Flag mis à jour après la restauration
     ret
 
 ; ============================================================
@@ -1405,4 +1447,3 @@ cga_cursor_draw:
     pop     ds
     popad
     ret
-
