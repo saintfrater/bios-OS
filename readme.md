@@ -20,7 +20,7 @@ Screenshot of early boot version + Text functions
 
 Screenshot of early buttons & sliders
 
-![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-01-29-210122.png)
+![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-02-05-203804.png)
 
 Screenshot of rounded buttons & checkboxes
 
@@ -153,7 +153,7 @@ Screenshot of early boot version + Text functions
 
 Screenshot of early buttons & sliders
 
-![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-01-29-210122.png)
+![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-02-05-203804.png)
 
 Screenshot of rounded buttons & checkboxes
 
