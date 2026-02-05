@@ -47,8 +47,7 @@ section     .text
 %include 	"./common/bda.asm"
 
 ; %include 	"./common/debug_cga.asm"
-; %include	"./drivers/gfx_cgam.asm"
-%include	"./drivers/gfx_egam.asm"
+%include	"./drivers/gfx_cgam.asm"
 %include	"./services/gui_lib.asm"
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
@@ -134,7 +133,7 @@ build_interface:
     mov     word [gs:si +  widget.x], 10
     mov     word [gs:si +  widget.y], 10
     mov     word [gs:si +  widget.w], 80
-    mov     word [gs:si +  widget.h], 20
+    mov     word [gs:si +  widget.h], 16
     mov     word [gs:si +  widget.text_ofs], str_quit
     ; mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
     mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
@@ -148,23 +147,47 @@ build_interface:
     mov     word [gs:si +  widget.x], 100
     mov     word [gs:si +  widget.y], 50
     mov     word [gs:si +  widget.w], 80
-    mov     word [gs:si +  widget.h], 20
+    mov     word [gs:si +  widget.h], 16
     mov     word [gs:si +  widget.text_ofs], str_hello
     mov     word [gs:si +  widget.text_seg], cs
     mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
 
-    ; Créer Bouton 2 "HELLO"
+    ; Créer checkbox 3 "option 1"
     call    gui_alloc_widget
     jc      .mem_full
 
-    mov     word [gs:si +  widget.x], 100
-    mov     word [gs:si +  widget.y], 150
-    mov     word [gs:si +  widget.w], 80
-    mov     word [gs:si +  widget.h], 20
-    mov     word [gs:si +  widget.text_ofs], str_hello
+    mov     word [gs:si +  widget.x], 200
+    mov     word [gs:si +  widget.y], 50
+    mov     word [gs:si +  widget.w], 100
+    mov     word [gs:si +  widget.h], 15
+    mov     word [gs:si +  widget.text_ofs], str_option1
     mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
     ; Pas de callback
+
+    ; Créer checkbox 3 "option 2"
+    call    gui_alloc_widget
+    jc      .mem_full
+
+    mov     word [gs:si +  widget.x], 200
+    mov     word [gs:si +  widget.y], 50+16
+    mov     word [gs:si +  widget.w], 100
+    mov     word [gs:si +  widget.h], 15
+    mov     word [gs:si +  widget.text_ofs], str_option2
+    mov     word [gs:si +  widget.text_seg], cs
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
+
+    ; Créer checkbox 3 "option 2"
+    call    gui_alloc_widget
+    jc      .mem_full
+
+    mov     word [gs:si +  widget.x], 200
+    mov     word [gs:si +  widget.y], 50+16*2
+    mov     word [gs:si +  widget.w], 100
+    mov     word [gs:si +  widget.h], 15
+    mov     word [gs:si +  widget.text_ofs], str_option3
+    mov     word [gs:si +  widget.text_seg], cs
+    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
 
     ; Créer Slider (Drag)
     call    gui_alloc_widget
@@ -188,8 +211,11 @@ build_interface:
 
 
 ; --- Données ROM ---
-str_quit  db "QUITTER", 0
-str_hello db "HELLO", 0
+str_quit  db "Quitter", 0
+str_hello db "Hello", 0
+str_option1 db "option 1", 0
+str_option2 db "option 2", 0
+str_option3 db "option 3", 0
 str_drag  db "->", 0
 
 ; -----------------------------------------------------------

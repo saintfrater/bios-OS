@@ -20,9 +20,12 @@
 ;
 ; =============================================================================
 
-; --- Configuration Mémoire ---
+; --- Configuration ---
 %define GUI_RAM_SEG         0x0A00      ; Segment de données UI
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
+
+; Dimensions
+%define GUI_CHECKBOX_SIZE 	10			;
 
 ; --- Drapeaux & États ---
 %define GUI_STATE_FREE      0           ; Le slot est vide (mémoire dispo)
@@ -36,6 +39,7 @@
 %define WIDGET_TYPE_SLIDER          1
 %define WIDGET_TYPE_LABEL           2
 %define WIDGET_TYPE_ROUND_BUTTON    3
+%define WIDGET_TYPE_CHECKBOX        4
 
 ; --- Widgets attributs ---
 %define BUTTON_OK                   1
@@ -307,6 +311,11 @@ gui_update_logic:
 	jmp     .done
 
 	.case_4:
+	cmp     byte [gs:si + widget.type], WIDGET_TYPE_CHECKBOX
+	jne     .case_5
+	call    gui_logic_checkbox
+
+	.case_5:
 	jmp     .done
 	.miss:
 	; Si on n'est plus dessus, mais qu'on l'était avant (HOVER/PRESSED), il faut redessiner !
@@ -434,6 +443,33 @@ gui_logic_slider:
 	xor     ax, ax
 	ret
 
+; --- Logique spécifique Checkbox ---
+gui_logic_checkbox:
+	test    bl, 1           ; Clic gauche ?
+	jz      .released
+
+	; Clic enfoncé
+	mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
+	xor     ax, ax
+	ret
+
+	.released:
+	cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
+	jne     .hover
+
+	; Clic validé ! Toggle value
+	xor     word [gs:si + widget.attr_val], 1
+	mov     byte [gs:si + widget.oldstate], 255 ; Force redraw
+
+	mov     al, 1
+	mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+	ret
+
+	.hover:
+	mov     byte [gs:si + widget.state], GUI_STATE_HOVER
+	xor     ax, ax
+	ret
+
 
 
 ; Dessine le widget pointé par SI
@@ -478,9 +514,15 @@ gui_draw_single_widget:
 	cmp     byte [gs:si + widget.type], WIDGET_TYPE_ROUND_BUTTON
 	jne     .case_4
 	call    draw_round_button
-;     jmp     .done
+	jmp     .done
 
 	.case_4:
+	cmp     byte [gs:si + widget.type], WIDGET_TYPE_CHECKBOX
+	jne     .case_5
+	call    draw_checkbox
+	jmp     .done
+
+	.case_5:
 
 
 
@@ -612,22 +654,23 @@ draw_round_button:
 	.paint_normal:
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
 		mov     di, 0                       ; Couleur Noire
-		call    .draw_round_borders
+		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 		jmp     .draw_text_now
 
 	.paint_hover:
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+		GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+		; GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
 		mov     di, 0                       ; Couleur Noire
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
-		call    .draw_round_borders
+		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 		jmp     .draw_text_now
 
 	.paint_pressed:
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK
 		mov     di, 1                       ; Bordure Blanche sur fond noir
-		call    .draw_round_borders
+		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
 		jmp     .draw_text_now
 
@@ -641,9 +684,8 @@ draw_round_button:
 	.done:
 	ret
 
-.draw_round_borders:
+draw_round_borders:
 	; Bordure principale
-	GFX     RECTANGLE_ROUND, ax, bx, cx, dx, di
 	; Si style "OK" (attr_mode & BUTTON_OK), on ajoute la double bordure
 	;test    byte [gs:si + widget.attr_mode], BUTTON_OK
 	;jz      .done_borders
@@ -655,6 +697,93 @@ draw_round_button:
 	.done_borders:
 	ret
 
+draw_checkbox:
+	; met un "fond" blanc
+	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+
+	cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
+	jne      .no_hover
+		GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+	.no_hover:
+
+	; Calcul coords box (centré verticalement)
+	mov     ax, [gs:si + widget.x]
+	add		ax, 4
+	mov     bx, [gs:si + widget.y]
+
+	mov     cx, [gs:si + widget.h]
+	mov		dx, [gs:si + widget.w]
+
+	sub     cx, GUI_CHECKBOX_SIZE
+	shr     cx, 1
+	add     bx, cx              ; Y1
+
+	mov     cx, ax
+	add     cx, GUI_CHECKBOX_SIZE         ; X2
+
+	mov     dx, bx
+	add     dx, GUI_CHECKBOX_SIZE         ; Y2
+
+	; Sauvegarde coords pour le X
+	push    ax
+	push    bx
+	push    cx
+	push    dx
+
+	; Fond blanc + Bordure noire
+	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+	GFX     RECTANGLE, ax, bx, cx, dx, 0
+
+	; Check if checked
+	cmp     word [gs:si + widget.attr_val], 0
+	je      .draw_label
+
+	; Dessin du X (Diagonales)
+	add     ax, 2
+	add     bx, 2
+	sub     cx, 2
+	sub     dx, 2
+
+	push    ax
+	push    bx
+	push    dx
+	.loop_x:
+		cmp     ax, cx
+		jg      .end_x
+		GFX     PUTPIXEL, ax, bx, 0
+		GFX     PUTPIXEL, ax, dx, 0
+		inc     ax
+		inc     bx
+		dec     dx
+		jmp     .loop_x
+	.end_x:
+	pop     dx
+	pop     bx
+	pop     ax
+
+	.draw_label:
+	pop     dx
+	pop     cx
+	pop     bx
+	pop     ax
+
+	; Dessin du texte à droite (BoxX2 + 6)
+	add     cx, 6
+
+	; Y = Centré par rapport au widget
+	mov     bx, [gs:si + widget.y]
+	mov     ax, [gs:si + widget.h]
+	sub     ax, 8
+	shr     ax, 1
+	add     bx, ax
+	inc     bx
+
+	GFX     GOTOXY, cx, bx
+	mov     dx, [gs:si + widget.text_seg]
+	mov     ax, [gs:si + widget.text_ofs]
+	GFX     WRITE, dx, ax
+
+	ret
 ;
 ; affiche le texte au centre du widget gs:si
 ;
@@ -691,6 +820,7 @@ draw_text:
 	sub     bx, 8
 	shr     bx, 1
 	add     bx, [gs:si + widget.y] ; Y final
+	inc		bx
 
 	pop     cx      ; CX = X Final, BX = Y Final
 
