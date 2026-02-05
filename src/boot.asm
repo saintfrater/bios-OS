@@ -46,8 +46,9 @@ section     .text
 ; definition du BDA
 %include 	"./common/bda.asm"
 
-%include 	"./common/debug_cga.asm"
-%include	"./drivers/gfx_cgam.asm"
+; %include 	"./common/debug_cga.asm"
+; %include	"./drivers/gfx_cgam.asm"
+%include	"./drivers/gfx_egam.asm"
 %include	"./services/gui_lib.asm"
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
