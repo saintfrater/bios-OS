@@ -430,6 +430,7 @@ gui_draw_single_widget:
     ; Chargement coords
     mov     ax, [gs:si + widget.x]
     mov     bx, [gs:si + widget.y]
+
     mov     cx, [gs:si + widget.w]
     mov     dx, [gs:si + widget.h]
 
@@ -482,7 +483,7 @@ draw_slider:
     xchg    ax, cx                        ; AX = X1, CX = X2
     jmp     .draw_thumb
 
-.calc_v:
+    .calc_v:
     ; --- Vertical ---
     mov     ax, [gs:si + widget.h]
     xor     bh, bh
@@ -498,7 +499,7 @@ draw_slider:
     mov     cx, ax
     add     cx, [gs:si + widget.w]        ; CX = X2
 
-.draw_thumb:
+    .draw_thumb:
     ; 3. Dessiner le curseur (Thumb)
     GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
     GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
@@ -506,6 +507,8 @@ draw_slider:
     GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
     call    draw_text
     ret
+
+
 
 draw_button:
     ; Dispatch selon état
@@ -516,20 +519,42 @@ draw_button:
 
     .paint_normal:
         GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_white
-        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
+
+        ; Si user_id == 1, on dessine le style "OK" (Double bordure épaisse)
+        test    byte [gs:si + widget.user_id], 1
+        jnz     .draw_default_style
+
+        GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+        jmp     .draw_text_now
+
+    .draw_default_style:
+        ; Bordure extérieure épaisse (2px)
+        GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+        inc     ax
+        inc     bx
+        dec     cx
+        dec     dx
+        GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+
+        ; Bordure intérieure fine (après un gap de 1px blanc)
+        add     ax, 2
+        add     bx, 2
+        sub     cx, 2
+        sub     dx, 2
+        GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
+
+    .draw_text_now:
+        ; Recharger les coordonnées de base pour le texte
+        mov     ax, [gs:si + widget.x]
+        mov     bx, [gs:si + widget.y]
+
         GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
         call    draw_text
         jmp     .done
 
     .paint_hover:
-        GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid ; pattern_white
-        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0   ; Bord Noir
-        ; Effet gras
-        inc     ax
-        inc     bx
-        dec     cx
-        dec     dx
-        GFX     RECTANGLE_DRAW, ax, bx, cx, dx, 0
+        GFX     RECTANGLE_FILL, ax, bx, cx, dx, pattern_gray_mid
+        GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
 
         ; Restauration coords pour le texte
         mov     ax, [gs:si + widget.x]
@@ -545,7 +570,7 @@ draw_button:
         mov     bx, [gs:si + widget.y]
         call    draw_text
 
-    .done
+    .done:
     ret
 
 draw_text:

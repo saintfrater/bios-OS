@@ -135,6 +135,7 @@ build_interface:
     mov     word [gs:si +  widget.w], 80
     mov     word [gs:si +  widget.h], 20
     mov     word [gs:si +  widget.text_ofs], str_quit
+    mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
     mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
     mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
     mov     byte [gs:si +  widget.type], WIDGET_TYPE_BUTTON
@@ -214,5 +215,5 @@ reset_vector:
 	jmp		0xF000:reset
 
 builddate:
-	db 		'06/01/2026'
+	db 		__DATE__
 	times 		16-($-$$) db 0   ; le stub tient dans 16 octets (ou moins)

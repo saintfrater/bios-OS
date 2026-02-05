@@ -75,9 +75,10 @@
 %define LINE_HORIZ      8
 %define RECTANGLE_DRAW  9
 %define RECTANGLE_FILL  10
-%define MOUSE_HIDE      11
-%define MOUSE_SHOW      12
-%define MOUSE_MOVE      13
+%define RECTANGLE_ROUND 11
+%define MOUSE_HIDE      12
+%define MOUSE_SHOW      13
+%define MOUSE_MOVE      14
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -102,6 +103,7 @@ graph_driver:
     dw cga_line_horizontal      ; dessin d'une ligne horizontale
     dw cga_draw_rect            ; dessin d'un rectangle
     dw cga_fill_rect            ; dessin d'un rectangle plein
+    dw cga_draw_rounded_frame   ; dessin d'un rectangle arrondi
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
@@ -1006,7 +1008,69 @@ cga_fill_rect:
 %undef  .y2
 %undef  .pat_idx
 
+
+; ------------------------------------------------------------
+; cga_draw_rounded_frame
+; dessiner un cadre arrondi
+; Entrée : AX=x1, BX=y1, CX=x2, DX=y2
+; ------------------------------------------------------------
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .color  word [bp+12]
+cga_draw_rounded_frame:
+    push    bp
+    mov     bp, sp
+    pusha
+
+ ;   call    cga_mouse_hide
+
+    ; Lignes horizontales (raccourcies de 2px de chaque côté)
+    mov     ax, .x1
+    add     ax, 2
+    mov     bx, .x2
+    sub     bx, 2
+    GFX     LINE_HORIZ, ax, bx, .y1, .color
+    GFX     LINE_HORIZ, ax, bx, .y2, .color
+
+    ; Lignes verticales (raccourcies de 2px)
+    mov     cx, .y1
+    add     cx, 2
+    mov     dx, .y2
+    sub     dx, 2
+    GFX     LINE_VERT, .x1, cx, dx, .color
+    GFX     LINE_VERT, .x2, cx, dx, .color
+
+    ; Pixels de coins pour l'arrondi
+    mov     ax, .x1
+    inc     ax
+    mov     bx, .y1
+    inc     bx
+    GFX     PUTPIXEL, ax, bx, .color        ; top left
+    mov     ax, .x2
+    dec     ax
+    GFX     PUTPIXEL, ax, bx, .color        ; Top-right
+    mov     bx, .y2
+    dec     bx
+    GFX     PUTPIXEL, ax, bx, .color        ; bottom-right
+    mov     ax, .x1
+    inc     ax
+    GFX     PUTPIXEL, ax, bx, .color        ; bottom-left
+
+;    call    cga_mouse_show
+
+    popa
+    leave
+    ret
+%undef  .x1
+%undef  .y1
+%undef  .x2
+%undef  .y2
+%undef  .color
+
 ; -----------------------------------------------------------------------------
+
 ; ------------------------------------------------------------
 ; GESTION DU CURSEUR
 ; ------------------------------------------------------------
@@ -1092,6 +1156,7 @@ cga_mouse_cursor_move:
 
 	cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
 	jne		.done
+
 	mov 	byte [BDA_MOUSE + mouse.cur_drawing],1
 
 	mov		ax, VIDEO_SEG
@@ -1340,3 +1405,4 @@ cga_cursor_draw:
     pop     ds
     popad
     ret
+

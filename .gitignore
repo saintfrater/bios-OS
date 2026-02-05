@@ -13,3 +13,4 @@ roms/qemu-vgabios.bin
 roms/vgabios.bin
 run.bat
 ProjectX.code-workspace
+gfx
