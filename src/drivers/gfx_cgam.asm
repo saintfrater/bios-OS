@@ -71,15 +71,13 @@
 %define TXT_MODE        4
 %define PUTCH           5
 %define WRITE           6
-%define LINE_VERT       7
-%define LINE_HORIZ      8
-%define RECTANGLE       9
-%define RECTANGLE_FILL  10
-%define RECTANGLE_ROUND 11
-%define MOUSE_HIDE      12
-%define MOUSE_SHOW      13
-%define MOUSE_MOVE      14
-%define LINE            15
+%define LINE            7
+%define RECTANGLE       8
+%define RECTANGLE_FILL  9
+%define RECTANGLE_ROUND 10
+%define MOUSE_HIDE      11
+%define MOUSE_SHOW      12
+%define MOUSE_MOVE      13
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -100,15 +98,14 @@ graph_driver:
     dw cga_set_writemode        ; mode texte
     dw cga_putc                 ; dessin d'un caractère
     dw cga_write                ; dessin d'une chaine de caractère
-    dw cga_line_vertical        ; dessin d'une ligne verticale
-    dw cga_line_horizontal      ; dessin d'une ligne horizontale
+    dw cga_line                 ; dessin d'une ligne (Bresenham) avec décision horizontale/verticale
     dw cga_draw_rect            ; dessin d'un rectangle
     dw cga_fill_rect            ; dessin d'un rectangle plein
     dw cga_draw_rounded_frame   ; dessin d'un rectangle arrondi
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
-    dw cga_line                 ; dessin d'une ligne (Bresenham)
+
 
 ; =============================================================================
 ;  SECTION : PATTERNS & FILL
@@ -790,6 +787,7 @@ cga_line_horizontal:
 %undef  .x1
 %undef  .x2
 %undef  .y
+
 ; ------------------------------------------------------------
 ; cga_line (x1, y1, x2, y2, color)
 ; Algorithme de Bresenham pour tracer une ligne arbitraire
@@ -803,6 +801,8 @@ cga_line_horizontal:
 cga_line:
     push    bp
     mov     bp, sp
+    pusha                   ; Sauvegarde de tous les registres (AX, BX, CX, DX, SI, DI)
+    push    es              ; Sauvegarde ES
 
     ; --- Optimisation : Lignes H/V ---
     mov     ax, .y1
@@ -812,14 +812,23 @@ cga_line:
     cmp     ax, .x2
     je      .do_vert
 
-    sub     sp, 10          ; Variables locales: dx, dy, sx, sy, err
-    pusha
-    push    es
-
+    ; --- Bresenham ---
     mov     ax, VIDEO_SEG
     mov     es, ax
 
     call    cga_mouse_hide
+
+    sub     sp, 10          ; Variables locales: dx, dy, sx, sy, err
+
+    ; --- Definitions locales ---
+    ; BP pointe sur l'ancien BP.
+    ; PUSHA (16 octets) + PUSH ES (2 octets) = 18 octets
+    ; Les variables locales commencent donc à BP-18
+    %define .dx     word [bp-20]
+    %define .dy     word [bp-22]
+    %define .sx     word [bp-24]
+    %define .sy     word [bp-26]
+    %define .err    word [bp-28]
 
     ; --- Initialisation Bresenham ---
     ; dx = abs(x2 - x1), sx = sign(x2 - x1)
@@ -830,8 +839,8 @@ cga_line:
     neg     ax
     neg     bx              ; sx = -1
 .calc_dx:
-    mov     [bp-2], ax      ; save dx
-    mov     [bp-6], bx      ; save sx
+    mov     .dx, ax      ; save dx
+    mov     .sx, bx      ; save sx
 
     ; dy = abs(y2 - y1), sy = sign(y2 - y1)
     mov     ax, .y2
@@ -841,13 +850,13 @@ cga_line:
     neg     ax
     neg     bx              ; sy = -1
 .calc_dy:
-    mov     [bp-4], ax      ; save dy
-    mov     [bp-8], bx      ; save sy
+    mov     .dy, ax      ; save dy
+    mov     .sy, bx      ; save sy
 
     ; err = dx - dy
-    mov     ax, [bp-2]      ; dx
-    sub     ax, [bp-4]      ; dy
-    mov     [bp-10], ax     ; err
+    mov     ax, .dx      ; dx
+    sub     ax, .dy      ; dy
+    mov     .err, ax     ; err
 
     ; Coordonnées courantes
     mov     cx, .x1
@@ -878,32 +887,30 @@ cga_line:
     je      .done
 
 .step:
-    mov     ax, [bp-10]     ; e2 = err
+    mov     ax, .err     ; e2 = err
     shl     ax, 1           ; e2 = 2*err
 
-    mov     bx, [bp-4]      ; dy
+    mov     bx, .dy      ; dy
     neg     bx              ; -dy
     cmp     ax, bx
     jle     .check_y
 
-    add     word [bp-10], bx ; err += -dy
-    add     cx, [bp-6]       ; x += sx
+    add     .err, bx     ; err += -dy
+    add     cx, .sx      ; x += sx
 
 .check_y:
-    mov     bx, [bp-2]      ; dx
+    mov     bx, .dx      ; dx
     cmp     ax, bx
     jge     .loop           ; if e2 >= dx, skip y step
 
-    add     word [bp-10], bx ; err += dx
-    add     dx, [bp-8]       ; y += sy
+    add     .err, bx     ; err += dx
+    add     dx, .sy      ; y += sy
     jmp     .loop
 
 .done:
     call    cga_mouse_show
-    pop     es
-    popa
-    leave
-    ret
+    add     sp, 10          ; Libération variables locales
+    jmp     .exit
 
 .do_horiz:
     push    word [bp+12]    ; color
@@ -912,8 +919,7 @@ cga_line:
     push    word [bp+4]     ; x1
     call    cga_line_horizontal
     add     sp, 8
-    pop     bp
-    ret
+    jmp     .exit
 
 .do_vert:
     push    word [bp+12]    ; color
@@ -922,13 +928,23 @@ cga_line:
     push    word [bp+4]     ; x
     call    cga_line_vertical
     add     sp, 8
+
+.exit:
+    pop     es
+    popa
     pop     bp
     ret
+
 %undef .x1
 %undef .y1
 %undef .x2
 %undef .y2
 %undef .color
+%undef .dx
+%undef .dy
+%undef .sx
+%undef .sy
+%undef .err
 
 ; ------------------------------------------------------------
 ; cga_draw_rect

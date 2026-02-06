@@ -195,15 +195,28 @@ build_interface:
     mov     word [gs:si + widget.x], 10
     mov     word [gs:si + widget.y], 100
     mov     word [gs:si + widget.w], 150
-    mov     word [gs:si + widget.h], 20
-    mov     word [gs:si + widget.text_ofs], str_drag
-    mov     word [gs:si + widget.text_seg], cs
+    mov     word [gs:si + widget.h], 12
     mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-    mov     byte [gs:si + widget.attr_mode], 1      ; Horizontal
+    mov     byte [gs:si + widget.attr_mode], SLIDER_HORIZONTAL
     mov     word [gs:si + widget.attr_min], 10      ; X Min
     mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
     mov     word [gs:si + widget.attr_val], 10      ; Position initiale
     mov     byte [gs:si + widget.thumb_pct], 15     ; Curseur fait 15% de la largeur
+;     mov     word [gs:si + widget.event_drag], on_drag_slider
+
+; Créer Slider (Drag)
+    call    gui_alloc_widget
+    jc      .mem_full
+    mov     word [gs:si + widget.x], 400
+    mov     word [gs:si + widget.y], 10
+    mov     word [gs:si + widget.w], 16
+    mov     word [gs:si + widget.h], 150
+    mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+    mov     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
+    mov     word [gs:si + widget.attr_min], 10      ; X Min
+    mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
+    mov     word [gs:si + widget.attr_val], 140      ; Position initiale
+    mov     byte [gs:si + widget.thumb_pct], 25     ; Curseur fait 15% de la largeur
 ;     mov     word [gs:si + widget.event_drag], on_drag_slider
 
 .mem_full:
@@ -216,7 +229,6 @@ str_hello db "Hello", 0
 str_option1 db "option 1", 0
 str_option2 db "option 2", 0
 str_option3 db "option 3", 0
-str_drag  db "->", 0
 
 ; -----------------------------------------------------------
 ; timer ISR (IRQ -> INT)

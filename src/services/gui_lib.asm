@@ -20,6 +20,10 @@
 ;
 ; =============================================================================
 
+;
+; https://github.com/buserror/libmui
+;
+
 ; --- Configuration ---
 %define GUI_RAM_SEG         0x0A00      ; Segment de données UI
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
@@ -43,6 +47,9 @@
 
 ; --- Widgets attributs ---
 %define BUTTON_OK                   1
+
+%define SLIDER_HORIZONTAL			1
+%define SLIDER_VERTICAL				2
 
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
@@ -371,55 +378,157 @@ gui_logic_slider:
 
 	mov     byte [gs:si + widget.state], GUI_STATE_PRESSED
 
-	; Calcul de l'ancrage
+	; --- CALCUL TAILLE THUMB POUR HIT TEST ---
+	; On doit savoir si le clic est SUR le curseur ou SUR la piste
+	push    ax
+	push    bx
+	push    dx
+
+	xor     ax, ax
+	xor     bx, bx
+
+	cmp     byte [gs:si + widget.attr_mode], 2
+	je      .calc_v
+
+	; --- Horizontal ---
+	mov     ax, [gs:si + widget.w]
+	mov     bl, [gs:si + widget.thumb_pct]
+	mul     bx
+	mov     bx, 100
+	div     bx                      ; AX = Thumb Width
+
+	; Check collision avec le thumb actuel
+	mov     bx, [gs:si + widget.attr_val]
+	cmp     cx, bx
+	jb      .click_outside_h        ; Click avant le thumb
+	add     bx, ax
+	cmp     cx, bx
+	ja      .click_outside_h        ; Click après le thumb
+
+	; Click DANS le thumb : Anchor = MouseX - AttrVal
 	mov     ax, cx
 	sub     ax, [gs:si + widget.attr_val]
 	mov     [gs:si + widget.attr_anchor], ax
-	cmp     byte [gs:si + widget.attr_mode], 2
-	jne     .do_drag
+	jmp     .init_done
+
+	.click_outside_h:
+	; Click HORS du thumb : On centre le thumb sur la souris
+	shr     ax, 1
+	mov     [gs:si + widget.attr_anchor], ax
+	jmp     .init_done
+
+	.calc_v:
+	; --- Vertical ---
+	mov     ax, [gs:si + widget.h]
+	mov     bl, [gs:si + widget.thumb_pct]
+	mul     bx
+	mov     bx, 100
+	div     bx                      ; AX = Thumb Height
+
+	; Check collision avec le thumb actuel
+	mov     bx, [gs:si + widget.attr_val]
+	cmp     dx, bx
+	jb      .click_outside_v
+	add     bx, ax
+	cmp     dx, bx
+	ja      .click_outside_v
+
+	; Click DANS le thumb
 	mov     ax, dx
 	sub     ax, [gs:si + widget.attr_val]
 	mov     [gs:si + widget.attr_anchor], ax
+	jmp     .init_done
+
+	.click_outside_v:
+	; Click HORS du thumb
+	shr     ax, 1
+	mov     [gs:si + widget.attr_anchor], ax
+
+	.init_done:
+	pop     dx
+	pop     bx
+	pop     ax
 
 	.do_drag:
 	; --- LOGIQUE DE DÉPLACEMENT ---
+	; On calcule les limites dynamiquement pour éviter que le curseur ne sorte
+	push    ax
+	push    bx
+	push    dx
+
+	xor     ax, ax
+	xor     bx, bx
+
 	cmp     byte [gs:si + widget.attr_mode], 1
 	je      .drag_h
 	cmp     byte [gs:si + widget.attr_mode], 2
 	je      .drag_v
+
+	pop     dx
+	pop     bx
+	pop     ax
 	xor     ax, ax
 	ret
 
 	.drag_h:
+	; 1. Thumb Width -> AX
+	mov     ax, [gs:si + widget.w]
+	mov     bl, [gs:si + widget.thumb_pct]
+	mul     bx
+	mov     bx, 100
+	div     bx      ; AX = Thumb Width
+
+	; 2. Max Pos = X + W - ThumbWidth
+	mov     bx, [gs:si + widget.x]
+	add     bx, [gs:si + widget.w]
+	sub     bx, ax  ; BX = Max Pos
+
+	; 3. Min Pos = X
+	mov     dx, [gs:si + widget.x] ; DX = Min Pos
+
+	; 4. Target Pos = MouseX - Anchor
 	mov     ax, cx
-	sub     ax, [gs:si + widget.attr_anchor]    ; Nouvelle pos = MouseX - Anchor
-	; Clamp Min
-	cmp     ax, [gs:si + widget.attr_min]
-	jge     .chk_max_h
-	mov     ax, [gs:si + widget.attr_min]
-	.chk_max_h:
-	; Clamp Max
-	cmp     ax, [gs:si + widget.attr_max]
-	jle     .apply_pos
-	mov     ax, [gs:si + widget.attr_max]
-	jmp     .apply_pos
+	sub     ax, [gs:si + widget.attr_anchor]
+	jmp     .apply_clamp
 
 	.drag_v:
-	mov     ax, dx
-	sub     ax, [gs:si + widget.attr_anchor]
-	; Clamp Min
-	cmp     ax, [gs:si + widget.attr_min]
-	jge     .chk_max_v
-	mov     ax, [gs:si + widget.attr_min]
+	; 1. Thumb Height -> AX
+	mov     ax, [gs:si + widget.h]
+	mov     bl, [gs:si + widget.thumb_pct]
+	mul     bx
+	mov     bx, 100
+	div     bx      ; AX = Thumb Height
 
-	.chk_max_v:
-	; Clamp Max
-	cmp     ax, [gs:si + widget.attr_max]
-	jle     .apply_pos
-	mov     ax, [gs:si + widget.attr_max]
+	; 2. Max Pos = Y + H - ThumbHeight
+	mov     bx, [gs:si + widget.y]
+	add     bx, [gs:si + widget.h]
+	sub     bx, ax  ; BX = Max Pos
+
+	; 3. Min Pos = Y
+	mov     dx, [gs:si + widget.y] ; DX = Min Pos
+
+	; 4. Target Pos = MouseY - Anchor
+	; MouseY est sur la pile (push dx initial), on le recupere via SP
+	mov     bp, sp
+	mov     ax, [bp]    ; [bp] = Saved DX (MouseY)
+	sub     ax, [gs:si + widget.attr_anchor]
+
+	.apply_clamp:
+	; AX = Target, DX = Min, BX = Max
+	cmp     ax, dx
+	jge     .chk_max
+	mov     ax, dx
 	jmp     .apply_pos
+	.chk_max:
+	cmp     ax, bx
+	jle     .apply_pos
+	mov     ax, bx
 
 	.apply_pos:
+	pop     dx
+	pop     bx
+	add     sp, 2   ; Clean AX from stack
+
 	cmp     ax, [gs:si + widget.attr_val]
 	je      .no_change
 	mov     [gs:si + widget.attr_val], ax
@@ -469,7 +578,6 @@ gui_logic_checkbox:
 	mov     byte [gs:si + widget.state], GUI_STATE_HOVER
 	xor     ax, ax
 	ret
-
 
 
 ; Dessine le widget pointé par SI
@@ -525,23 +633,36 @@ gui_draw_single_widget:
 	.case_5:
 
 
-
 	.done:
 	GFX     MOUSE_SHOW              ; On réaffiche la souris APRES, capturant le widget fini
 	popa
 	ret
 
+; --- Locals Mapping ---
+%define .thumb_x1   word [bp-2]
+%define .thumb_y1   word [bp-4]
+%define .thumb_x2   word [bp-6]
+%define .thumb_y2   word [bp-8]
+%define .track_x1   word [bp-10]
+%define .track_y1   word [bp-12]
+%define .track_x2   word [bp-14]
+%define .track_y2   word [bp-16]
 draw_slider:
+	push    bp
+	mov     bp, sp
+	sub     sp, 16          ; Reserve space for locals
+
+	; Save track coords (Arguments passed in AX, BX, CX, DX)
+	mov     .track_x1, ax
+	mov     .track_y1, bx
+	mov     .track_x2, cx
+	mov     .track_y2, dx
+
 	; 1. Dessiner la piste (Track)
-	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
-	GFX     RECTANGLE, ax, bx, cx, dx, 0
+	GFX     RECTANGLE_FILL, .track_x1, .track_y1, .track_x2, .track_y2, PATTERN_WHITE_LIGHT
+	GFX     RECTANGLE, .track_x1, .track_y1, .track_x2, .track_y2, 0
 
 	; 2. Calculer la taille du curseur (Thumb)
-	push    ax                      ; Sauvegarde coords track (X1, Y1, X2, Y2)
-	push    bx
-	push    cx
-	push    dx
-
 	cmp     byte [gs:si + widget.attr_mode], 2
 	je      .calc_v
 
@@ -553,12 +674,34 @@ draw_slider:
 	mov     bx, 100
 	div     bx                      ; AX = Thumb Width
 
-	mov     bx, [gs:si + widget.y]        ; BX = Y1
-	mov     dx, bx
-	add     dx, [gs:si + widget.h]        ; DX = Y2
-	mov     cx, [gs:si + widget.attr_val] ; CX = X1
-	add     ax, cx                        ; AX = X1 + Width = X2
-	xchg    ax, cx                        ; AX = X1, CX = X2
+	; Thumb X1 = attr_val
+	mov     cx, [gs:si + widget.attr_val]
+
+	; --- CLAMP X1 (Fix Overflow) ---
+	; Max X1 = TrackX2 - ThumbW
+	mov     dx, .track_x2
+	sub     dx, ax      ; DX = Max X1
+	cmp     cx, dx
+	jle     .chk_min_x
+	mov     cx, dx
+	.chk_min_x:
+	cmp     cx, .track_x1
+	jge     .ok_x1
+	mov     cx, .track_x1
+	.ok_x1:
+	mov     .thumb_x1, cx
+
+	; Thumb X2 = X1 + Width
+	add     cx, ax
+	mov     .thumb_x2, cx
+
+	; Thumb Y1 = Track Y1
+	mov     ax, .track_y1
+	mov     .thumb_y1, ax
+
+	; Thumb Y2 = Track Y2
+	mov     ax, .track_y2
+	mov     .thumb_y2, ax
 	jmp     .draw_thumb
 
 	.calc_v:
@@ -570,23 +713,119 @@ draw_slider:
 	mov     bx, 100
 	div     bx                      ; AX = Thumb Height
 
-	mov     bx, [gs:si + widget.attr_val] ; BX = Y1
-	mov     dx, bx
-	add     dx, ax                        ; DX = Y2
-	mov     ax, [gs:si + widget.x]        ; AX = X1
-	mov     cx, ax
-	add     cx, [gs:si + widget.w]        ; CX = X2
+	; Thumb Y1 = attr_val
+	mov     cx, [gs:si + widget.attr_val]
+
+	; --- CLAMP Y1 (Fix Overflow) ---
+	; Max Y1 = TrackY2 - ThumbH
+	mov     dx, .track_y2
+	sub     dx, ax      ; DX = Max Y1
+	cmp     cx, dx
+	jle     .chk_min_y
+	mov     cx, dx
+	.chk_min_y:
+	cmp     cx, .track_y1
+	jge     .ok_y1
+	mov     cx, .track_y1
+	.ok_y1:
+	mov     .thumb_y1, cx
+
+	; Thumb Y2 = Y1 + Height
+	add     cx, ax
+	mov     .thumb_y2, cx
+
+	; Thumb X1 = Track X1
+	mov     ax, .track_x1
+	mov     .thumb_x1, ax
+
+	; Thumb X2 = Track X2
+	mov     ax, .track_x2
+	mov     .thumb_x2, ax
 
 	.draw_thumb:
 	; 3. Dessiner le curseur (Thumb)
-	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
-	GFX     RECTANGLE, ax, bx, cx, dx, 0
-	add     sp, 8                   ; Nettoyer la pile des push ax..dx
-	GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-	call    draw_text
+	GFX     RECTANGLE_FILL, .thumb_x1, .thumb_y1, .thumb_x2, .thumb_y2, PATTERN_WHITE
+	GFX     RECTANGLE, .thumb_x1, .thumb_y1, .thumb_x2, .thumb_y2, 0
+
+	; --- Grip Lines (3 lignes pour un look moderne) ---
+	cmp     byte [gs:si + widget.attr_mode], 2
+	je      .grip_v
+
+	; --- Grip Horizontal (Lignes verticales) ---
+	; Center X
+	mov     ax, .thumb_x1
+	add     ax, .thumb_x2
+	shr     ax, 1           ; AX = Center X
+
+	; Y bounds (padding 3px)
+	mov     bx, .thumb_y1
+	add     bx, 3
+	mov     dx, .thumb_y2
+	sub     dx, 3
+
+	; Center Line
+	GFX     LINE, ax, bx, ax, dx, 0
+
+	; Left Line
+	mov     cx, ax
+	sub     cx, 2
+	cmp     cx, .thumb_x1
+	jle     .skip_left
+	GFX     LINE, cx, bx, cx, dx, 0
+	.skip_left:
+
+	; Right Line
+	mov     cx, ax
+	add     cx, 2
+	cmp     cx, .thumb_x2
+	jge     .grip_done
+	GFX     LINE, cx, bx, cx, dx, 0
+	jmp     .grip_done
+
+	.grip_v:
+	; --- Grip Vertical (Lignes horizontales) ---
+	; Center Y
+	mov     bx, .thumb_y1
+	add     bx, .thumb_y2
+	shr     bx, 1           ; BX = Center Y
+
+	; X bounds (padding 3px)
+	mov     ax, .thumb_x1
+	add     ax, 3
+	mov     cx, .thumb_x2
+	sub     cx, 3
+
+	; Center Line
+	GFX     LINE, ax, bx, cx, bx, 0
+
+	; Top Line
+	mov     dx, bx
+	sub     dx, 2
+	cmp     dx, .thumb_y1
+	jle     .skip_top
+	GFX     LINE, ax, dx, cx, dx, 0
+	.skip_top:
+
+	; Bottom Line
+	mov     dx, bx
+	add     dx, 2
+	cmp     dx, .thumb_y2
+	jge     .grip_done
+	GFX     LINE, ax, dx, cx, dx, 0
+
+	.grip_done:
+	leave
 	ret
 
-
+; Clean up defines
+%undef .thumb_x1
+%undef .thumb_y1
+%undef .thumb_x2
+%undef .thumb_y2
+%undef .track_x1
+%undef .track_y1
+%undef .track_x2
+%undef .track_y2
 
 draw_button:
 	; Dispatch selon état
