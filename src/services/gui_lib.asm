@@ -595,16 +595,6 @@ draw_button:
 	cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
 	je      .paint_hover
 
-;	.paint_normal:
-;		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
-
-		; Si user_id == 1, on dessine le style "OK" (Double bordure épaisse)
-		;test    byte [gs:si + widget.attr_mode], BUTTON_OK
-		;jnz     .draw_default_style
-
-;		GFX     RECTANGLE, ax, bx, cx, dx, 0
-;		jmp     .done
-
 	.draw_default_style:
 		; Bordure extérieure épaisse (2px)
 		GFX     RECTANGLE, ax, bx, cx, dx, 0
@@ -686,15 +676,11 @@ draw_round_button:
 
 draw_round_borders:
 	; Bordure principale
-	; Si style "OK" (attr_mode & BUTTON_OK), on ajoute la double bordure
-	;test    byte [gs:si + widget.attr_mode], BUTTON_OK
-	;jz      .done_borders
 	add     ax, 2
 	add     bx, 2
 	sub     cx, 2
 	sub     dx, 2
 	GFX     RECTANGLE_ROUND, ax, bx, cx, dx, di
-	.done_borders:
 	ret
 
 draw_checkbox:
