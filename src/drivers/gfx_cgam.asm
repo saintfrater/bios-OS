@@ -79,6 +79,7 @@
 %define MOUSE_HIDE      12
 %define MOUSE_SHOW      13
 %define MOUSE_MOVE      14
+%define LINE            15
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -107,6 +108,7 @@ graph_driver:
     dw cga_mouse_hide           ; déplacement du curseur
     dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
+    dw cga_line                 ; dessin d'une ligne (Bresenham)
 
 ; =============================================================================
 ;  SECTION : PATTERNS & FILL
@@ -314,7 +316,7 @@ get_glyph_offset:
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
 ; convert al -> AX aligned with "cl"
-%macro ALING_BYTE 0
+%macro ALIGN_BYTE 0
         mov     ah,al
         xor     al,al
         shr     ax,cl
@@ -385,13 +387,13 @@ cga_putc:
     xor     ax, ax
     mov     al, [cs:si]
     inc     si
-    ALING_BYTE
+    ALIGN_BYTE
     mov     dx,ax
 
     ; ligne "impaire" du gylphe
     mov     al, [cs:si]
     inc     si
-    ALING_BYTE
+    ALIGN_BYTE
     xchg    ax, dx
 
     test   ch,00000001b
@@ -789,6 +791,146 @@ cga_line_horizontal:
 %undef  .x2
 %undef  .y
 ; ------------------------------------------------------------
+; cga_line (x1, y1, x2, y2, color)
+; Algorithme de Bresenham pour tracer une ligne arbitraire
+; ------------------------------------------------------------
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .color  byte [bp+12]
+
+cga_line:
+    push    bp
+    mov     bp, sp
+
+    ; --- Optimisation : Lignes H/V ---
+    mov     ax, .y1
+    cmp     ax, .y2
+    je      .do_horiz
+    mov     ax, .x1
+    cmp     ax, .x2
+    je      .do_vert
+
+    sub     sp, 10          ; Variables locales: dx, dy, sx, sy, err
+    pusha
+    push    es
+
+    mov     ax, VIDEO_SEG
+    mov     es, ax
+
+    call    cga_mouse_hide
+
+    ; --- Initialisation Bresenham ---
+    ; dx = abs(x2 - x1), sx = sign(x2 - x1)
+    mov     ax, .x2
+    sub     ax, .x1
+    mov     bx, 1           ; sx = 1
+    jge     .calc_dx
+    neg     ax
+    neg     bx              ; sx = -1
+.calc_dx:
+    mov     [bp-2], ax      ; save dx
+    mov     [bp-6], bx      ; save sx
+
+    ; dy = abs(y2 - y1), sy = sign(y2 - y1)
+    mov     ax, .y2
+    sub     ax, .y1
+    mov     bx, 1           ; sy = 1
+    jge     .calc_dy
+    neg     ax
+    neg     bx              ; sy = -1
+.calc_dy:
+    mov     [bp-4], ax      ; save dy
+    mov     [bp-8], bx      ; save sy
+
+    ; err = dx - dy
+    mov     ax, [bp-2]      ; dx
+    sub     ax, [bp-4]      ; dy
+    mov     [bp-10], ax     ; err
+
+    ; Coordonnées courantes
+    mov     cx, .x1
+    mov     dx, .y1
+
+.loop:
+    ; Plot pixel (CX, DX)
+    push    cx
+    push    dx
+    call    cga_calc_addr   ; Out: DI=offset, AH=mask
+
+    mov     bl, .color
+    cmp     bl, 0
+    je      .plot_black
+    or      byte [es:di], ah
+    jmp     .plot_next
+.plot_black:
+    not     ah
+    and     byte [es:di], ah
+.plot_next:
+    pop     dx
+    pop     cx
+
+    ; Check fin
+    cmp     cx, .x2
+    jne     .step
+    cmp     dx, .y2
+    je      .done
+
+.step:
+    mov     ax, [bp-10]     ; e2 = err
+    shl     ax, 1           ; e2 = 2*err
+
+    mov     bx, [bp-4]      ; dy
+    neg     bx              ; -dy
+    cmp     ax, bx
+    jle     .check_y
+
+    add     word [bp-10], bx ; err += -dy
+    add     cx, [bp-6]       ; x += sx
+
+.check_y:
+    mov     bx, [bp-2]      ; dx
+    cmp     ax, bx
+    jge     .loop           ; if e2 >= dx, skip y step
+
+    add     word [bp-10], bx ; err += dx
+    add     dx, [bp-8]       ; y += sy
+    jmp     .loop
+
+.done:
+    call    cga_mouse_show
+    pop     es
+    popa
+    leave
+    ret
+
+.do_horiz:
+    push    word [bp+12]    ; color
+    push    word [bp+6]     ; y
+    push    word [bp+8]     ; x2
+    push    word [bp+4]     ; x1
+    call    cga_line_horizontal
+    add     sp, 8
+    pop     bp
+    ret
+
+.do_vert:
+    push    word [bp+12]    ; color
+    push    word [bp+10]    ; y2
+    push    word [bp+6]     ; y1
+    push    word [bp+4]     ; x
+    call    cga_line_vertical
+    add     sp, 8
+    pop     bp
+    ret
+%undef .x1
+%undef .y1
+%undef .x2
+%undef .y2
+%undef .color
+
+; ------------------------------------------------------------
 ; cga_draw_rect
 ; Dessine un rectangle vide (contour)
 ; Entrée : x1, y1, x2, y2, color
@@ -830,11 +972,11 @@ cga_draw_rect:
     ; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
     ; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
 
-    GFX     LINE_HORIZ, .x1, .x2, .y1, .color
-    GFX     LINE_HORIZ, .x1, .x2, .y2, .color
+    GFX     LINE, .x1, .y1, .x2, .y1, .color
+    GFX     LINE, .x1, .y2, .x2, .y2, .color
 
-    GFX     LINE_VERT, .x1, .y1, .y2, .color
-    GFX     LINE_VERT, .x2, .y1, .y2, .color
+    GFX     LINE, .x1, .y1, .x1, .y2, .color
+    GFX     LINE, .x2, .y1, .x2, .y2, .color
 
     call    cga_mouse_show
     popa
@@ -1046,9 +1188,13 @@ cga_fill_rect:
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .color  word [bp+12]
+; Variable locale pour l'index du motif (y % 8)
+%define .coord1 word [bp-2]
+%define .coord2 word [bp-4]
 cga_draw_rounded_frame:
     push    bp
     mov     bp, sp
+    sub     sp, 4           ; Reserve espace pour .coord1 et .coord2
     pusha
 
     call    cga_mouse_hide
@@ -1056,18 +1202,22 @@ cga_draw_rounded_frame:
     ; Lignes horizontales (raccourcies de 2px pour laisser place à l'arrondi)
     mov     ax, .x1
     add     ax, 2
+    mov     .coord1, ax
     mov     bx, .x2
     sub     bx, 2
-    GFX     LINE_HORIZ, ax, bx, .y1, .color
-    GFX     LINE_HORIZ, ax, bx, .y2, .color
+    mov     .coord2, bx
+    GFX     LINE, .coord1, .y1, .coord2, .y1, .color
+    GFX     LINE, .coord1, .y2, .coord2, .y2, .color
 
     ; Lignes verticales (raccourcies de 1px en haut et en bas)
     mov     cx, .y1
     add     cx, 2
+    mov     .coord1, cx
     mov     dx, .y2
     sub     dx, 2
-    GFX     LINE_VERT, .x1, cx, dx, .color
-    GFX     LINE_VERT, .x2, cx, dx, .color
+    mov     .coord2, dx
+    GFX     LINE, .x1, .coord1, .x1, .coord2, .color
+    GFX     LINE, .x2, .coord1, .x2, .coord2, .color
 
     ; Ajout des pixels de transition pour adoucir les coins (chanfrein)
     mov     ax, .x1

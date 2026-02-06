@@ -277,18 +277,18 @@ gui_update_logic:
 
 	; --- Hit Test ---
 	cmp     cx, [gs:si + widget.x]
-	jl      .miss                               ; mouse.x < widget.x ?
+	jb      .miss                               ; mouse.x < widget.x ?
 	mov     bx, [gs:si + widget.x]
 	add     bx, [gs:si + widget.w]
 	cmp     cx, bx
-	jg      .miss                               ; mouse.x >= widget.x ?
+	ja      .miss                               ; mouse.x >= widget.x ?
 
 	cmp     dx, [gs:si + widget.y]
-	jl      .miss                               ; mouse.y < widget.y ?
+	jb      .miss                               ; mouse.y < widget.y ?
 	mov     bx, [gs:si + widget.y]
 	add     bx, [gs:si + widget.h]
 	cmp     dx, bx
-	jg      .miss                               ; mouse.y >= widget.y ?
+	ja      .miss                               ; mouse.y >= widget.y ?
 
 	mov     bl, [BDA_MOUSE + mouse.status]
 
@@ -744,22 +744,12 @@ draw_checkbox:
 	sub     cx, 2
 	sub     dx, 2
 
-	push    ax
-	push    bx
-	push    dx
-	.loop_x:
-		cmp     ax, cx
-		jg      .end_x
-		GFX     PUTPIXEL, ax, bx, 0
-		GFX     PUTPIXEL, ax, dx, 0
-		inc     ax
-		inc     bx
-		dec     dx
-		jmp     .loop_x
-	.end_x:
-	pop     dx
-	pop     bx
-	pop     ax
+	; Optimisation : Utilisation de LINE au lieu de PUTPIXEL en boucle
+	; Diagonale 1 : (ax, bx) -> (cx, dx)
+	GFX     LINE, ax, bx, cx, dx, 0
+
+	; Diagonale 2 : (ax, dx) -> (cx, bx)
+	GFX     LINE, ax, dx, cx, bx, 0
 
 	.draw_label:
 	pop     dx
