@@ -230,12 +230,19 @@ gui_api_destroy:
 ; -----------------------------------------------------------------------------
 ; gui_get_widget_ptr
 ; Helper interne : Convertit ID en Pointeur
-; In: AX = ID
+; In: ID
 ; Out: GS:SI = Ptr, CF=1 if error
 ; -----------------------------------------------------------------------------
+%define .id word [bp+4]
 gui_get_widget_ptr:
+    push    bp
+    mov     bp, sp
+
+	mov		ax, .id
+	stc
+
     cmp     ax, GUI_MAX_WIDGETS
-    jae     .error
+    je   	.done
 
     push    dx
     mov     cx, widget_size
@@ -247,9 +254,8 @@ gui_get_widget_ptr:
     mov     gs, ax
 
     clc
-    ret
-.error:
-    stc
+.done:
+	leave
     ret
 
 ; =============================================================================
