@@ -88,45 +88,6 @@ endstruc
 ;   0x03C00-0x08000 : stack segment
 ;   0x
 
-
-
-; -----------------------------------------------------------------------------------
-; PC components I/O ports
-; -----------------------------------------------------------------------------------
-
-; controleur clavier/souris i8042 (AT-PS/2)
-%define i8042_PS2_DATA          0x60
-%define i8042_PS2_CTRL          0x64
-
-; PIC 8259 ports (Programmable Interrupt Controller)
-; PIC 1 : Master
-%define i8259_MASTER_CMD        0x20
-%define i8259_MASTER_DATA	0x21
-; PIC 2 : Slave
-%define i8259_SLAVE_CMD         0xA0
-%define i8259_SLAVE_DATA	0xA1
-
-; i8259 Commands
-%define ICW1_ICW4               0x01            ; Indicates that ICW4 will be present
-%define ICW1_SINGLE	        0x02            ; Single (cascade) mode
-%define ICW1_INTERVAL4          0x04            ; Call address interval 4 (8)
-%define ICW1_LEVEL              0x08            ; Level triggered (edge) mode
-%define ICW1_INIT               0x10            ; Initialization - required!
-
-%define ICW4_8086               0x01            ; 8086/88 (MCS-80/85) mode
-%define ICW4_AUTO	        0x02		; Auto (normal) EOI
-%define ICW4_BUF_SLAVE	        0x08		; Buffered mode/slave
-%define ICW4_BUF_MASTER	        0x0C		; Buffered mode/master
-%define ICW4_SFNM	        0x10		; Special fully nested (not)
-%define PIC_EOI                 0x20
-
-; Remap : IRQ0..7 -> 0x08..0x0F, IRQ8..15 -> 0x70..0x77
-%define i8259_MASTER_INT        0x08
-%define i8259_SLAVE_INT         0x70
-
-%define IRQ_ENABLED             0x00
-%define IRQ_DISABLED            0x01
-
 ; -----------------------------------------------------------------------------------
 ;  bda_setup
 ;  Initialise la BDA à zéro

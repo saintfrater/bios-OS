@@ -20,6 +20,44 @@
 ;
 ; =============================================================================
 
+
+; -----------------------------------------------------------------------------------
+; PC components I/O ports
+; -----------------------------------------------------------------------------------
+
+; controleur clavier/souris i8042 (AT-PS/2)
+%define i8042_PS2_DATA          0x60
+%define i8042_PS2_CTRL          0x64
+
+; PIC 8259 ports (Programmable Interrupt Controller)
+; PIC 1 : Master
+%define i8259_MASTER_CMD        0x20
+%define i8259_MASTER_DATA		0x21
+; PIC 2 : Slave
+%define i8259_SLAVE_CMD         0xA0
+%define i8259_SLAVE_DATA		0xA1
+
+; i8259 Commands
+%define ICW1_ICW4               0x01            ; Indicates that ICW4 will be present
+%define ICW1_SINGLE	       		0x02            ; Single (cascade) mode
+%define ICW1_INTERVAL4          0x04            ; Call address interval 4 (8)
+%define ICW1_LEVEL              0x08            ; Level triggered (edge) mode
+%define ICW1_INIT               0x10            ; Initialization - required!
+
+%define ICW4_8086               0x01            ; 8086/88 (MCS-80/85) mode
+%define ICW4_AUTO	        	0x02			; Auto (normal) EOI
+%define ICW4_BUF_SLAVE	        0x08			; Buffered mode/slave
+%define ICW4_BUF_MASTER	        0x0C			; Buffered mode/master
+%define ICW4_SFNM	        	0x10			; Special fully nested (not)
+%define PIC_EOI                 0x20
+
+; Remap : IRQ0..7 -> 0x08..0x0F, IRQ8..15 -> 0x70..0x77
+%define i8259_MASTER_INT        0x08
+%define i8259_SLAVE_INT         0x70
+
+%define IRQ_ENABLED             0x00
+%define IRQ_DISABLED            0x01
+
 ; ---------------------------------------------------------------------------
 ; Détection les ROM supplementaires
 ; Teste la RAM de 0xC000 jusqu’à 0xE000, par pas de 2KB.
@@ -66,11 +104,11 @@ setup_check_vga:
 	; Comparer avec default_isr (offset) et CS (segment)
 	mov		dx, default_isr 		; DX = offset default_isr (dans notre CS)
 	cmp 	bx, dx
-	jne 	.init_ok	; vecteur different, bios initialisé
+	jne 	.init_ok				; vecteur different, bios initialisé
 	cmp 	cx, ax
 	jne 	.init_ok
 
-	mov		ax,cs			; vecteur identique, sans doute pas d'initialisation
+	mov		ax,cs					; vecteur identique, sans doute pas d'initialisation
 	mov		ds,ax
 	.init_ok:
 	ret
@@ -81,19 +119,19 @@ setup_check_vga:
 ivt_setup:
 	; installation de la table d'interrupts
 	xor 	ax, ax
-	mov 	es, ax	 	; ES = 0000h -> base IVT
-	xor 	di, di	 	; DI = 0000h -> offset IVT
+	mov 	es, ax	 				; ES = 0000h -> base IVT
+	xor 	di, di	 				; DI = 0000h -> offset IVT
 
-	mov 	ax, default_isr   	; offset du handler
-	mov 	dx, cs	  ; segment du handler (ROM)
+	mov 	ax, default_isr   		; offset du handler
+	mov 	dx, cs	  				; segment du handler (ROM)
 
 	mov 	cx, 256	 ; 256 vecteurs
 
 	.fill:
-	stosw     				  ; write offset (AX)  -> [ES:DI], DI += 2
-	xchg 	ax, dx  	          ; AX = segment, DX = offset
-	stosw          	        ; write segment (AX) -> [ES:DI], DI += 2
-	xchg 	ax, dx        		  ; AX = offset, DX = segment
+	stosw     				  		; write offset (AX)  -> [ES:DI], DI += 2
+	xchg 	ax, dx  	          	; AX = segment, DX = offset
+	stosw          	        		; write segment (AX) -> [ES:DI], DI += 2
+	xchg 	ax, dx        		  	; AX = offset, DX = segment
 	loop 	.fill
 	; fin de la table d'interrupt
 	ret
@@ -109,17 +147,17 @@ ivt_setvector:
 	push	es
 	push	di
 
-	shl		ax,2			; ax=id *4
+	shl		ax,2					; ax=id *4
 	mov		di,ax
 
 	xor		ax,ax
-	mov 	es, ax	 	; ES = 0000h -> base IVT
+	mov 	es, ax	 				; ES = 0000h -> base IVT
 
-	mov 	ax, bx		; offset du handler
+	mov 	ax, bx					; offset du handler
 	cli
-	stosw     				  ; write offset (AX)  -> [ES:DI], DI += 2
-	xchg 	ax, dx  	          ; AX = segment, DX = offset
-	stosw          	        ; write segment (AX) -> [ES:DI], DI += 2
+	stosw     				  		; write offset (AX)  -> [ES:DI], DI += 2
+	xchg 	ax, dx  	          	; AX = segment, DX = offset
+	stosw          	        		; write segment (AX) -> [ES:DI], DI += 2
 	sti
 
 	pop		di
@@ -153,17 +191,17 @@ pic_init:
 	out 	i8259_SLAVE_CMD, al
 
 	mov		 			al, i8259_MASTER_INT
-	out 	i8259_MASTER_DATA, al	; ICW2: Master PIC vector offset
+	out 	i8259_MASTER_DATA, al		; ICW2: Master PIC vector offset
 	mov 	al, i8259_SLAVE_INT
-	out 	i8259_SLAVE_DATA, al	; ICW2: Slave PIC vector offset
+	out 	i8259_SLAVE_DATA, al		; ICW2: Slave PIC vector offset
 
 	; Master: cascade (IRQ2 => 1 << IRQ2  = 0x04)
 	mov 	al, 0x04       			 	; master: slave on IRQ2: 0100b
-	out 	i8259_MASTER_DATA, al	; ICW3: tell Master PIC that there is a slave PIC at IRQ2
+	out 	i8259_MASTER_DATA, al		; ICW3: tell Master PIC that there is a slave PIC at IRQ2
 
 	; Slave: numéro de ligne sur master (2)
-	mov 	al, 0x02        	; slave: cascade identity 2
-	out 	i8259_SLAVE_DATA, al	; ICW3: tell Slave PIC its cascade identity (0000 0010)
+	mov 	al, 0x02        			; slave: cascade identity 2
+	out 	i8259_SLAVE_DATA, al		; ICW3: tell Slave PIC its cascade identity (0000 0010)
 
 	; ICW4: 8086 mode
 	mov 	al, ICW4_8086
@@ -181,7 +219,7 @@ pic_init:
 pic_set_irq_mask:
 	pusha
 
-	mov     cl, al          ; CL = numéro d'IRQ
+	mov     cl, al          			; CL = numéro d'IRQ
 	; Par défaut, PIC Maître (Data port)
 	mov     dx, i8259_MASTER_DATA
 
@@ -189,30 +227,30 @@ pic_set_irq_mask:
 	jl      .is_master
 
 	; Si IRQ >= 8, on passe sur le PIC Esclave
-	sub     cl, 8           ; Ajuste l'index du bit (8-15 -> 0-7)
+	sub     cl, 8           			; Ajuste l'index du bit (8-15 -> 0-7)
 	; Port Data du PIC Esclave
 	mov     dx, i8259_SLAVE_DATA
 
 .is_master:
 	; Préparation du masque de bit
 	mov     bl, 1
-	shl     bl, cl          ; BL contient maintenant le bit correspondant (ex: IRQ 3 -> 00001000)
+	shl     bl, cl          			; BL contient maintenant le bit correspondant (ex: IRQ 3 -> 00001000)
 
-	in      al, dx          ; Lire l'IMR actuel depuis le port (0x21 ou 0xA1)
+	in      al, dx          			; Lire l'IMR actuel depuis le port (0x21 ou 0xA1)
 
-	test    ah, ah          ; AH est-il à 1 (Disable) ?
+	test    ah, ah          			; AH est-il à 1 (Disable) ?
 	jnz     .do_disable
 
 	.do_enable:
-	not     bl	  			; Inverser le masque (ex: 11110111)
-	and     al, bl          ; Mettre le bit à 0 (Unmask)
+	not     bl	  						; Inverser le masque (ex: 11110111)
+	and     al, bl          			; Mettre le bit à 0 (Unmask)
 	jmp     .write_back
 
 	.do_disable:
-	or      al, bl          ; Mettre le bit à 1 (Mask)
+	or      al, bl         				; Mettre le bit à 1 (Mask)
 
 	.write_back:
-	out     dx, al          ; Écrire le nouveau masque dans l'IMR
+	out     dx, al          			; Écrire le nouveau masque dans l'IMR
 
 	popa
 	ret

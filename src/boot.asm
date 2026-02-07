@@ -42,17 +42,19 @@ section     .text
 
 %include	"./common/chartable.asm"
 %include	"./common/cursor.asm"
+%include    "./common/generic.asm"
 
 ; definition du BDA
 %include 	"./common/bda.asm"
 
-; %include 	"./common/debug_cga.asm"
+; drivers
 %include	"./drivers/gfx_cgam.asm"
-%include	"./services/gui_lib.asm"
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
-%include 	"./services/generic.asm"
-; %include	"./services/gui_window.asm"
+
+; GUI
+%include	"./gui/lib.asm"
+%include	"./gui/draw.asm"
 
 reset:
 	cli
