@@ -74,6 +74,12 @@ To build and run this project, the following tools and components are required:
 
 ---
 
+### API
+
+Get a look at the [API](/doc/API.md) for more information.
+
+---
+
 ### Build and Run
 
 #### Compilation
@@ -205,6 +211,15 @@ Utilisé comme émulateur PC principal pour tester et déboguer le BIOS personna
 - **BIOS VGA de QEMU**
 Le BIOS VGA standard de QEMU (vgabios.bin) est utilisé pour initialiser le matériel vidéo, ce qui permet au projet de se concentrer sur le développement du BIOS sans réimplémenter la logique VGA complète.
 
+----
+
+### API
+
+Consultez la documentation de l'[API](/doc/API.md) pour plus d'informations.
+
+---
+
+
 ### Compilation et exécution
 
 #### Compilation
@@ -270,7 +285,5 @@ Ce projet est avant tout un **laboratoire d’apprentissage et d’exploration**
 
 🚧 **Work in progress**
 Designed for experimentation, learning, and documentation.
-
-parcourez l'[API](/doc/API.md) pour plus d'informations
 
 ---

@@ -79,6 +79,179 @@ struc widget
 endstruc
 
 ; =============================================================================
+;  SECTION : API ACTIONS
+; =============================================================================
+
+%macro GUI 1-*
+    %rep %0 - 1
+        %rotate -1
+        push %1
+    %endrep
+    %rotate -1
+    call word [cs:gui_api_table + ((%1)*2)]
+    add sp, (%0 - 1) * 2
+%endmacro
+
+%define GUI_CREATE      0
+%define GUI_DESTROY     1
+%define GUI_GET_STATE   2
+%define GUI_GET_TYPE    3
+%define GUI_GET_VAL     4
+
+gui_api_table:
+    dw gui_api_create
+	dw gui_api_destroy
+    dw gui_api_get_state
+    dw gui_api_get_type
+    dw gui_api_get_val
+
+; -----------------------------------------------------------------------------
+; gui_api_create
+; Crée un widget et retourne son ID
+; Out: AX = ID ou -1 si erreur
+; -----------------------------------------------------------------------------
+gui_api_create:
+    call    gui_alloc_widget        ; Returns GS:SI
+    jc      .error
+
+    ; ID = SI / widget_size
+    mov     ax, si
+    xor     dx, dx
+    mov     cx, widget_size
+    div     cx
+    ret
+
+.error:
+    mov     ax, -1
+    ret
+
+; -----------------------------------------------------------------------------
+; gui_api_get_state
+; Arg1: ID
+; Out: AX = State
+; -----------------------------------------------------------------------------
+%define .id word [bp+4]
+gui_api_get_state:
+    push    bp
+    mov     bp, sp
+
+    mov     ax, .id         ; ID
+    call    gui_get_widget_ptr
+    jc      .err
+
+    xor     ax, ax
+    mov     al, [gs:si + widget.state]
+    jmp     .done
+
+.err:
+    mov     ax, -1
+.done:
+    leave
+    ret
+%undef .id
+
+; -----------------------------------------------------------------------------
+; gui_api_get_type
+; Arg1: ID
+; Out: AX = Type
+; -----------------------------------------------------------------------------
+%define .id word [bp+4]
+gui_api_get_type:
+    push    bp
+    mov     bp, sp
+
+    mov     ax, .id         ; ID
+    call    gui_get_widget_ptr
+    jc      .err
+
+    xor     ax, ax
+    mov     al, [gs:si + widget.type]
+    jmp     .done
+
+.err:
+    mov     ax, -1
+.done:
+    leave
+    ret
+%undef .id
+
+; -----------------------------------------------------------------------------
+; gui_api_get_val
+; Arg1: ID
+; Out: AX = Attr Val
+; -----------------------------------------------------------------------------
+%define .id word [bp+4]
+gui_api_get_val:
+    push    bp
+    mov     bp, sp
+
+
+    mov     ax, .id         ; ID
+    call    gui_get_widget_ptr
+    jc      .err
+
+    mov     ax, [gs:si + widget.attr_val]
+    jmp     .done
+
+.err:
+    mov     ax, -1
+.done:
+    leave
+    ret
+%undef .id
+
+; -----------------------------------------------------------------------------
+; gui_api_destroy
+; Détruit un widget via son ID
+; Arg1: ID
+; Out: AX = 0 (OK), -1 (Error)
+; -----------------------------------------------------------------------------
+%define .id word [bp+4]
+gui_api_destroy:
+    push    bp
+    mov     bp, sp
+
+    mov     ax, .id         ; ID
+    call    gui_get_widget_ptr
+    jc      .err
+
+    call    gui_free_widget
+    xor     ax, ax
+    jmp     .done
+
+.err:
+    mov     ax, -1
+.done:
+    leave
+    ret
+%undef .id
+
+; -----------------------------------------------------------------------------
+; gui_get_widget_ptr
+; Helper interne : Convertit ID en Pointeur
+; In: AX = ID
+; Out: GS:SI = Ptr, CF=1 if error
+; -----------------------------------------------------------------------------
+gui_get_widget_ptr:
+    cmp     ax, GUI_MAX_WIDGETS
+    jae     .error
+
+    push    dx
+    mov     cx, widget_size
+    mul     cx              ; AX = Offset
+    mov     si, ax
+    pop     dx
+
+    mov     ax, GUI_RAM_SEG
+    mov     gs, ax
+
+    clc
+    ret
+.error:
+    stc
+    ret
+
+; =============================================================================
 ;  SECTION : GESTION MÉMOIRE (ALLOCATION / LIBÉRATION)
 ; =============================================================================
 
