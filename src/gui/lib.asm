@@ -1,6 +1,6 @@
 ; =============================================================================
 ;  Project  : Custom BIOS / ROM
-;  File     : gui_lib.asm
+;  File     : gui/lib.asm
 ;  Author   : frater
 ;
 ;  License  : GNU General Public License v3.0 or later (GPL-3.0+)
@@ -21,7 +21,7 @@
 ; =============================================================================
 
 ; --- Configuration ---
-%define GUI_RAM_SEG         0x0A00      ; Segment de données UI
+%define GUI_RAM_SEG         0x1800      ; Segment de données UI (Safe: après Stack, avant Heap)
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
 ; Dimensions
@@ -46,6 +46,23 @@
 
 %define SLIDER_HORIZONTAL			1
 %define SLIDER_VERTICAL				2
+
+; =============================================================================
+;  SECTION : API ACTIONS
+; =============================================================================
+
+%define GUI_CREATE      0
+%define GUI_DESTROY     1
+%define GUI_GET_STATE   2
+%define GUI_GET_TYPE    3
+%define GUI_GET_VAL     4
+
+gui_api_table:
+    dw gui_api_create
+	dw gui_api_destroy
+    dw gui_api_get_state
+    dw gui_api_get_type
+    dw gui_api_get_val
 
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
@@ -78,10 +95,6 @@ struc widget
 	alignb      2           ; Alignement mémoire pour performance
 endstruc
 
-; =============================================================================
-;  SECTION : API ACTIONS
-; =============================================================================
-
 %macro GUI 1-*
     %rep %0 - 1
         %rotate -1
@@ -91,19 +104,6 @@ endstruc
     call word [cs:gui_api_table + ((%1)*2)]
     add sp, (%0 - 1) * 2
 %endmacro
-
-%define GUI_CREATE      0
-%define GUI_DESTROY     1
-%define GUI_GET_STATE   2
-%define GUI_GET_TYPE    3
-%define GUI_GET_VAL     4
-
-gui_api_table:
-    dw gui_api_create
-	dw gui_api_destroy
-    dw gui_api_get_state
-    dw gui_api_get_type
-    dw gui_api_get_val
 
 ; -----------------------------------------------------------------------------
 ; gui_api_create

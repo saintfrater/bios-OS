@@ -1,6 +1,6 @@
 ; =============================================================================
 ;  Project  : Custom BIOS / ROM
-;  File     : gui_lib.asm
+;  File     : gui/draw.asm
 ;  Author   : frater
 ;
 ;  License  : GNU General Public License v3.0 or later (GPL-3.0+)

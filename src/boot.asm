@@ -38,10 +38,11 @@
 ;	times 	0xFFFF - ($ - $$) db 0xFF
 
 section     .text
-    bits	16
+	bits	16
 
 %include	"./common/chartable.asm"
 %include	"./common/cursor.asm"
+%include	"./common/patterns.asm"
 %include    "./common/generic.asm"
 
 ; definition du BDA
@@ -51,6 +52,8 @@ section     .text
 %include	"./drivers/gfx_cgam.asm"
 %include	"./drivers/mouse_ps2.asm"
 %include 	"./drivers/keyboard_ps2.asm"
+
+%include	"./common/debug_cga.asm"
 
 ; GUI
 %include	"./gui/lib.asm"
@@ -102,123 +105,123 @@ reset:
 	push	cs
 	pop		ds
 
-    ; Init du système GUI
-    call    gui_init_system
+	; Init du système GUI
+	call    gui_init_system
  	call	build_interface
 
 main_loop:
-    ; 2. Moteur GUI (Gère tout : Loop, HitTest, Draw, Callbacks)
-    ; DS pointe déjà sur GUI_RAM_SEG
-    call    gui_process_all
+	call    gui_process_all
 
-    ; 3. Afficher souris
-    ; GFX     MOUSE_MOVE
+ 	GUI		GUI_GET_VAL, 5		; slider
 
-    jmp     main_loop
+	;GFX		GOTOXY, 5, 20
+	;call	print_word_hex
+
+	jmp     main_loop
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
 on_click_quit:
-    hlt
-    jmp     on_click_quit
+	hlt
+	jmp     on_click_quit
 
 
 build_interface:
-    ; --- CRÉATION DYNAMIQUE DES BOUTONS ---
-    ; On reste dans CS pour lire les arguments,
-    ; mais on configure DS=GUI_RAM_SEG pour l'allocation
+	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
+	; On reste dans CS pour lire les arguments,
+	; mais on configure DS=GUI_RAM_SEG pour l'allocation
 
-    ; Créer Bouton 1 "QUITTER"
-    call    gui_alloc_widget        ; Retourne SI = Pointeur nouveau slot
-    jc     .mem_full
+	; Créer Bouton 1 "QUITTER"
+	call    gui_alloc_widget        ; Retourne SI = Pointeur nouveau slot
+	jc     .mem_full
 
-    ; Remplir les propriétés
-    mov     word [gs:si +  widget.x], 10
-    mov     word [gs:si +  widget.y], 10
-    mov     word [gs:si +  widget.w], 80
-    mov     word [gs:si +  widget.h], 16
-    mov     word [gs:si +  widget.text_ofs], str_quit
-    ; mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
-    mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
-    mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
+	; Remplir les propriétés
+	mov     word [gs:si +  widget.x], 10
+	mov     word [gs:si +  widget.y], 10
+	mov     word [gs:si +  widget.w], 80
+	mov     word [gs:si +  widget.h], 16
+	mov     word [gs:si +  widget.text_ofs], str_quit
+	; mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
+	mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
+	mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
+	mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
 
-    ; Créer Bouton 2 "HELLO"
-    call    gui_alloc_widget
-    jc      .mem_full
+	; Créer Bouton 2 "HELLO"
+	call    gui_alloc_widget
+	jc      .mem_full
 
-    mov     word [gs:si +  widget.x], 100
-    mov     word [gs:si +  widget.y], 50
-    mov     word [gs:si +  widget.w], 80
-    mov     word [gs:si +  widget.h], 16
-    mov     word [gs:si +  widget.text_ofs], str_hello
-    mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
+	mov     word [gs:si +  widget.x], 100
+	mov     word [gs:si +  widget.y], 50
+	mov     word [gs:si +  widget.w], 80
+	mov     word [gs:si +  widget.h], 16
+	mov     word [gs:si +  widget.text_ofs], str_hello
+	mov     word [gs:si +  widget.text_seg], cs
+	mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
 
-    ; Créer checkbox 3 "option 1"
-    call    gui_alloc_widget
-    jc      .mem_full
+	; Créer checkbox 3 "option 1"
+	call    gui_alloc_widget
+	jc      .mem_full
 
-    mov     word [gs:si +  widget.x], 200
-    mov     word [gs:si +  widget.y], 50
-    mov     word [gs:si +  widget.w], 100
-    mov     word [gs:si +  widget.h], 15
-    mov     word [gs:si +  widget.text_ofs], str_option1
-    mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
-    ; Pas de callback
+	mov     word [gs:si +  widget.x], 200
+	mov     word [gs:si +  widget.y], 50
+	mov     word [gs:si +  widget.w], 100
+	mov     word [gs:si +  widget.h], 15
+	mov     word [gs:si +  widget.text_ofs], str_option1
+	mov     word [gs:si +  widget.text_seg], cs
+	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
+	; Pas de callback
 
-    ; Créer checkbox 3 "option 2"
-    call    gui_alloc_widget
-    jc      .mem_full
+	; Créer checkbox 3 "option 2"
+	call    gui_alloc_widget
+	jc      .mem_full
 
-    mov     word [gs:si +  widget.x], 200
-    mov     word [gs:si +  widget.y], 50+16
-    mov     word [gs:si +  widget.w], 100
-    mov     word [gs:si +  widget.h], 15
-    mov     word [gs:si +  widget.text_ofs], str_option2
-    mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
+	mov     word [gs:si +  widget.x], 200
+	mov     word [gs:si +  widget.y], 50+16
+	mov     word [gs:si +  widget.w], 100
+	mov     word [gs:si +  widget.h], 15
+	mov     word [gs:si +  widget.text_ofs], str_option2
+	mov     word [gs:si +  widget.text_seg], cs
+	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
 
-    ; Créer checkbox 3 "option 2"
-    call    gui_alloc_widget
-    jc      .mem_full
+	; Créer checkbox 3 "option 2"
+	call    gui_alloc_widget
+	jc      .mem_full
 
-    mov     word [gs:si +  widget.x], 200
-    mov     word [gs:si +  widget.y], 50+16*2
-    mov     word [gs:si +  widget.w], 100
-    mov     word [gs:si +  widget.h], 15
-    mov     word [gs:si +  widget.text_ofs], str_option3
-    mov     word [gs:si +  widget.text_seg], cs
-    mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
+	mov     word [gs:si +  widget.x], 200
+	mov     word [gs:si +  widget.y], 50+16*2
+	mov     word [gs:si +  widget.w], 100
+	mov     word [gs:si +  widget.h], 15
+	mov     word [gs:si +  widget.text_ofs], str_option3
+	mov     word [gs:si +  widget.text_seg], cs
+	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
 
-    ; Créer Slider (Drag)
-    call    gui_alloc_widget
-    jc      .mem_full
-    mov     word [gs:si + widget.x], 10
-    mov     word [gs:si + widget.y], 100
-    mov     word [gs:si + widget.w], 150
-    mov     word [gs:si + widget.h], 12
-    mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-    mov     byte [gs:si + widget.attr_mode], SLIDER_HORIZONTAL
-    mov     word [gs:si + widget.attr_min], 10      ; X Min
-    mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
-    mov     word [gs:si + widget.attr_val], 10      ; Position initiale
-    mov     byte [gs:si + widget.thumb_pct], 15     ; Curseur fait 15% de la largeur
+	; Créer Slider (Drag)
+	call    gui_alloc_widget
+	jc      .mem_full
+	mov     word [gs:si + widget.x], 10
+	mov     word [gs:si + widget.y], 100
+	mov     word [gs:si + widget.w], 150
+	mov     word [gs:si + widget.h], 12
+	mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+	mov     byte [gs:si + widget.attr_mode], SLIDER_HORIZONTAL
+	mov     word [gs:si + widget.attr_min], 10      ; X Min
+	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
+	mov     word [gs:si + widget.attr_val], 10      ; Position initiale
+	mov     byte [gs:si + widget.thumb_pct], 15     ; Curseur fait 15% de la largeur
 ;     mov     word [gs:si + widget.event_drag], on_drag_slider
 
 ; Créer Slider (Drag)
-    call    gui_alloc_widget
-    jc      .mem_full
-    mov     word [gs:si + widget.x], 400
-    mov     word [gs:si + widget.y], 10
-    mov     word [gs:si + widget.w], 16
-    mov     word [gs:si + widget.h], 150
-    mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-    mov     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
-    mov     word [gs:si + widget.attr_min], 10      ; X Min
-    mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
-    mov     word [gs:si + widget.attr_val], 140      ; Position initiale
-    mov     byte [gs:si + widget.thumb_pct], 25     ; Curseur fait 15% de la largeur
+	call    gui_alloc_widget
+	jc      .mem_full
+	mov     word [gs:si + widget.x], 400
+	mov     word [gs:si + widget.y], 10
+	mov     word [gs:si + widget.w], 16
+	mov     word [gs:si + widget.h], 150
+	mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+	mov     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
+	mov     word [gs:si + widget.attr_min], 10      ; X Min
+	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
+	mov     word [gs:si + widget.attr_val], 140      ; Position initiale
+	mov     byte [gs:si + widget.thumb_pct], 25     ; Curseur fait 15% de la largeur
 ;     mov     word [gs:si + widget.event_drag], on_drag_slider
 
 .mem_full:
