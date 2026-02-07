@@ -21,7 +21,7 @@
 ; =============================================================================
 
 ; --- Configuration ---
-%define GUI_RAM_SEG         0x1800      ; Segment de données UI (Safe: après Stack, avant Heap)
+%define GUI_RAM_SEG         0x0600      ; Segment de données UI (Safe: après Stack, avant Heap)
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
 ; Dimensions
@@ -94,6 +94,7 @@ struc widget
 
 	alignb      2           ; Alignement mémoire pour performance
 endstruc
+; actuellement 34 octets
 
 %macro GUI 1-*
     %rep %0 - 1

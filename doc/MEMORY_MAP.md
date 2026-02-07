@@ -11,10 +11,10 @@ The processor starts in Real Mode, addressing 1 MB of memory.
 | **`0x00000`** | **`0x003FF`** | 1 KB | **IVT** (Interrupt Vector Table) | `0x0000` | `memory.asm` |
 | **`0x00400`** | **`0x004FF`** | 256 B | **BDA** (BIOS Data Area) Standard | `0x0040` | `memory.asm` |
 | **`0x00500`** | **`0x005FF`** | ~256 B | **Custom BDA** (Driver Data) | `0x0050` | `memory.asm` |
-| **`0x00600`** | **`0x07FFF`** | 30.5 KB | **Free** (Low Memory) | | |
+| **`0x00600`** | **`0x00AFF`** | 1.25 KB | **GUI RAM** (Widget Allocation) | `0x0060` | `gui/lib.asm` |
+| **`0x00B00`** | **`0x07FFF`** | 29 KB | **Free** (Low Memory) | | |
 | **`0x08000`** | **`0x17FFF`** | 64 KB | **Stack** (Grows downwards) | `0x0800` | `memory.asm` |
-| **`0x18000`** | **`0x18FFF`** | ~4 KB | **GUI RAM** (Widget Allocation) | `0x0A00` | `gui/lib.asm` |
-| **`0x19000`** | **`0x9FBFF`** | 539 KB | **Free** (Conventional RAM) | | |
+| **`0x18000`** | **`0x9FBFF`** | 543 KB | **Free** (Conventional RAM) | | |
 | **`0x9FC00`** | **`0x9FFFF`** | 1 KB | **EBDA** (Extended BIOS Data Area) | `0x9FC0` | `memory.asm` |
 | **`0xA0000`** | **`0xAFFFF`** | 64 KB | **VGA RAM** (Graphics Modes) | `0xA000` | `Hardware` |
 | **`0xB0000`** | **`0xB7FFF`** | 32 KB | **MDA RAM** (Monochrome Text) | `0xB000` | `Hardware` |
@@ -42,8 +42,8 @@ The project separates the standard IBM BDA from its own variables to avoid confl
 
 #### Stack & GUI RAM
 *   **Stack**: Segment `0x0800`, SP `0xFFFE`. Grows downwards from physical address `0x17FFE`.
-*   **GUI RAM**: Segment `0x0A00` (Physical `0x0A000`).
-*   **Layout**: The GUI RAM sits at the "bottom" of the stack segment's physical range, but since the stack starts at the top (`0x17FFE`) and grows down, there is approximately **56 KB** of safe space before collision.
+*   **GUI RAM**: Segment `0x0060` (Physical `0x00600`).
+*   **Layout**: Located in low memory (`0x00600`) to avoid any collision with the Stack (`0x08000`).
 
 #### Video RAM (CGA High-Res)
 *   **Segment**: `0xB800`
@@ -73,10 +73,10 @@ Le processeur démarre en mode réel, adressant 1 Mo de mémoire.
 | **`0x00000`** | **`0x003FF`** | 1 Ko | **IVT** (Interrupt Vector Table) | `0x0000` | `memory.asm` |
 | **`0x00400`** | **`0x004FF`** | 256 o | **BDA** (BIOS Data Area) Standard | `0x0040` | `memory.asm` |
 | **`0x00500`** | **`0x005FF`** | ~256 o | **Custom BDA** (Données Drivers) | `0x0050` | `memory.asm` |
-| **`0x00600`** | **`0x07FFF`** | 30.5 Ko | **Libre** (Mémoire Basse) | | |
-| **`0x08000`** | **`0x17FFF`** | 64 KB | **Stack** (Grows downwards) | `0x0800` | `memory.asm` |
-| **`0x18000`** | **`0x18FFF`** | ~4 KB | **GUI RAM** (Widget Allocation) | `0x0A00` | `gui/lib.asm` |
-| **`0x19000`** | **`0x9FBFF`** | 539 Ko | **Libre** (RAM Conventionnelle) | | |
+| **`0x00600`** | **`0x00AFF`** | 1.25 Ko | **GUI RAM** (Allocation Widgets) | `0x0060` | `gui/lib.asm` |
+| **`0x00B00`** | **`0x07FFF`** | 29 Ko | **Libre** (Mémoire Basse) | | |
+| **`0x08000`** | **`0x17FFF`** | 64 Ko | **Pile** (Stack) | `0x0800` | `memory.asm` |
+| **`0x18000`** | **`0x9FBFF`** | 543 Ko | **Libre** (RAM Conventionnelle) | | |
 | **`0x9FC00`** | **`0x9FFFF`** | 1 Ko | **EBDA** (Extended BIOS Data Area) | `0x9FC0` | `memory.asm` |
 | **`0xA0000`** | **`0xAFFFF`** | 64 Ko | **VGA RAM** (Modes Graphiques) | `0xA000` | `Matériel` |
 | **`0xB0000`** | **`0xB7FFF`** | 32 Ko | **MDA RAM** (Texte Monochrome) | `0xB000` | `Matériel` |
@@ -104,8 +104,8 @@ Le projet sépare la BDA standard IBM de ses propres variables pour éviter les 
 
 #### Stack & GUI RAM
 *   **Stack** : Segment `0x0800`, SP `0xFFFE`. Grandit vers le bas depuis l'adresse physique `0x17FFE`.
-*   **GUI RAM** : Segment `0x0A00` (Physique `0x0A000`).
-*   **Organisation** : La RAM GUI se trouve "en bas" de la plage physique du segment de pile, mais comme la pile commence tout en haut (`0x17FFE`) et descend, il y a environ **56 Ko** d'espace libre avant collision.
+ *   **GUI RAM** : Segment `0x0060` (Physique `0x00600`).
+*   **Organisation** : Située en mémoire basse (`0x00600`) pour éviter toute collision avec la Pile (`0x08000`).
 
 #### Video RAM (CGA High-Res)
 *   **Segment** : `0xB800`
