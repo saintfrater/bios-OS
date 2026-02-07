@@ -21,7 +21,7 @@
 ; =============================================================================
 
 ; --- Configuration ---
-%define GUI_RAM_SEG         0x0600      ; Segment de données UI (Safe: après Stack, avant Heap)
+%define GUI_RAM_SEG         0x060       ; Segment de données UI (Safe: après Stack, avant Heap)
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
 ; Dimensions

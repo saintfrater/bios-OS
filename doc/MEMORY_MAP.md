@@ -39,11 +39,11 @@ The project separates the standard IBM BDA from its own variables to avoid confl
 *   **Custom BDA (`0050:0000`)**: Defined by `BDA_DATA_SEG`. Stores driver states:
     *   **Mouse**: Input buffer, status, coordinates, background buffer (for cursor).
     *   **Gfx**: Text cursor position, attributes.
+    *   **GUI RAM**: Segment `0x0060` (Physical `0x00600`).
+        *   **Layout**: Located in low memory (`0x0060`) to avoid any collision with the Stack (`0x0800`).
 
-#### Stack & GUI RAM
+#### Stack
 *   **Stack**: Segment `0x0800`, SP `0xFFFE`. Grows downwards from physical address `0x17FFE`.
-*   **GUI RAM**: Segment `0x0060` (Physical `0x00600`).
-*   **Layout**: Located in low memory (`0x00600`) to avoid any collision with the Stack (`0x08000`).
 
 #### Video RAM (CGA High-Res)
 *   **Segment**: `0xB800`
@@ -101,11 +101,12 @@ Le projet sépare la BDA standard IBM de ses propres variables pour éviter les 
 *   **Custom BDA (`0050:0000`)** : Définie par `BDA_DATA_SEG`. Stocke l'état des drivers :
     *   **Souris** : Buffer d'entrée, état, coordonnées, buffer de sauvegarde du fond (pour le curseur).
     *   **Gfx** : Position du curseur texte, attributs.
+    *   **GUI RAM** : Segment `0x0060`.
+        *   **Organisation** : Située en mémoire basse (`0x0060`) pour éviter toute collision avec la Pile (`0x0800`).
 
-#### Stack & GUI RAM
+#### Stack
 *   **Stack** : Segment `0x0800`, SP `0xFFFE`. Grandit vers le bas depuis l'adresse physique `0x17FFE`.
- *   **GUI RAM** : Segment `0x0060` (Physique `0x00600`).
-*   **Organisation** : Située en mémoire basse (`0x00600`) pour éviter toute collision avec la Pile (`0x08000`).
+
 
 #### Video RAM (CGA High-Res)
 *   **Segment** : `0xB800`
