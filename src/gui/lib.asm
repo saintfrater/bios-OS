@@ -52,11 +52,20 @@
 ;  SECTION : API ACTIONS
 ; =============================================================================
 
-%define OBJ_CREATE      0
-%define OBJ_DESTROY     1
-%define OBJ_GET_STATE   2
-%define OBJ_GET_TYPE    3
-%define OBJ_GET_VAL     4
+%define OBJ_CREATE      			0
+%define OBJ_DESTROY     			1
+%define OBJ_GET_STATE   			2
+%define OBJ_GET_TYPE    			3
+%define OBJ_GET_VAL     			4
+%define	OBJ_SET_VAL					5
+
+%define	OBJ_SET_MODE				6
+%define	OBJ_SET_TEXT				7
+
+%define OBJ_GET_PTR					8
+
+%define OBJ_SLIDER_SET_ATTR			9
+
 
 gui_api_table:
 	dw gui_api_create
@@ -64,36 +73,39 @@ gui_api_table:
 	dw gui_api_get_state
 	dw gui_api_get_type
 	dw gui_api_get_val
+	dw gui_api_set_val
+	dw gui_api_set_mode
+	dw gui_api_set_text
+	dw gui_get_widget_ptr
+	dw gui_api_slider_attr
+
 
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
-	.state      resb 1      ; État (0=libre, >0=utilisé)
-	.type       resb 1      ; Type (0=Button, 1=Slider...)
-	.oldstate   resb 1      ; widget a-t-il été modifié ?
-	.user_id    resb 1      ; ID unique utilisateur
-	.x          resw 1      ; Position X
-	.y          resw 1      ; Position Y
-	.x2         resw 1      ; Position X2 calculée
-	.y2         resw 1      ; Position Y2 calculée
-	.w          resw 1      ; Largeur
-	.h          resw 1      ; Hauteur
-	.text_ofs   resw 1      ; Offset du texte
-	.text_seg   resw 1      ; Segment du texte
-	.event_click      resw 1      ; adresse de la fonction "on click"
-;    .event_hover      resw 1      ; adresse de la fonction "on hover"
-;    .event_release    resw 1      ; adresse de la fonction "on release"
-;    .event_disable    resw 1      ; adresse de la fonction "on disable"
-;    .event_enable     resw 1      ; adresse de la fonction "on enable"
-	.event_drag       resw 1      ; adresse de la fonction "on drag"
+	.state      resb 1      		; État (0=libre, >0=utilisé)
+	.type       resb 1      		; Type (0=Button, 1=Slider...)
+	.oldstate   resb 1      		; widget a-t-il été modifié ?
+	.user_id    resb 1      		; ID unique utilisateur
+	.x          resw 1      		; Position X
+	.y          resw 1      		; Position Y
+	.x2         resw 1      		; Position X2 calculée
+	.y2         resw 1      		; Position Y2 calculée
+	.w          resw 1      		; Largeur
+	.h          resw 1      		; Hauteur
+	.text_ofs   resw 1      		; Offset du texte
+	.text_seg   resw 1      		; Segment du texte
+	.event_click      resw 1      	; adresse de la fonction "on click"
+	.event_drag       resw 1      	; adresse de la fonction "on drag"
 
-	.attr_mode        resb 1      ; 0=None, 1=Horiz, 2=Vert
-	.attr_min         resw 1      ; Valeur/Position Min
-	.attr_max         resw 1      ; Valeur/Position Max
-	.attr_val         resw 1      ; Valeur/Position Actuelle
-	.attr_anchor      resw 1      ; Offset interne pour le drag
-	.thumb_pct        resb 1      ; Taille du curseur en % (1-100)
+	.attr_mode        resb 1      	; 0=None, 1=Horiz, 2=Vert
+	.attr_min         resw 1      	; Valeur/Position Min
+	.attr_max         resw 1      	; Valeur/Position Max
+	.attr_val         resw 1      	; Valeur/Position Actuelle
 
-	alignb      2           ; Alignement mémoire pour performance
+	.thumb_pct        resb 1      	; Taille du curseur en % (1-100)
+
+	.attr_anchor      resw 1      	; interne Offset pour le drag
+	alignb      2           		; Alignement mémoire pour performance
 endstruc
 ; actuellement 34 octets
 
@@ -108,11 +120,98 @@ endstruc
 %endmacro
 
 ; -----------------------------------------------------------------------------
+; gui_api_slider_attr
+; -----------------------------------------------------------------------------
+%define     .id      word [bp+4]
+%define     .min	 word [bp+6]
+%define     .max	 word [bp+8]
+%define     .val	 word [bp+10]
+%define     .pct     word [bp+12]
+gui_api_slider_attr:
+	push    bp
+	mov     bp, sp
+	push	ax
+
+	push	.id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
+
+	mov		ax, .mode
+	mov		byte [gs:si + widget.attr_min], al
+	mov		ax, .min
+	mov		word [gs:si + widget.attr_min], ax
+	mov		ax, .max
+	mov		word [gs:si + widget.attr_max], ax
+	mov		ax, .val
+	mov		word [gs:si + widget.attr_val], ax
+	mov		ax, .pct
+	mov		byte [gs:si + widget.thumb_pct], al
+
+	.err:
+	pop		ax
+	leave
+	ret
+%undef     .id
+%undef     .mode
+
+; -----------------------------------------------------------------------------
+; gui_api_set_mode
+; -----------------------------------------------------------------------------
+%define     .id       word [bp+4]
+%define     .mode     word [bp+6]
+gui_api_set_mode:
+	push    bp
+	mov     bp, sp
+	push	ax
+
+	push	.id
+	call    gui_get_widget_ptr
+	jc      .err
+
+	mov		ax, .mode
+	mov		byte [gs:si + widget.attr_mode], al
+
+	.err:
+	pop		ax
+	leave
+	ret
+%undef     .id
+%undef     .mode
+
+; -----------------------------------------------------------------------------
+; gui_api_set_text
+; -----------------------------------------------------------------------------
+%define     .id       	word [bp+4]
+%define     .segmt   	word [bp+6]
+%define     .oft 	 	word [bp+8]
+gui_api_set_text:
+	push    bp
+	mov     bp, sp
+	push	ax
+
+	push	.id
+	call    gui_get_widget_ptr
+	jc      .err
+
+	mov		ax, .segmt
+	mov		word [gs:si + widget.text_seg], ax
+	mov		ax, .oft							; Offset du texte
+	mov		word [gs:si + widget.text_ofs], ax
+
+	.err:
+	pop		ax
+	leave
+	ret
+%undef     .id
+%undef     .text_ofs
+%undef     .text_seg
+
+; -----------------------------------------------------------------------------
 ; gui_api_create
 ; Crée un widget et retourne son ID
 ; Out: AX = ID ou -1 si erreur
 ;
-; widget_type, x, y, w, h, text_ofs, text_seg
+; parameters : type, x, y, w, h, text_ofs, text_seg
 ;
 ; -----------------------------------------------------------------------------
 %define     .type       word [bp+4]
@@ -120,8 +219,6 @@ endstruc
 %define     .y	        word [bp+8]
 %define     .w          word [bp+10]
 %define     .h          word [bp+12]
-%define     .text_ofs   word [bp+14]
-%define     .text_seg   word [bp+16]
 gui_api_create:
 	push    bp
 	mov     bp, sp
@@ -139,20 +236,16 @@ gui_api_create:
 	mov     cx, widget_size
 	div     cx
 
-	mov     ax, .type
-	mov     byte [gs:si + widget.type], al
-	mov     ax, .x
-	mov     word [gs:si + widget.x], ax
-	mov     ax, .y
-	mov     word [gs:si + widget.y], ax
-	mov     ax, .w
-	mov     word [gs:si + widget.w], ax
-	mov     ax, .h
-	mov     word [gs:si + widget.h], ax
-	mov     ax, .text_ofs
-	mov     word [gs:si + widget.text_ofs], ax
-	mov     ax, .text_seg
-	mov     word [gs:si + widget.text_seg], ax
+	mov     bx, .type
+	mov     byte [gs:si + widget.type], bl
+	mov     bx, .x
+	mov     word [gs:si + widget.x], bx
+	mov     bx, .y
+	mov     word [gs:si + widget.y], bx
+	mov     bx, .w
+	mov     word [gs:si + widget.w], bx
+	mov     bx, .h
+	mov     word [gs:si + widget.h], bx
 
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
 	mov     byte [gs:si + widget.oldstate], 0
@@ -165,8 +258,6 @@ gui_api_create:
 %undef     .y
 %undef     .w
 %undef     .h
-%undef     .text_ofs
-%undef     .text_seg
 
 ; -----------------------------------------------------------------------------
 ; gui_api_get_state
@@ -242,6 +333,32 @@ gui_api_get_val:
 	leave
 	ret
 %undef .id
+
+; -----------------------------------------------------------------------------
+; gui_api_get_val
+; Arg1: ID
+; Out: AX = Attr Val
+; -----------------------------------------------------------------------------
+%define .id 	word [bp+4]
+%define .val	word [bp+6]
+gui_api_set_val:
+	push    bp
+	mov     bp, sp
+
+	mov     ax, .id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
+
+	mov     ax, [gs:si + widget.attr_val]
+	jmp     .done
+
+.err:
+	mov     ax, -1
+.done:
+	leave
+	ret
+%undef .id
+
 
 ; -----------------------------------------------------------------------------
 ; gui_api_destroy
@@ -347,7 +464,7 @@ gui_alloc_widget:
 	mov     si, 0                   ; Début du pool
 	mov     cx, GUI_MAX_WIDGETS
 
-.loop_find:
+	.loop_find:
 	cmp     byte [gs:si + widget.state], GUI_STATE_FREE
 	je      .found                  ; Si state == 0, c'est libre !
 
@@ -358,19 +475,19 @@ gui_alloc_widget:
 	stc                             ; set Carry Flag : erreur
 	jmp     .done
 
-.found:
+	.found:
 	; On initialise le slot trouvé
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL   ; Marquer comme occupé
-	mov     byte [gs:si + widget.type], OBJ_TYPE_BUTTON  ; Type par défaut
-	mov     byte [gs:si + widget.oldstate], 0                ; doit etre dessiné
+	mov     byte [gs:si + widget.type], OBJ_TYPE_BUTTON  	; Type par défaut
+	mov     byte [gs:si + widget.oldstate], 0               ; doit etre dessiné
 
 	; Reset des champs critiques pour éviter les déchets
 	mov     word [gs:si + widget.event_click], 0
 	mov     word [gs:si + widget.event_drag], 0
-	mov     byte [gs:si + widget.thumb_pct], 10     ; 10% par défaut
+	mov     byte [gs:si + widget.thumb_pct], 10     		; 10% par défaut
 
-	clc                             ; Clear Carry Flag
-.done:
+	clc                             						; Clear Carry Flag
+	.done:
 	pop     bx
 	pop     cx
 	pop     ax
@@ -394,9 +511,9 @@ gui_free_widget:
 	xor     eax, eax
 	rep     stosd          ; Remplit tout de 0
 
+	; On efface le widget
 	mov     byte [es:si + widget.state], GUI_STATE_FREE
-	; On efface visuellement le widget (optionnel, remplit de blanc)
-	; Pour l'instant on le marque juste libre, il sera redessiné par-dessus.
+	; Pour l'instant on le marque juste libre, il n'est pas retirer de l'écran.
 
 	pop     es
 	pop     eax

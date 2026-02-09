@@ -131,48 +131,32 @@ build_interface:
 	; mais on configure DS=GUI_RAM_SEG pour l'allocation
 
 	; Créer Bouton 1 "QUITTER"
-    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16, str_quit, cs
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16
+	GUI     OBJ_SET_TEXT, ax, cs, str_quit
 	; Créer Bouton 2 "HELLO"
-    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16, str_hello, cs
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16,
+	GUI     OBJ_SET_TEXT, ax, cs, str_hello
 	; Créer checkbox 3 "option 1"
-    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15, str_option1, cs
-    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16, 100, 15, str_option2, cs
-    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15, str_option3, cs
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option1
+
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option2
+
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option3
 
     ; Créer Slider (Drag)
-    ; GUI     OBJ_CREATE, OBJ_TYPE_SLIDER,
-	call    gui_alloc_widget
-	jc      .mem_full
-	mov     word [gs:si + widget.x], 10
-	mov     word [gs:si + widget.y], 100
-	mov     word [gs:si + widget.w], 150
-	mov     word [gs:si + widget.h], 12
-	mov     byte [gs:si + widget.type],OBJ_TYPE_SLIDER
-	mov     byte [gs:si + widget.attr_mode], SLIDER_HORIZONTAL
-	mov     word [gs:si + widget.attr_min], 10      ; X Min
-	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
-	mov     word [gs:si + widget.attr_val], 10      ; Position initiale
-	mov     byte [gs:si + widget.thumb_pct], 15     ; Curseur fait 15% de la largeur
-;     mov     word [gs:si + widget.event_drag], on_drag_slider
+    GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
+	GUI		OBJ_SET_MODE, ax, SLIDER_HORIZONTAL
+	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 10, 15
 
-; Créer Slider (Drag)
-	call    gui_alloc_widget
-	jc      .mem_full
-	mov     word [gs:si + widget.x], 400
-	mov     word [gs:si + widget.y], 10
-	mov     word [gs:si + widget.w], 16
-	mov     word [gs:si + widget.h], 150
-	mov     byte [gs:si + widget.type], OBJ_TYPE_SLIDER
-	mov     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
-	mov     word [gs:si + widget.attr_min], 10      ; X Min
-	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
-	mov     word [gs:si + widget.attr_val], 140      ; Position initiale
-	mov     byte [gs:si + widget.thumb_pct], 25     ; Curseur fait 15% de la largeur
-;     mov     word [gs:si + widget.event_drag], on_drag_slider
+	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
+	GUI		OBJ_SET_MODE, ax, SLIDER_VERTICAL
+	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 140, 20
 
 .mem_full:
 	ret
-
 
 ; --- Données ROM ---
 str_quit  db "Quitter", 0
