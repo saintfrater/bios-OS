@@ -30,6 +30,9 @@ gui_draw_single_widget:
 
 	GFX     MOUSE_HIDE              ; On cache la souris AVANT de commencer le dessin du widget
 
+	mov		ax, GUI_RAM_SEG
+	mov		gs, ax
+
 	mov     al, [gs:si + widget.state]
 	cmp     al, [gs:si + widget.oldstate]
 	je      .done

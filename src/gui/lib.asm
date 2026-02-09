@@ -604,8 +604,12 @@ gui_process_all:
 ; Sortie : AL=1 si Clicked, 0 sinon. Met à jour [gs:si].state
 gui_update_logic:
 	push    ds
+	push    gs
+
 	mov     ax, BDA_DATA_SEG
 	mov     ds, ax
+	mov		ax, GUI_RAM_SEG
+	mov		gs, ax
 
 	mov     al, byte [gs:si + widget.state]
 	cmp     al, GUI_STATE_DISABLED
@@ -673,6 +677,7 @@ gui_update_logic:
 	xor     ax, ax
 
 	.done:
+	pop		gs
 	pop     ds
 	ret
 
