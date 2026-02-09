@@ -157,8 +157,8 @@ gui_api_create:
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
 	mov     byte [gs:si + widget.oldstate], 0
 .done:
-	leave
 	pop     gs
+	leave
 	ret
 %undef     .type
 %undef     .x
