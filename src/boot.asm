@@ -59,7 +59,7 @@ section     .text
 %include	"./gui/lib.asm"
 %include	"./gui/draw.asm"
 
-reset:
+entrycode:
 	cli
 	; il n'existe aucun 'stack' par défaut
 	mov		ax, STACK_SEG
@@ -112,7 +112,7 @@ reset:
 main_loop:
 	call    gui_process_all
 
- 	GUI		GUI_GET_VAL, 5		; slider
+ 	GUI		OBJ_GET_VAL, 5		; slider
 
 	;GFX		GOTOXY, 5, 20
 	;call	print_word_hex
@@ -131,77 +131,23 @@ build_interface:
 	; mais on configure DS=GUI_RAM_SEG pour l'allocation
 
 	; Créer Bouton 1 "QUITTER"
-	call    gui_alloc_widget        ; Retourne SI = Pointeur nouveau slot
-	jc     .mem_full
-
-	; Remplir les propriétés
-	mov     word [gs:si +  widget.x], 10
-	mov     word [gs:si +  widget.y], 10
-	mov     word [gs:si +  widget.w], 80
-	mov     word [gs:si +  widget.h], 16
-	mov     word [gs:si +  widget.text_ofs], str_quit
-	; mov     byte [gs:si +  widget.user_id], 1         ; Style "Bouton par défaut" (OK)
-	mov     word [gs:si +  widget.text_seg], cs        ; Texte est dans la ROM
-	mov     word [gs:si +  widget.event_click], on_click_quit ; Fonction à appeler
-	mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
-
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16, str_quit, cs
 	; Créer Bouton 2 "HELLO"
-	call    gui_alloc_widget
-	jc      .mem_full
-
-	mov     word [gs:si +  widget.x], 100
-	mov     word [gs:si +  widget.y], 50
-	mov     word [gs:si +  widget.w], 80
-	mov     word [gs:si +  widget.h], 16
-	mov     word [gs:si +  widget.text_ofs], str_hello
-	mov     word [gs:si +  widget.text_seg], cs
-	mov     byte [gs:si +  widget.type], WIDGET_TYPE_ROUND_BUTTON
-
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16, str_hello, cs
 	; Créer checkbox 3 "option 1"
-	call    gui_alloc_widget
-	jc      .mem_full
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15, str_option1, cs
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16, 100, 15, str_option2, cs
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15, str_option3, cs
 
-	mov     word [gs:si +  widget.x], 200
-	mov     word [gs:si +  widget.y], 50
-	mov     word [gs:si +  widget.w], 100
-	mov     word [gs:si +  widget.h], 15
-	mov     word [gs:si +  widget.text_ofs], str_option1
-	mov     word [gs:si +  widget.text_seg], cs
-	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
-	; Pas de callback
-
-	; Créer checkbox 3 "option 2"
-	call    gui_alloc_widget
-	jc      .mem_full
-
-	mov     word [gs:si +  widget.x], 200
-	mov     word [gs:si +  widget.y], 50+16
-	mov     word [gs:si +  widget.w], 100
-	mov     word [gs:si +  widget.h], 15
-	mov     word [gs:si +  widget.text_ofs], str_option2
-	mov     word [gs:si +  widget.text_seg], cs
-	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
-
-	; Créer checkbox 3 "option 2"
-	call    gui_alloc_widget
-	jc      .mem_full
-
-	mov     word [gs:si +  widget.x], 200
-	mov     word [gs:si +  widget.y], 50+16*2
-	mov     word [gs:si +  widget.w], 100
-	mov     word [gs:si +  widget.h], 15
-	mov     word [gs:si +  widget.text_ofs], str_option3
-	mov     word [gs:si +  widget.text_seg], cs
-	mov     byte [gs:si +  widget.type], WIDGET_TYPE_CHECKBOX
-
-	; Créer Slider (Drag)
+    ; Créer Slider (Drag)
+    ; GUI     OBJ_CREATE, OBJ_TYPE_SLIDER,
 	call    gui_alloc_widget
 	jc      .mem_full
 	mov     word [gs:si + widget.x], 10
 	mov     word [gs:si + widget.y], 100
 	mov     word [gs:si + widget.w], 150
 	mov     word [gs:si + widget.h], 12
-	mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+	mov     byte [gs:si + widget.type],OBJ_TYPE_SLIDER
 	mov     byte [gs:si + widget.attr_mode], SLIDER_HORIZONTAL
 	mov     word [gs:si + widget.attr_min], 10      ; X Min
 	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
@@ -216,7 +162,7 @@ build_interface:
 	mov     word [gs:si + widget.y], 10
 	mov     word [gs:si + widget.w], 16
 	mov     word [gs:si + widget.h], 150
-	mov     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+	mov     byte [gs:si + widget.type], OBJ_TYPE_SLIDER
 	mov     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
 	mov     word [gs:si + widget.attr_min], 10      ; X Min
 	mov     word [gs:si + widget.attr_max], 140     ; X Max (Widget.x + W - ThumbW)
@@ -268,7 +214,7 @@ global		reset_vector
 
 reset_vector:
    	; code minimal au reset
-	jmp		0xF000:reset
+	jmp		0xF000:entrycode
 
 builddate:
 	db 		__DATE__

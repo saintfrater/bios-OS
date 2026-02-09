@@ -51,25 +51,30 @@ gui_draw_single_widget:
 	mov 	[gs:si + widget.y2], dx
 
 	; Dispatch selon le type
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+    cmp     byte [gs:si + widget.type], OBJ_TYPE_LABEL
+	jne     .case_1
+    jmp     .done
+
+    .case_1:
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_SLIDER
 	jne     .case_2
 	call    draw_slider
 	jmp     .done
 
 	.case_2:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_BUTTON
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_BUTTON
 	jne     .case_3
 	call    draw_button
 	jmp     .done
 
 	.case_3:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_ROUND_BUTTON
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_BUTTON_ROUNDED
 	jne     .case_4
 	call    draw_round_button
 	jmp     .done
 
 	.case_4:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_CHECKBOX
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_CHECKBOX
 	jne     .case_5
 	call    draw_checkbox
 	jmp     .done

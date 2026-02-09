@@ -35,13 +35,14 @@
 %define GUI_STATE_DISABLED  4           ; Grisé
 
 ; --- Types de Widgets ---
-%define WIDGET_TYPE_BUTTON          0
-%define WIDGET_TYPE_SLIDER          1
-%define WIDGET_TYPE_LABEL           2
-%define WIDGET_TYPE_ROUND_BUTTON    3
-%define WIDGET_TYPE_CHECKBOX        4
+%define OBJ_TYPE_LABEL           0
+%define OBJ_TYPE_BUTTON          1
+%define OBJ_TYPE_SLIDER          2
+%define OBJ_TYPE_BUTTON_ROUNDED  3
+%define OBJ_TYPE_CHECKBOX        4
 
 ; --- Widgets attributs ---
+%define BUTTON_DEFAULT              0
 %define BUTTON_OK                   1
 
 %define SLIDER_HORIZONTAL			1
@@ -51,18 +52,18 @@
 ;  SECTION : API ACTIONS
 ; =============================================================================
 
-%define GUI_CREATE      0
-%define GUI_DESTROY     1
-%define GUI_GET_STATE   2
-%define GUI_GET_TYPE    3
-%define GUI_GET_VAL     4
+%define OBJ_CREATE      0
+%define OBJ_DESTROY     1
+%define OBJ_GET_STATE   2
+%define OBJ_GET_TYPE    3
+%define OBJ_GET_VAL     4
 
 gui_api_table:
-    dw gui_api_create
+	dw gui_api_create
 	dw gui_api_destroy
-    dw gui_api_get_state
-    dw gui_api_get_type
-    dw gui_api_get_val
+	dw gui_api_get_state
+	dw gui_api_get_type
+	dw gui_api_get_val
 
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
@@ -97,34 +98,75 @@ endstruc
 ; actuellement 34 octets
 
 %macro GUI 1-*
-    %rep %0 - 1
-        %rotate -1
-        push %1
-    %endrep
-    %rotate -1
-    call word [cs:gui_api_table + ((%1)*2)]
-    add sp, (%0 - 1) * 2
+	%rep %0 - 1
+		%rotate -1
+		push %1
+	%endrep
+	%rotate -1
+	call word [cs:gui_api_table + ((%1)*2)]
+	add sp, (%0 - 1) * 2
 %endmacro
 
 ; -----------------------------------------------------------------------------
 ; gui_api_create
 ; Crée un widget et retourne son ID
 ; Out: AX = ID ou -1 si erreur
+;
+; widget_type, x, y, w, h, text_ofs, text_seg
+;
 ; -----------------------------------------------------------------------------
+%define     .type       word [bp+4]
+%define     .x          word [bp+6]
+%define     .y	        word [bp+8]
+%define     .w          word [bp+10]
+%define     .h          word [bp+12]
+%define     .text_ofs   word [bp+14]
+%define     .text_seg   word [bp+16]
 gui_api_create:
-    call    gui_alloc_widget        ; Returns GS:SI
-    jc      .error
+	push    bp
+	mov     bp, sp
+	push    gs
 
-    ; ID = SI / widget_size
-    mov     ax, si
-    xor     dx, dx
-    mov     cx, widget_size
-    div     cx
-    ret
+	mov     ax, GUI_RAM_SEG
+	mov     gs, ax
+	call    gui_alloc_widget        ; Returns GS:SI
+	mov     ax, -1
+	jc      .done
 
-.error:
-    mov     ax, -1
-    ret
+	; ID = SI / widget_size
+	mov     ax, si
+	xor     dx, dx
+	mov     cx, widget_size
+	div     cx
+
+	mov     ax, .type
+	mov     byte [gs:si + widget.type], al
+	mov     ax, .x
+	mov     word [gs:si + widget.x], ax
+	mov     ax, .y
+	mov     word [gs:si + widget.y], ax
+	mov     ax, .w
+	mov     word [gs:si + widget.w], ax
+	mov     ax, .h
+	mov     word [gs:si + widget.h], ax
+	mov     ax, .text_ofs
+	mov     word [gs:si + widget.text_ofs], ax
+	mov     ax, .text_seg
+	mov     word [gs:si + widget.text_seg], ax
+
+	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
+	mov     byte [gs:si + widget.oldstate], 0
+.done:
+	leave
+	pop     gs
+	ret
+%undef     .type
+%undef     .x
+%undef     .y
+%undef     .w
+%undef     .h
+%undef     .text_ofs
+%undef     .text_seg
 
 ; -----------------------------------------------------------------------------
 ; gui_api_get_state
@@ -133,22 +175,22 @@ gui_api_create:
 ; -----------------------------------------------------------------------------
 %define .id word [bp+4]
 gui_api_get_state:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-    mov     ax, .id         ; ID
-    call    gui_get_widget_ptr
-    jc      .err
+	mov     ax, .id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
 
-    xor     ax, ax
-    mov     al, [gs:si + widget.state]
-    jmp     .done
+	xor     ax, ax
+	mov     al, [gs:si + widget.state]
+	jmp     .done
 
 .err:
-    mov     ax, -1
+	mov     ax, -1
 .done:
-    leave
-    ret
+	leave
+	ret
 %undef .id
 
 ; -----------------------------------------------------------------------------
@@ -158,22 +200,22 @@ gui_api_get_state:
 ; -----------------------------------------------------------------------------
 %define .id word [bp+4]
 gui_api_get_type:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-    mov     ax, .id         ; ID
-    call    gui_get_widget_ptr
-    jc      .err
+	mov     ax, .id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
 
-    xor     ax, ax
-    mov     al, [gs:si + widget.type]
-    jmp     .done
+	xor     ax, ax
+	mov     al, [gs:si + widget.type]
+	jmp     .done
 
 .err:
-    mov     ax, -1
+	mov     ax, -1
 .done:
-    leave
-    ret
+	leave
+	ret
 %undef .id
 
 ; -----------------------------------------------------------------------------
@@ -183,22 +225,22 @@ gui_api_get_type:
 ; -----------------------------------------------------------------------------
 %define .id word [bp+4]
 gui_api_get_val:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
 
-    mov     ax, .id         ; ID
-    call    gui_get_widget_ptr
-    jc      .err
+	mov     ax, .id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
 
-    mov     ax, [gs:si + widget.attr_val]
-    jmp     .done
+	mov     ax, [gs:si + widget.attr_val]
+	jmp     .done
 
 .err:
-    mov     ax, -1
+	mov     ax, -1
 .done:
-    leave
-    ret
+	leave
+	ret
 %undef .id
 
 ; -----------------------------------------------------------------------------
@@ -209,22 +251,22 @@ gui_api_get_val:
 ; -----------------------------------------------------------------------------
 %define .id word [bp+4]
 gui_api_destroy:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-    mov     ax, .id         ; ID
-    call    gui_get_widget_ptr
-    jc      .err
+	mov     ax, .id         ; ID
+	call    gui_get_widget_ptr
+	jc      .err
 
-    call    gui_free_widget
-    xor     ax, ax
-    jmp     .done
+	call    gui_free_widget
+	xor     ax, ax
+	jmp     .done
 
 .err:
-    mov     ax, -1
+	mov     ax, -1
 .done:
-    leave
-    ret
+	leave
+	ret
 %undef .id
 
 ; -----------------------------------------------------------------------------
@@ -235,28 +277,28 @@ gui_api_destroy:
 ; -----------------------------------------------------------------------------
 %define .id word [bp+4]
 gui_get_widget_ptr:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
 	mov		ax, .id
 	stc
 
-    cmp     ax, GUI_MAX_WIDGETS
-    je   	.done
+	cmp     ax, GUI_MAX_WIDGETS
+	je   	.done
 
-    push    dx
-    mov     cx, widget_size
-    mul     cx              ; AX = Offset
-    mov     si, ax
-    pop     dx
+	push    dx
+	mov     cx, widget_size
+	mul     cx              ; AX = Offset
+	mov     si, ax
+	pop     dx
 
-    mov     ax, GUI_RAM_SEG
-    mov     gs, ax
+	mov     ax, GUI_RAM_SEG
+	mov     gs, ax
 
-    clc
+	clc
 .done:
 	leave
-    ret
+	ret
 
 ; =============================================================================
 ;  SECTION : GESTION MÉMOIRE (ALLOCATION / LIBÉRATION)
@@ -319,7 +361,7 @@ gui_alloc_widget:
 .found:
 	; On initialise le slot trouvé
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL   ; Marquer comme occupé
-	mov     byte [gs:si + widget.type], WIDGET_TYPE_BUTTON  ; Type par défaut
+	mov     byte [gs:si + widget.type], OBJ_TYPE_BUTTON  ; Type par défaut
 	mov     byte [gs:si + widget.oldstate], 0                ; doit etre dessiné
 
 	; Reset des champs critiques pour éviter les déchets
@@ -475,48 +517,50 @@ gui_update_logic:
 
 	mov     bl, [BDA_MOUSE + mouse.status]
 
+	.case_0:
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_LABEL
+	jne     .case_1
+	call    gui_logic_label
+	jmp     .done
+
+	.case_1:
 	; Dispatch selon le type
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_SLIDER
 	jne     .case_2
 	call    gui_logic_slider
 	jmp     .done
 
 	.case_2:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_BUTTON
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_BUTTON
 	jne     .case_3
 	call    gui_logic_button
 	jmp     .done
 
 	.case_3:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_ROUND_BUTTON
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_BUTTON_ROUNDED
 	jne     .case_4
 	call    gui_logic_button
 	jmp     .done
 
 	.case_4:
-	cmp     byte [gs:si + widget.type], WIDGET_TYPE_CHECKBOX
+	cmp     byte [gs:si + widget.type], OBJ_TYPE_CHECKBOX
 	jne     .case_5
 	call    gui_logic_checkbox
+	jmp     .done
 
 	.case_5:
 	jmp     .done
+
 	.miss:
-	; Si on n'est plus dessus, mais qu'on l'était avant (HOVER/PRESSED), il faut redessiner !
-	cmp     byte [gs:si + widget.state], GUI_STATE_NORMAL
-	je      .done                           ; Déjà normal, rien à faire
-
-	; Cas particulier : si c'est un slider en cours de drag, on continue la logique
-;    cmp     byte [gs:si + widget.type], WIDGET_TYPE_SLIDER
-;    jne     .reset_state
-;    cmp     byte [gs:si + widget.state], GUI_STATE_PRESSED
-;    je      .gui_logic_slider
-
-	.reset_state:
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
 	xor     ax, ax
 
 	.done:
 	pop     ds
+	ret
+
+	; --- Logique spécifique LABEL ---
+gui_logic_label:
 	ret
 
 ; --- Logique spécifique Bouton ---
