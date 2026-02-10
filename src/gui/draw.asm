@@ -56,7 +56,8 @@ gui_draw_single_widget:
 	; Dispatch selon le type
     cmp     byte [gs:si + widget.type], OBJ_TYPE_LABEL
 	jne     .case_1
-    jmp     .done
+	call    draw_label
+	jmp     .done
 
     .case_1:
 	cmp     byte [gs:si + widget.type], OBJ_TYPE_SLIDER
@@ -451,29 +452,31 @@ draw_checkbox:
 	GFX     WRITE, dx, ax
 
 	ret
+
+;
+; dessine un label (texte simple)
+;
+draw_label:
+	GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+	call    draw_text
+	ret
+
 ;
 ; affiche le texte au centre du widget gs:si
 ;
 draw_text:
-	; Petit hack pour recentrer le texte après l'effet gras
-	mov     cx, [gs:si + widget.w]
-	mov     dx, [gs:si + widget.h]
-
-	.text:
-	; --- Centrage Texte (Simplifié) ---
+	; --- Centrage Texte ---
 	mov     es, [gs:si + widget.text_seg]
 	mov     di, [gs:si + widget.text_ofs]
 	xor     cx, cx
 
-	.strlen:
-	cmp     byte [es:di], 0
-	je      .calc
-	inc     cx
-	inc     di
-	jmp     .strlen
+	push	di
+	push	es
+	call 	strlen
+	add     sp, 4           ; Fix: Nettoyage de la pile (2 args * 2 octets)
 
 	.calc:
-	shl     cx, 3   ; Largeur texte px
+	shl     cx, 3   ; Largeur texte px : x = strlen * 8
 	push    ax      ; Sauve X original
 	mov     ax, [gs:si + widget.w]
 	sub     ax, cx

@@ -23,6 +23,7 @@
 %define MEM_GET_SIZE    1
 %define MEM_FREE        2
 %define MEM_RESOLVE     3
+%define MEM_INIT        4
 
 ; --- Macro API ---
 ; Usage: MEM FUNCTION, [ARG1], [ARG2]...
@@ -41,9 +42,11 @@ mem_api_table:
 	dw mem_get_size
 	dw mem_free
 	dw mem_resolve
+	dw mem_init
 
 struc mem_block
 	.status resb 1      ; État du bloc (0=Libre, 1=Occupé)
+	.pad    resb 1      ; Padding pour alignement 16-bits
 	.size   resw 1      ; Taille des données (sans le header)
 	.next   resw 1      ; Offset du prochain bloc (0 = Fin)
 endstruc
@@ -97,6 +100,12 @@ mem_alloc:
 	push    es
 	push    di
 
+	; Alignement de la taille demandée sur 2 octets (Word align)
+	mov     ax, .size_requested
+	test    ax, 1
+	jz      .size_aligned
+	inc     word .size_requested
+.size_aligned:
 	mov     .curr_ptr, 0        ; On commence la recherche à l'offset 0
 
 	mov     ax, MEM_HEAP_SEG
@@ -208,8 +217,6 @@ mem_free:
 	push    bp
 	mov     bp, sp
 
-
-
 	push    es
 	push    di
 	push    bx
@@ -217,6 +224,10 @@ mem_free:
 	mov     ax, .handle         ; Handle
 	test    ax, ax
 	jz      .done               ; Sécurité Handle NULL
+
+	; Sécurité : Vérifier si le handle est dans le segment
+	cmp     ax, MEM_HEAP_SIZE
+	ja      .done
 
 	mov     bx, MEM_HEAP_SEG
 	mov     es, bx

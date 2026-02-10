@@ -44,6 +44,7 @@ section     .text
 %include	"./common/cursor.asm"
 %include	"./common/patterns.asm"
 %include    "./common/generic.asm"
+%include	"./common/string.asm"
 
 ; definition du BDA
 %include 	"./common/bda.asm"
