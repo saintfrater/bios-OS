@@ -136,8 +136,6 @@ gui_api_slider_attr:
 	call    gui_get_widget_ptr
 	jc      .err
 
-	mov		ax, .mode
-	mov		byte [gs:si + widget.attr_min], al
 	mov		ax, .min
 	mov		word [gs:si + widget.attr_min], ax
 	mov		ax, .max
@@ -319,7 +317,6 @@ gui_api_get_val:
 	push    bp
 	mov     bp, sp
 
-
 	mov     ax, .id         ; ID
 	call    gui_get_widget_ptr
 	jc      .err
@@ -335,9 +332,9 @@ gui_api_get_val:
 %undef .id
 
 ; -----------------------------------------------------------------------------
-; gui_api_get_val
+; gui_api_set_val
 ; Arg1: ID
-; Out: AX = Attr Val
+; Arg2: Value
 ; -----------------------------------------------------------------------------
 %define .id 	word [bp+4]
 %define .val	word [bp+6]
@@ -349,16 +346,14 @@ gui_api_set_val:
 	call    gui_get_widget_ptr
 	jc      .err
 
-	mov     ax, [gs:si + widget.attr_val]
-	jmp     .done
+	mov     ax, .val
+	mov     [gs:si + widget.attr_val], ax
 
 .err:
-	mov     ax, -1
-.done:
 	leave
 	ret
 %undef .id
-
+%undef .val
 
 ; -----------------------------------------------------------------------------
 ; gui_api_destroy
@@ -793,10 +788,6 @@ gui_logic_slider:
 
 	.do_drag:
 	; --- LOGIQUE DE DÉPLACEMENT ---
-	; On calcule les limites dynamiquement pour éviter que le curseur ne sorte
-	push    ax
-	push    bx
-	push    dx
 
 	xor     ax, ax
 	xor     bx, bx
@@ -806,9 +797,6 @@ gui_logic_slider:
 	cmp     byte [gs:si + widget.attr_mode], 2
 	je      .drag_v
 
-	pop     dx
-	pop     bx
-	pop     ax
 	xor     ax, ax
 	ret
 
@@ -816,6 +804,7 @@ gui_logic_slider:
 	; 1. Thumb Width -> AX
 	mov     ax, [gs:si + widget.w]
 	mov     bl, [gs:si + widget.thumb_pct]
+	xor		bh, bh			; Sécurité
 	mul     bx
 	mov     bx, 100
 	div     bx      ; AX = Thumb Width
@@ -829,7 +818,13 @@ gui_logic_slider:
 	mov     dx, [gs:si + widget.x] ; DX = Min Pos
 
 	; 4. Target Pos = MouseX - Anchor
-	mov     ax, cx
+	; On recharge MouseX depuis la BDA pour être sûr
+	push    ds
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
+	mov     ax, [BDA_MOUSE + mouse.x]
+	pop     ds
+
 	sub     ax, [gs:si + widget.attr_anchor]
 	jmp     .apply_clamp
 
@@ -837,6 +832,7 @@ gui_logic_slider:
 	; 1. Thumb Height -> AX
 	mov     ax, [gs:si + widget.h]
 	mov     bl, [gs:si + widget.thumb_pct]
+	xor		bh, bh			; Sécurité
 	mul     bx
 	mov     bx, 100
 	div     bx      ; AX = Thumb Height
@@ -850,9 +846,13 @@ gui_logic_slider:
 	mov     dx, [gs:si + widget.y] ; DX = Min Pos
 
 	; 4. Target Pos = MouseY - Anchor
-	; MouseY est sur la pile (push dx initial), on le recupere via SP
-	mov     bp, sp
-	mov     ax, [bp]    ; [bp] = Saved DX (MouseY)
+	; On recharge MouseY depuis la BDA pour être sûr
+	push    ds
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
+	mov     ax, [BDA_MOUSE + mouse.y]
+	pop     ds
+
 	sub     ax, [gs:si + widget.attr_anchor]
 
 	.apply_clamp:
@@ -867,10 +867,6 @@ gui_logic_slider:
 	mov     ax, bx
 
 	.apply_pos:
-	pop     dx
-	pop     bx
-	add     sp, 2   ; Clean AX from stack
-
 	cmp     ax, [gs:si + widget.attr_val]
 	je      .no_change
 	mov     [gs:si + widget.attr_val], ax

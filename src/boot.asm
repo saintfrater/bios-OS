@@ -103,13 +103,6 @@ entrycode:
 	GFX		MOUSE_MOVE
 	GFX		MOUSE_SHOW
 
-	push	cs
-	pop		ds
-
-	; Init du système GUI
-	call    gui_init_system
- 	call	build_interface
-
     call    main_loop
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
@@ -119,34 +112,19 @@ on_click_quit:
     ret
 
 %define     .oldval     word [bp-2]
+%define     .slider     word [bp-4]
 main_loop:
     push    bp
-    push    bx
     mov     bp, sp
-    sub     sp, 2
+    sub     sp, 4
 
-    mov     .oldval, -1
+	push	cs
+	pop		ds
 
-    .loop:
-	call    gui_process_all
- 	GUI		OBJ_GET_VAL, 6		; slider
+	; Init du système GUI
+	call    gui_init_system
 
-    cmp     ax,.oldval
-    je      .loop
-
-    mov     .oldval, ax
-    GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
-	GFX		GOTOXY, 8, 150
-
-	call	print_word_hex
-
-	jmp     .loop
-
-
-build_interface:
 	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
-	; On reste dans CS pour lire les arguments,
-	; mais on configure DS=GUI_RAM_SEG pour l'allocation
 
 	; Créer Bouton 1 "QUITTER"
     GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16
@@ -170,10 +148,28 @@ build_interface:
 	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 10, 15
 
 	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
-	GUI		OBJ_SET_MODE, ax, SLIDER_VERTICAL
-	GUI		OBJ_SLIDER_SET_ATTR, ax, 0, 15, 15, 20
+	mov     .slider, ax
+	GUI		OBJ_SET_MODE, .slider, SLIDER_VERTICAL
+	GUI		OBJ_SLIDER_SET_ATTR, .slider, 0, 15, 15, 20
+    mov     .oldval, -1
 
-.mem_full:
+    .loop:
+	call    gui_process_all
+ 	GUI		OBJ_GET_VAL, .slider		; slider
+
+    cmp     ax,.oldval
+    je      .loop
+
+	; debug
+    mov     .oldval, ax
+    GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
+	GFX		GOTOXY, 8, 150
+
+	call	print_word_hex
+	; end debug
+
+	jmp     .loop
+	leave
 	ret
 
 ; --- Données ROM ---
