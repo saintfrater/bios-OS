@@ -774,7 +774,6 @@ cga_line_horizontal:
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .color  byte [bp+12]
-
 cga_line:
     push    bp
     mov     bp, sp
@@ -815,7 +814,8 @@ cga_line:
     jge     .calc_dx
     neg     ax
     neg     bx              ; sx = -1
-.calc_dx:
+
+    .calc_dx:
     mov     .dx, ax      ; save dx
     mov     .sx, bx      ; save sx
 
@@ -826,7 +826,8 @@ cga_line:
     jge     .calc_dy
     neg     ax
     neg     bx              ; sy = -1
-.calc_dy:
+
+    .calc_dy:
     mov     .dy, ax      ; save dy
     mov     .sy, bx      ; save sy
 
@@ -839,7 +840,7 @@ cga_line:
     mov     cx, .x1
     mov     dx, .y1
 
-.loop:
+    .loop:
     ; Plot pixel (CX, DX)
     push    cx
     push    dx
@@ -850,10 +851,12 @@ cga_line:
     je      .plot_black
     or      byte [es:di], ah
     jmp     .plot_next
-.plot_black:
+
+    .plot_black:
     not     ah
     and     byte [es:di], ah
-.plot_next:
+
+    .plot_next:
     pop     dx
     pop     cx
 
@@ -863,7 +866,7 @@ cga_line:
     cmp     dx, .y2
     je      .done
 
-.step:
+    .step:
     mov     ax, .err     ; e2 = err
     shl     ax, 1           ; e2 = 2*err
 
@@ -875,7 +878,7 @@ cga_line:
     add     .err, bx     ; err += -dy
     add     cx, .sx      ; x += sx
 
-.check_y:
+    .check_y:
     mov     bx, .dx      ; dx
     cmp     ax, bx
     jge     .loop           ; if e2 >= dx, skip y step
@@ -884,12 +887,12 @@ cga_line:
     add     dx, .sy      ; y += sy
     jmp     .loop
 
-.done:
+    .done:
     call    cga_mouse_show
     add     sp, 10          ; Libération variables locales
     jmp     .exit
 
-.do_horiz:
+    .do_horiz:
     push    word [bp+12]    ; color
     push    word [bp+6]     ; y
     push    word [bp+8]     ; x2
@@ -898,7 +901,7 @@ cga_line:
     add     sp, 8
     jmp     .exit
 
-.do_vert:
+    .do_vert:
     push    word [bp+12]    ; color
     push    word [bp+10]    ; y2
     push    word [bp+6]     ; y1
@@ -906,7 +909,7 @@ cga_line:
     call    cga_line_vertical
     add     sp, 8
 
-.exit:
+    .exit:
     pop     es
     popa
     pop     bp

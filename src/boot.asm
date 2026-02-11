@@ -110,20 +110,37 @@ entrycode:
 	call    gui_init_system
  	call	build_interface
 
-main_loop:
-	call    gui_process_all
-
- 	GUI		OBJ_GET_VAL, 5		; slider
-
-	;GFX		GOTOXY, 5, 20
-	;call	print_word_hex
-
-	jmp     main_loop
+    call    main_loop
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
 on_click_quit:
 	hlt
 	jmp     on_click_quit
+    ret
+
+%define     .oldval     word [bp-2]
+main_loop:
+    push    bp
+    push    bx
+    mov     bp, sp
+    sub     sp, 2
+
+    mov     .oldval, -1
+
+    .loop:
+	call    gui_process_all
+ 	GUI		OBJ_GET_VAL, 6		; slider
+
+    cmp     ax,.oldval
+    je      .loop
+
+    mov     .oldval, ax
+    GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
+	GFX		GOTOXY, 8, 150
+
+	call	print_word_hex
+
+	jmp     .loop
 
 
 build_interface:
@@ -154,7 +171,7 @@ build_interface:
 
 	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
 	GUI		OBJ_SET_MODE, ax, SLIDER_VERTICAL
-	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 140, 20
+	GUI		OBJ_SLIDER_SET_ATTR, ax, 0, 15, 15, 20
 
 .mem_full:
 	ret
