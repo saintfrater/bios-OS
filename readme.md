@@ -10,11 +10,11 @@ This project aims to design and implement a **PC-compatible BIOS/ROM from scratc
 
 Rather than booting an operating system from disk, the PC starts **directly from the ROM** into a **minimalist graphical interface**, using **CGA High-Resolution Monochrome (640×200)** mode.
 
-The project is intentionally educational, experimental, and minimalist.
-
-![Screenshot 86Box](/doc/assets/Capture-86box.png)
+![Screenshot 86Box](/doc/assets/Capture-86Box.png)
 
 You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
+
+The project is intentionally educational, experimental, and minimalist.
 
 ---
 
@@ -94,6 +94,11 @@ This is a **learning and exploration project**, not a drop-in BIOS replacement.
 Ce projet consiste à concevoir et développer un **BIOS/ROM PC compatible entièrement écrit “from scratch”**, destiné principalement à l’émulation **QEMU**, avec pour objectif principal l’**apprentissage approfondi de l’architecture PC** et de la **programmation assembleur x86 en mode réel**.
 
 Au lieu de charger un système d’exploitation depuis un disque, le PC **démarre directement depuis la ROM** vers une **interface graphique minimaliste**, utilisant le mode **CGA Haute Résolution Monochrome (640×200)**.
+
+
+![Screenshot 86Box](/doc/assets/Capture-86Box.png)
+
+You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
 
 ---
 
