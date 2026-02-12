@@ -23,7 +23,7 @@ The project is intentionally educational, experimental, and minimalist.
 - **Write a PC-compatible BIOS from scratch**
   - No reuse of existing BIOS code
   - Minimal but functional implementation
-  - Compatible with QEMU
+  - Compatible with QEMU & 86Box
   - Target architecture: **i386+**
 
 - **Boot directly from ROM**
@@ -107,7 +107,7 @@ You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
 - **Écrire un BIOS PC depuis zéro**
   - Aucun code BIOS existant réutilisé
   - Implémentation minimale mais fonctionnelle
-  - Compatible avec QEMU
+  - Compatible avec QEMU & 86Box
   - Architecture ciblée : **i386+**
 
 - **Démarrer directement depuis la ROM**
