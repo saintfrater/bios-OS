@@ -154,53 +154,7 @@ Consultez la documentation de l'[API](/doc/API.md) pour plus d'informations.
 
 ### Compilation et exécution
 
-#### Compilation
-
-Depuis la racine du projet :
-
-```bash
-cd src
-nasm -f bin boot.asm -o ..\build\bios.bin
-```
-
-Cette commande génère une image BIOS brute (`bios.bin`) directement exécutable par QEMU.
-
-#### Exécution
-
-Le BIOS VGA de QEMU doit être copié dans un dossier local `rom/`.
-
-Emplacements par défaut de `vgabios.bin` :
-
-Windows
-`C:\Program Files\qemu\share\vgabios.bin`
-
-Linux
-`/usr/share/qemu/vgabios.bin`
-
-Vous pouvez aussi utiliser un bios video du projet de 86box
-
-https://github.com/86Box/roms
-
-À copier vers : `roms/vgabios.bin`
-
-Puis lancer QEMU avec la commande suivante :
-
-```bash
-qemu-system-i386 \
-  -bios build/bios.bin \
-  -device loader,file=roms/vgabios.bin,addr=0xC0000,force-raw=on \
-  -device isa-debugcon,chardev=myconsole \
-  -chardev stdio,id=myconsole \
-  -k be \
-  -display sdl
-```
-
-Cette commande :
-
-- Charge le BIOS personnalisé comme ROM système
-- Injecte le BIOS VGA à l’adresse 0xC0000
-- Redirige les messages de debug vers la console
-- Affiche l’interface graphique via SDL
+[read detailed step to compile an run](/doc/build.md)
 
 ### Hors périmètre
 
