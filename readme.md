@@ -12,17 +12,9 @@ Rather than booting an operating system from disk, the PC starts **directly from
 
 The project is intentionally educational, experimental, and minimalist.
 
-![Screenshot of the boot + text test](/doc/assets/Capture-2026-01-29-210122.png)
+![Screenshot 86Box](/doc/assets/Capture-86box.png)
 
-Screenshot of early boot version + Text functions
-
-![Screenshot WIP - Buttons & Sliders](/doc/assets/Capture-2026-02-03-213148.png)
-
-Screenshot of early buttons & sliders
-
-![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-02-06-232336.png)
-
-Screenshot of rounded buttons & checkboxes
+You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
 
 ---
 
@@ -82,53 +74,7 @@ Get a look at the [API](/doc/API.md) for more information.
 
 ### Build and Run
 
-#### Compilation
-
-From the project root:
-
-```bash
-cd src
-nasm -f bin boot.asm -o ..\build\bios.bin
-```
-
-This produces a raw BIOS ROM image (bios.bin) suitable for direct execution by QEMU.
-
-#### Execution
-
-The QEMU VGA BIOS must be copied into a local rom/ directory.
-
-Default locations of `vgabios.bin`:
-
-Windows
-`C:\Program Files\qemu\share\vgabios.bin`
-
-Linux
-`/usr/share/qemu/vgabios.bin`
-
-You can use an video bios from the 86box's project:
-
-https://github.com/86Box/roms
-
-Copy it to: `roms/vgabios.bin`
-
-Then run QEMU with:
-
-```bash
-qemu-system-i386 \
-  -bios build/bios.bin \
-  -device loader,file=roms/vgabios.bin,addr=0xC0000,force-raw=on \
-  -device isa-debugcon,chardev=myconsole \
-  -chardev stdio,id=myconsole \
-  -k be \
-  -display sdl
-```
-
-This command:
-
-- Loads the custom BIOS as the system ROM
-- Injects the VGA BIOS at 0xC0000
-- Redirects debug output to the console
-- Displays graphics using SDL
+[read detailed step to compile an run](/doc/build.md)
 
 ### Non-Goals
 
@@ -148,20 +94,6 @@ This is a **learning and exploration project**, not a drop-in BIOS replacement.
 Ce projet consiste à concevoir et développer un **BIOS/ROM PC compatible entièrement écrit “from scratch”**, destiné principalement à l’émulation **QEMU**, avec pour objectif principal l’**apprentissage approfondi de l’architecture PC** et de la **programmation assembleur x86 en mode réel**.
 
 Au lieu de charger un système d’exploitation depuis un disque, le PC **démarre directement depuis la ROM** vers une **interface graphique minimaliste**, utilisant le mode **CGA Haute Résolution Monochrome (640×200)**.
-
-Le projet est volontairement **éducatif, expérimental et minimaliste**.
-
-![Screenshot of the boot + text test](/doc/assets/Capture-2026-01-29-210122.png)
-
-Screenshot of early boot version + Text functions
-
-![Screenshot WIP - Buttons & Sliders](/doc/assets/Capture-2026-02-03-213148.png)
-
-Screenshot of early buttons & sliders
-
-![Screenshot WIP - Rounded Buttons & Checkboxes ](/doc/assets/Capture-2026-02-06-232336.png)
-
-Screenshot of rounded buttons & checkboxes
 
 ---
 

@@ -43,20 +43,20 @@
 %define GFX_TXT_BLACK               00000011b
 
 %macro GFX 1-*
-    ; %1 est l'index de la fonction
-    ; On itère sur les arguments suivants en sens inverse (Convention C)
+	; %1 est l'index de la fonction
+	; On itère sur les arguments suivants en sens inverse (Convention C)
 
-    %rep %0 - 1       ; Répéter pour (Nombre d'args - 1)
-        %rotate -1    ; Prend le dernier argument
-        push %1       ; L'empile
-    %endrep
+	%rep %0 - 1       ; Répéter pour (Nombre d'args - 1)
+		%rotate -1    ; Prend le dernier argument
+		push %1       ; L'empile
+	%endrep
 
-    %rotate -1        ; On revient au premier argument (l'index de fonction)
-    call word [cs:graph_driver + ((%1)*2)]
+	%rotate -1        ; On revient au premier argument (l'index de fonction)
+	call word [cs:graph_driver + ((%1)*2)]
 
-    ; Nettoyage de la pile (Convention CDECL: l'appelant nettoie)
-    ; Chaque argument = 2 octets (1 word).
-    add sp, (%0 - 1) * 2
+	; Nettoyage de la pile (Convention CDECL: l'appelant nettoie)
+	; Chaque argument = 2 octets (1 word).
+	add sp, (%0 - 1) * 2
 %endmacro
 
 ; ------------------------------------------------------------
@@ -91,19 +91,19 @@
 ; ------------------------------------------------------------
 align   2
 graph_driver:
-    dw cga_init                 ; init de la carte graphique
-    dw cga_putpixel             ; dessin d'un pixel
-    dw cga_getpixel             ; lecture d'un pixel
-    dw cga_set_charpos          ; gotoxy
-    dw cga_set_writemode        ; mode texte
-    dw cga_putc                 ; dessin d'un caractère
-    dw cga_write                ; dessin d'une chaine de caractère
-    dw cga_line                 ; dessin d'une ligne (Bresenham) avec décision horizontale/verticale
-    dw cga_draw_rect            ; dessin d'un rectangle
-    dw cga_fill_rect            ; dessin d'un rectangle plein
-    dw cga_draw_rounded_frame   ; dessin d'un rectangle arrondi
-    dw cga_mouse_hide           ; déplacement du curseur
-    dw cga_mouse_show           ; déplacement du curseur
+	dw cga_init                 ; init de la carte graphique
+	dw cga_putpixel             ; dessin d'un pixel
+	dw cga_getpixel             ; lecture d'un pixel
+	dw cga_set_charpos          ; gotoxy
+	dw cga_set_writemode        ; mode texte
+	dw cga_putc                 ; dessin d'un caractère
+	dw cga_write                ; dessin d'une chaine de caractère
+	dw cga_line                 ; dessin d'une ligne (Bresenham) avec décision horizontale/verticale
+	dw cga_draw_rect            ; dessin d'un rectangle
+	dw cga_fill_rect            ; dessin d'un rectangle plein
+	dw cga_draw_rounded_frame   ; dessin d'un rectangle arrondi
+	dw cga_mouse_hide           ; déplacement du curseur
+	dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
 
 ; ------------------------------------------------------------
@@ -112,8 +112,8 @@ graph_driver:
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
 cga_init:
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
 
 	; init graphics mode
 	mov 	ah, 0x00     	                		; AH=00h set video mode
@@ -126,7 +126,7 @@ cga_init:
 
 ; dummy functions
 cga_none:
-    ret
+	ret
 
 ; ------------------------------------------------------------
 ; Calcule DI + AH=mask pour (CX=x, DX=y) en mode CGA 640x200
@@ -148,16 +148,16 @@ cga_calc_addr:
 	shr     ax, 3              ; x / 3
 	add     di, ax             ; di = offset banque paire
 
-    mov     bx, dx
-    and     bx, 1              ; BX = 0 ou 1
-    neg     bx                 ; BX = 0 ou 0xFFFF (-1)
-    and     bx, 0x2000         ; BX = 0 ou 0x2000 (CGA_ODD_BANK)
-    add     di, bx             ; Application de l'offset
+	mov     bx, dx
+	and     bx, 1              ; BX = 0 ou 1
+	neg     bx                 ; BX = 0 ou 0xFFFF (-1)
+	and     bx, 0x2000         ; BX = 0 ou 0x2000 (CGA_ODD_BANK)
+	add     di, bx             ; Application de l'offset
 
-    ; calcul du masque du pixel
-    and     cl, 7
-    mov     ah, 0x80
-    shr     ah, cl
+	; calcul du masque du pixel
+	and     cl, 7
+	mov     ah, 0x80
+	shr     ah, cl
 	ret
 
 ; ---------------------------------------------------------------------------
@@ -172,25 +172,25 @@ cga_calc_addr:
 ; est l'inverse de la couleur du texte
 ; ---------------------------------------------------------------------------
 cga_set_writemode:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-    ; --- Définition des arguments ---
-    %define .mode   word [bp+4]
+	; --- Définition des arguments ---
+	%define .mode   word [bp+4]
 
-    push    fs
-    push    ax
-    mov     ax, BDA_DATA_SEG
-    mov     fs,ax
+	push    fs
+	push    ax
+	mov     ax, BDA_DATA_SEG
+	mov     fs,ax
 
-    mov     ax, .mode
+	mov     ax, .mode
 
-    mov     byte [fs:BDA_GFX + gfx.cur_mode], al
+	mov     byte [fs:BDA_GFX + gfx.cur_mode], al
 
-    pop     ax
-    pop     fs
-    leave
-    ret
+	pop     ax
+	pop     fs
+	leave
+	ret
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos (x,y)
@@ -201,62 +201,62 @@ cga_set_writemode:
 ;  - stocke aussi shift = x&7
 ; ---------------------------------------------------------------------------
 cga_set_charpos:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-    ; --- Définition des arguments ---
-    %define .x     word [bp+4]
-    %define .y     word [bp+6]
+	; --- Définition des arguments ---
+	%define .x     word [bp+4]
+	%define .y     word [bp+6]
 
-    pusha
-    push    fs
+	pusha
+	push    fs
 
-    mov     ax,BDA_DATA_SEG
-    mov     fs,ax
+	mov     ax,BDA_DATA_SEG
+	mov     fs,ax
 
-    ; store x,y en pixel
-    mov     cx, .x
-    mov     dx, .y
+	; store x,y en pixel
+	mov     cx, .x
+	mov     dx, .y
 
-    mov     [fs:BDA_GFX + gfx.cur_x], cx
-    mov     [fs:BDA_GFX + gfx.cur_y], dx
+	mov     [fs:BDA_GFX + gfx.cur_x], cx
+	mov     [fs:BDA_GFX + gfx.cur_y], dx
 
-    mov     ax, cx
-    and     ax, 0x07
-    mov     [fs:BDA_GFX + gfx.cur_shift], al
+	mov     ax, cx
+	and     ax, 0x07
+	mov     [fs:BDA_GFX + gfx.cur_shift], al
 
-    ; calcul de l'offset de la position 'x,y':
-    ; si 'y' est paire, DI < 0x2000 & add = 0x2000
-    ; si 'y' est impaire, DI> 0x2000 & add = -0x2000
-    ; DI = (y>>1)*80 + (x>>3) + (y&1)*
-    mov     ax, dx
-    shr     ax, 1
-    mov     bx, ax                          ; bx = dx>>1
-    shl     bx, 4                           ; bx = bx * 16
-    shl     ax, 6                           ; ax = ax * 64
-    add     bx, ax
-    mov     ax, cx
-    shr     ax, 3                           ; ax = x/8
-    add     bx, ax
-    mov     ax, CGA_ODD_BANK
+	; calcul de l'offset de la position 'x,y':
+	; si 'y' est paire, DI < 0x2000 & add = 0x2000
+	; si 'y' est impaire, DI> 0x2000 & add = -0x2000
+	; DI = (y>>1)*80 + (x>>3) + (y&1)*
+	mov     ax, dx
+	shr     ax, 1
+	mov     bx, ax                          ; bx = dx>>1
+	shl     bx, 4                           ; bx = bx * 16
+	shl     ax, 6                           ; ax = ax * 64
+	add     bx, ax
+	mov     ax, cx
+	shr     ax, 3                           ; ax = x/8
+	add     bx, ax
+	mov     ax, CGA_ODD_BANK
 
-    test    dl, 1
-    jz      .even
-    add     bx, ax
-    neg     ax
-    add     ax, CGA_STRIDE
-    .even:
-    mov     [fs:BDA_GFX + gfx.cur_line_ofs], ax
-    mov     [fs:BDA_GFX + gfx.cur_offset], bx
+	test    dl, 1
+	jz      .even
+	add     bx, ax
+	neg     ax
+	add     ax, CGA_STRIDE
+	.even:
+	mov     [fs:BDA_GFX + gfx.cur_line_ofs], ax
+	mov     [fs:BDA_GFX + gfx.cur_offset], bx
 
-    pop     fs
+	pop     fs
 
-    ; clean defs
-    %undef  .x
-    %undef  .y
-    popa
-    leave
-    ret
+	; clean defs
+	%undef  .x
+	%undef  .y
+	popa
+	leave
+	ret
 
 ; ---------------------------------------------------------------------------
 ; get_glyph_offset
@@ -264,23 +264,23 @@ cga_set_charpos:
 ; Out: CS:SI -> 8 bytes
 ; ---------------------------------------------------------------------------
 get_glyph_offset:
-    cmp     al, 0x20
-    jb      .qmark              ; al < 20h (' '
-    cmp     al, 0x7E
-    ja      .qmark              ; al > 7Eh ('~')
-    sub     al, 0x20
-    jmp     .ok
+	cmp     al, 0x20
+	jb      .qmark              ; al < 20h (' '
+	cmp     al, 0x7E
+	ja      .qmark              ; al > 7Eh ('~')
+	sub     al, 0x20
+	jmp     .ok
 
-    .qmark:
-    mov     al, '?'
-    sub     al, 0x20
+	.qmark:
+	mov     al, '?'
+	sub     al, 0x20
 
-    .ok:
-    xor     ah, ah
-    mov     si, ax
-    shl     si, 3
-    add     si, font8x8
-    ret
+	.ok:
+	xor     ah, ah
+	mov     si, ax
+	shl     si, 3
+	add     si, font8x8
+	ret
 
 ; ---------------------------------------------------------------------------
 ; cga_putc_unalign (car)
@@ -289,117 +289,117 @@ get_glyph_offset:
 ; ---------------------------------------------------------------------------
 ; convert al -> AX aligned with "cl"
 %macro ALIGN_BYTE 0
-        mov     ah,al
-        xor     al,al
-        shr     ax,cl
-        xchg    ah,al
+		mov     ah,al
+		xor     al,al
+		shr     ax,cl
+		xchg    ah,al
 %endmacro
 
 cga_putc:
-    push    bp
-    mov     bp, sp
-    sub     sp, 2               ; 1 word variable locale
+	push    bp
+	mov     bp, sp
+	sub     sp, 2               ; 1 word variable locale
 
-    ; --- Définition des arguments ---
-    %define .car    word [bp+4]
+	; --- Définition des arguments ---
+	%define .car    word [bp+4]
 
-    ; --- Définition des variables locales ---
-    %define .cpt    word [bp-2]
+	; --- Définition des variables locales ---
+	%define .cpt    word [bp-2]
 
-    pusha
-    push    fs
-    push    es
+	pusha
+	push    fs
+	push    es
 
-    call    cga_mouse_hide      ; Protection souris
+	call    cga_mouse_hide      ; Protection souris
 
-    mov     bx, VIDEO_SEG
-    mov     es, bx
-    mov     bx, BDA_DATA_SEG
-    mov     fs, bx
+	mov     bx, VIDEO_SEG
+	mov     es, bx
+	mov     bx, BDA_DATA_SEG
+	mov     fs, bx
 
-    mov     ax, .car
+	mov     ax, .car
 
-    call    get_glyph_offset
+	call    get_glyph_offset
 
-    ; Base offset VRAM pour la scanline Y
-    mov     di, [fs:BDA_GFX + gfx.cur_offset]
-    mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
-    mov     ch, [fs:BDA_GFX + gfx.cur_mode]
-    mov     cl, [fs:BDA_GFX + gfx.cur_shift]
+	; Base offset VRAM pour la scanline Y
+	mov     di, [fs:BDA_GFX + gfx.cur_offset]
+	mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
+	mov     ch, [fs:BDA_GFX + gfx.cur_mode]
+	mov     cl, [fs:BDA_GFX + gfx.cur_shift]
 
-    mov     .cpt, 4
+	mov     .cpt, 4
 
-    .row_loop:
-    ; gestion du fond de texte
-    test    ch, 00000010b               ; transparent background ?
-    jz      .skip_attribut              ; oui
+	.row_loop:
+	; gestion du fond de texte
+	test    ch, 00000010b               ; transparent background ?
+	jz      .skip_attribut              ; oui
 
-    test    ch, 00000001b               ; background blanc ?
-    je      .bkg_black
+	test    ch, 00000001b               ; background blanc ?
+	je      .bkg_black
 
-    ; background = white
-    mov     ax, 0xFF00
-    shr     ax, cl
-    xchg    al, ah
-    or      [es:di], ax
-    or      [es:di+bx], ax
-    jmp     .skip_attribut
+	; background = white
+	mov     ax, 0xFF00
+	shr     ax, cl
+	xchg    al, ah
+	or      [es:di], ax
+	or      [es:di+bx], ax
+	jmp     .skip_attribut
 
-    .bkg_black:                        ; OK
-    ; background = black
-    mov     ax, 0xFF00
-    shr     ax, cl
-    xchg    al, ah
-    not     ax
-    and     [es:di], ax
-    and     [es:di+bx], ax
+	.bkg_black:                        ; OK
+	; background = black
+	mov     ax, 0xFF00
+	shr     ax, cl
+	xchg    al, ah
+	not     ax
+	and     [es:di], ax
+	and     [es:di+bx], ax
 
-    .skip_attribut:
-    ; ligne "paire" du gylphe
-    xor     ax, ax
-    mov     al, [cs:si]
-    inc     si
-    ALIGN_BYTE
-    mov     dx,ax
+	.skip_attribut:
+	; ligne "paire" du gylphe
+	xor     ax, ax
+	mov     al, [cs:si]
+	inc     si
+	ALIGN_BYTE
+	mov     dx,ax
 
-    ; ligne "impaire" du gylphe
-    mov     al, [cs:si]
-    inc     si
-    ALIGN_BYTE
-    xchg    ax, dx
+	; ligne "impaire" du gylphe
+	mov     al, [cs:si]
+	inc     si
+	ALIGN_BYTE
+	xchg    ax, dx
 
-    test   ch,00000001b
-    jz     .black_text
+	test   ch,00000001b
+	jz     .black_text
 
-    ; white text
-    not      ax
-    not      dx
-    and      [es:di], ax
-    and      [es:di+bx], dx
+	; white text
+	not      ax
+	not      dx
+	and      [es:di], ax
+	and      [es:di+bx], dx
 
-    jmp     .next
+	jmp     .next
 
-    .black_text:
-    or      [es:di], ax
-    or      [es:di+bx], dx
+	.black_text:
+	or      [es:di], ax
+	or      [es:di+bx], dx
 
-    .next:
-    add     di,CGA_STRIDE
+	.next:
+	add     di,CGA_STRIDE
 
-    dec     .cpt
-    jnz     .row_loop
+	dec     .cpt
+	jnz     .row_loop
 
-    ; Avancer curseur d'un caractère (8 pixels)
-    inc     word [fs:BDA_GFX + gfx.cur_offset]
-    add     word [fs:BDA_GFX + gfx.cur_x], 8
+	; Avancer curseur d'un caractère (8 pixels)
+	inc     word [fs:BDA_GFX + gfx.cur_offset]
+	add     word [fs:BDA_GFX + gfx.cur_x], 8
 
-    call    cga_mouse_show      ; Restauration souris
+	call    cga_mouse_show      ; Restauration souris
 
-    pop     es
-    pop     fs
-    popa
-    leave
-    ret
+	pop     es
+	pop     fs
+	popa
+	leave
+	ret
 
 ;
 ; write string from [DS:SI] to screen
@@ -408,29 +408,29 @@ cga_putc:
 %define .txt_seg   word [bp+4]
 %define .txt_ofs   word [bp+6]
 cga_write:
-    push    bp
-    mov     bp, sp
-    push    ax
-    push    ds
+	push    bp
+	mov     bp, sp
+	push    ax
+	push    ds
 
-    mov     ax, .txt_seg
-    mov     ds, ax
-    mov     si, .txt_ofs
-    cld
+	mov     ax, .txt_seg
+	mov     ds, ax
+	mov     si, .txt_ofs
+	cld
 
-    .loops:
-    lodsb
-    cmp     al,0
-    je      .done
-    push    ax
-    call    cga_putc
-    jmp     .loops
+	.loops:
+	lodsb
+	cmp     al,0
+	je      .done
+	push    ax
+	call    cga_putc
+	jmp     .loops
 
-    .done:
-    pop     ds
-    pop     ax
-    leave
-    ret
+	.done:
+	pop     ds
+	pop     ax
+	leave
+	ret
 %undef  .txt_seg
 %undef  .txt_ofs
 
@@ -448,34 +448,34 @@ cga_write:
 %define .y      word [bp+6]
 %define .color  byte [bp+8]
 cga_putpixel:
-    push    bp
-    mov     bp, sp
-    pusha
+	push    bp
+	mov     bp, sp
+	pusha
 
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    call    cga_mouse_hide      ; Protection souris
-    mov     cx, .x
-    mov     dx, .y
-    call    cga_calc_addr
+	call    cga_mouse_hide      ; Protection souris
+	mov     cx, .x
+	mov     dx, .y
+	call    cga_calc_addr
 
 	; write
 	cmp     .color, 0
 	je    	.clear
 
-    .set:
+	.set:
 	or      byte [es:di], ah
 	jmp     .done
 
-    .clear:
+	.clear:
 	not     ah
 	and     byte [es:di], ah
 
-    .done:
-    call    cga_mouse_show      ; Restauration souris
-    popa
-    leave
+	.done:
+	call    cga_mouse_show      ; Restauration souris
+	popa
+	leave
 	ret
 ; clean defs
 %undef  .x
@@ -489,21 +489,21 @@ cga_putpixel:
 ; Out: AL=0/1
 ; ------------------------------------------------------------
 cga_getpixel:
-    push    bp
-    mov     bp, sp
+	push    bp
+	mov     bp, sp
 
-        ; --- Définition des arguments ---
-    %define .x      word [bp+4]
-    %define .y      word [bp+6]
+		; --- Définition des arguments ---
+	%define .x      word [bp+4]
+	%define .y      word [bp+6]
 
 	push   	di
 	push   	es
 
-    mov     cx, .x
-    mov     dx, .y
+	mov     cx, .x
+	mov     dx, .y
 
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 	call    cga_calc_addr
 
 	mov     al, [es:di]
@@ -513,10 +513,10 @@ cga_getpixel:
 	pop     es
 	pop     di
 
-    ; clean defs
-    %undef  .x
-    %undef  .y
-    leave
+	; clean defs
+	%undef  .x
+	%undef  .y
+	leave
 	ret
 
 ; ------------------------------------------------------------
@@ -547,74 +547,74 @@ cga_background:
 %define .y2     word [bp+8]
 %define .color  byte [bp+10]
 cga_line_vertical:
-    push    bp
-    mov     bp, sp
-    pusha
-    push    es
+	push    bp
+	mov     bp, sp
+	pusha
+	push    es
 
-    ; Setup ES = Video Segment
-    mov     ax, VIDEO_SEG       ; Utiliser AX plutot que SI pour setup ES
-    mov     es, ax
+	; Setup ES = Video Segment
+	mov     ax, VIDEO_SEG       ; Utiliser AX plutot que SI pour setup ES
+	mov     es, ax
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    mov     bx, .y1
-    mov     dx, .y2
+	mov     bx, .y1
+	mov     dx, .y2
 
-    ; 1. Ordonner Y (BX = Debut, DX = Fin)
-    cmp     bx, dx
-    jle     .y_sorted
-    xchg    bx, dx
-    .y_sorted:
+	; 1. Ordonner Y (BX = Debut, DX = Fin)
+	cmp     bx, dx
+	jle     .y_sorted
+	xchg    bx, dx
+	.y_sorted:
 
-    ; 2. Calculer la hauteur MAINTENANT (avant que DX/BX ne soient modifiés)
-    sub     dx, bx              ; DX = Hauteur - 1
-    inc     dx                  ; DX = Hauteur en pixels
-    push    dx                  ; Sauvegarde de la hauteur (compteur) sur la pile [1]
+	; 2. Calculer la hauteur MAINTENANT (avant que DX/BX ne soient modifiés)
+	sub     dx, bx              ; DX = Hauteur - 1
+	inc     dx                  ; DX = Hauteur en pixels
+	push    dx                  ; Sauvegarde de la hauteur (compteur) sur la pile [1]
 
-    ; 3. Calculer l'adresse de départ
-    mov     cx, .x              ; CX = X
-    mov     dx, bx              ; DX = Y_Start (Argument pour cga_calc_addr)
-    call    cga_calc_addr       ; DI = Offset, AH = Masque Bit
+	; 3. Calculer l'adresse de départ
+	mov     cx, .x              ; CX = X
+	mov     dx, bx              ; DX = Y_Start (Argument pour cga_calc_addr)
+	call    cga_calc_addr       ; DI = Offset, AH = Masque Bit
 
-    ; 4. Préparer les registres pour la boucle
-    mov     al, ah              ; AL = Masque
-    not     al                  ; AL = ~Masque (pour effacer/noir)
+	; 4. Préparer les registres pour la boucle
+	mov     al, ah              ; AL = Masque
+	not     al                  ; AL = ~Masque (pour effacer/noir)
 
-    ; Charger la couleur (CORRECTION BUG COULEUR)
-    mov     cl, .color          ; On charge la couleur dans CL maintenant
+	; Charger la couleur (CORRECTION BUG COULEUR)
+	mov     cl, .color          ; On charge la couleur dans CL maintenant
 
-    ; Récupérer le compteur de hauteur
-    pop     dx                  ; DX = Hauteur restaurée [1]
+	; Récupérer le compteur de hauteur
+	pop     dx                  ; DX = Hauteur restaurée [1]
 
-    .v_loop:
-    cmp     cl, 0               ; Test de la couleur (CL)
-    jz      .draw_black
+	.v_loop:
+	cmp     cl, 0               ; Test de la couleur (CL)
+	jz      .draw_black
 
-    .draw_white:
-    or      byte [es:di], ah    ; Allumer le bit (AH)
-    jmp     .next_line
+	.draw_white:
+	or      byte [es:di], ah    ; Allumer le bit (AH)
+	jmp     .next_line
 
-    .draw_black:
-    and     byte [es:di], al    ; Eteindre le bit (AL)
+	.draw_black:
+	and     byte [es:di], al    ; Eteindre le bit (AL)
 
-    .next_line:
-    ; --- Logique Next Line CGA ---
-    xor     di, 0x2000          ; Bascule banque 0 <-> 1
-    test    di, 0x2000          ; Si on est passé à la banque 1 (0x2000)
-    jnz     .skip_add           ; On a visuellement descendu d'une ligne, c'est bon.
-    add     di, 80              ; Si on revient banque 0, il faut avancer de 80 octets.
-    .skip_add:
+	.next_line:
+	; --- Logique Next Line CGA ---
+	xor     di, 0x2000          ; Bascule banque 0 <-> 1
+	test    di, 0x2000          ; Si on est passé à la banque 1 (0x2000)
+	jnz     .skip_add           ; On a visuellement descendu d'une ligne, c'est bon.
+	add     di, 80              ; Si on revient banque 0, il faut avancer de 80 octets.
+	.skip_add:
 
-    dec     dx                  ; Décrémenter le compteur de hauteur
-    jnz     .v_loop
+	dec     dx                  ; Décrémenter le compteur de hauteur
+	jnz     .v_loop
 
-    call    cga_mouse_show
+	call    cga_mouse_show
 
-    pop     es
-    popa
-    leave                       ; Leave gère le 'mov sp, bp / pop bp'
-    ret
+	pop     es
+	popa
+	leave                       ; Leave gère le 'mov sp, bp / pop bp'
+	ret
 ; clean defs
 %undef  .x
 %undef  .y1
@@ -630,136 +630,136 @@ cga_line_vertical:
 %define .y      word [bp+8]
 %define .color  byte [bp+10]
 cga_line_horizontal:
-    push    bp
-    mov     bp, sp
-    pusha
-    push    es
+	push    bp
+	mov     bp, sp
+	pusha
+	push    es
 
-    ; Setup ES = Video Segment
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	; Setup ES = Video Segment
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    mov     ax, .x1
-    mov     bx, .x2
+	mov     ax, .x1
+	mov     bx, .x2
 
-    ; 1. Ordonner X (AX = Gauche, BX = Droite)
-    cmp     ax, bx
-    jle     .x_sorted
-    xchg    ax, bx
-    .x_sorted:
+	; 1. Ordonner X (AX = Gauche, BX = Droite)
+	cmp     ax, bx
+	jle     .x_sorted
+	xchg    ax, bx
+	.x_sorted:
 
-    ; 2. Calculer l'adresse de départ
-    mov     cx, ax          ; CX = X_Start pour cga_calc_addr
-    mov     dx, .y          ; DX = Y
+	; 2. Calculer l'adresse de départ
+	mov     cx, ax          ; CX = X_Start pour cga_calc_addr
+	mov     dx, .y          ; DX = Y
 
-    push    bx              ; Sauve X_End
-    push    ax              ; <--- AJOUT CRITIQUE : Sauve X_Start (AX)
-    call    cga_calc_addr   ; DI = Offset VRAM (AX est détruit ici !)
-    pop     ax              ; <--- RESTAURATION : On récupère le bon X1
-    pop     bx              ; Restaure X_End
+	push    bx              ; Sauve X_End
+	push    ax              ; <--- AJOUT CRITIQUE : Sauve X_Start (AX)
+	call    cga_calc_addr   ; DI = Offset VRAM (AX est détruit ici !)
+	pop     ax              ; <--- RESTAURATION : On récupère le bon X1
+	pop     bx              ; Restaure X_End
 
-    ; 3. Préparer la couleur
-    mov     dl, .color      ; DL = Couleur
+	; 3. Préparer la couleur
+	mov     dl, .color      ; DL = Couleur
 
-    ; --- ANALYSE DES OCTETS ---
-    mov     si, ax
-    shr     si, 3           ; SI = Index octet start (Calcul correct maintenant)
+	; --- ANALYSE DES OCTETS ---
+	mov     si, ax
+	shr     si, 3           ; SI = Index octet start (Calcul correct maintenant)
 
-    mov     cx, bx
-    shr     cx, 3           ; CX = Index octet end
+	mov     cx, bx
+	shr     cx, 3           ; CX = Index octet end
 
-    ; Cas spécial : Tout dans le même octet ?
-    cmp     si, cx
-    je      .single_byte
+	; Cas spécial : Tout dans le même octet ?
+	cmp     si, cx
+	je      .single_byte
 
-    ; ============================================
-    ; CAS MULTI-BYTE (Gauche -> Milieu -> Droite)
-    ; ============================================
+	; ============================================
+	; CAS MULTI-BYTE (Gauche -> Milieu -> Droite)
+	; ============================================
 
-    ; --- A. PARTIE GAUCHE (Start) ---
-    push    cx              ; Sauve Index End
-    mov     cx, ax
-    and     cx, 7           ; CL = X1 % 8
-    mov     dh, 0xFF
-    shr     dh, cl          ; DH = Masque Gauche
+	; --- A. PARTIE GAUCHE (Start) ---
+	push    cx              ; Sauve Index End
+	mov     cx, ax
+	and     cx, 7           ; CL = X1 % 8
+	mov     dh, 0xFF
+	shr     dh, cl          ; DH = Masque Gauche
 
-    call    .apply_mask     ; Applique DH sur [ES:DI]
+	call    .apply_mask     ; Applique DH sur [ES:DI]
 
-    inc     di              ; Octet suivant
-    inc     si              ; Index suivant
-    pop     cx              ; Restaure Index End
+	inc     di              ; Octet suivant
+	inc     si              ; Index suivant
+	pop     cx              ; Restaure Index End
 
-    ; --- B. PARTIE CENTRALE (Full Bytes) ---
-    cmp     si, cx
-    jge     .do_right_part
+	; --- B. PARTIE CENTRALE (Full Bytes) ---
+	cmp     si, cx
+	jge     .do_right_part
 
-    mov     al, 0x00        ; Noir
-    cmp     dl, 0
-    jz      .fill_loop
-    mov     al, 0xFF        ; Blanc
+	mov     al, 0x00        ; Noir
+	cmp     dl, 0
+	jz      .fill_loop
+	mov     al, 0xFF        ; Blanc
 
-    .fill_loop:
-    mov     byte [es:di], al
-    inc     di
-    inc     si
-    cmp     si, cx
-    jl      .fill_loop
+	.fill_loop:
+	mov     byte [es:di], al
+	inc     di
+	inc     si
+	cmp     si, cx
+	jl      .fill_loop
 
-    .do_right_part:
-    ; --- C. PARTIE DROITE (End) ---
-    mov     cx, bx
-    and     cx, 7
-    inc     cx
-    mov     dh, 0xFF
-    shr     dh, cl
-    not     dh              ; DH = Masque Droite
+	.do_right_part:
+	; --- C. PARTIE DROITE (End) ---
+	mov     cx, bx
+	and     cx, 7
+	inc     cx
+	mov     dh, 0xFF
+	shr     dh, cl
+	not     dh              ; DH = Masque Droite
 
-    call    .apply_mask
-    jmp     .done
+	call    .apply_mask
+	jmp     .done
 
-    ; ============================================
-    ; CAS SINGLE BYTE
-    ; ============================================
-    .single_byte:
-    ; Masque Gauche
-    mov     cx, ax
-    and     cx, 7
-    mov     dh, 0xFF
-    shr     dh, cl
+	; ============================================
+	; CAS SINGLE BYTE
+	; ============================================
+	.single_byte:
+	; Masque Gauche
+	mov     cx, ax
+	and     cx, 7
+	mov     dh, 0xFF
+	shr     dh, cl
 
-    ; Masque Droite
-    mov     cx, bx
-    and     cx, 7
-    inc     cx
-    mov     ah, 0xFF
-    shr     ah, cl
-    not     ah
+	; Masque Droite
+	mov     cx, bx
+	and     cx, 7
+	inc     cx
+	mov     ah, 0xFF
+	shr     ah, cl
+	not     ah
 
-    ; Intersection
-    and     dh, ah
-    call    .apply_mask
-    jmp     .done
+	; Intersection
+	and     dh, ah
+	call    .apply_mask
+	jmp     .done
 
-    ; --- Helper local ---
-    .apply_mask:
-    cmp     dl, 0
-    jz      .apply_black
-    or      byte [es:di], dh
-    ret
-    .apply_black:
-    not     dh
-    and     byte [es:di], dh
-    not     dh
-    ret
+	; --- Helper local ---
+	.apply_mask:
+	cmp     dl, 0
+	jz      .apply_black
+	or      byte [es:di], dh
+	ret
+	.apply_black:
+	not     dh
+	and     byte [es:di], dh
+	not     dh
+	ret
 
-    .done:
-    call    cga_mouse_show
-    pop     es
-    popa
-    leave
-    ret
+	.done:
+	call    cga_mouse_show
+	pop     es
+	popa
+	leave
+	ret
 ; clean defs
 %undef  .x1
 %undef  .x2
@@ -775,145 +775,145 @@ cga_line_horizontal:
 %define .y2     word [bp+10]
 %define .color  byte [bp+12]
 cga_line:
-    push    bp
-    mov     bp, sp
-    pusha                   ; Sauvegarde de tous les registres (AX, BX, CX, DX, SI, DI)
-    push    es              ; Sauvegarde ES
+	push    bp
+	mov     bp, sp
+	pusha                   ; Sauvegarde de tous les registres (AX, BX, CX, DX, SI, DI)
+	push    es              ; Sauvegarde ES
 
-    ; --- Optimisation : Lignes H/V ---
-    mov     ax, .y1
-    cmp     ax, .y2
-    je      .do_horiz
-    mov     ax, .x1
-    cmp     ax, .x2
-    je      .do_vert
+	; --- Optimisation : Lignes H/V ---
+	mov     ax, .y1
+	cmp     ax, .y2
+	je      .do_horiz
+	mov     ax, .x1
+	cmp     ax, .x2
+	je      .do_vert
 
-    ; --- Bresenham ---
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	; --- Bresenham ---
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    sub     sp, 10          ; Variables locales: dx, dy, sx, sy, err
+	sub     sp, 10          ; Variables locales: dx, dy, sx, sy, err
 
-    ; --- Definitions locales ---
-    ; BP pointe sur l'ancien BP.
-    ; PUSHA (16 octets) + PUSH ES (2 octets) = 18 octets
-    ; Les variables locales commencent donc à BP-18
-    %define .dx     word [bp-20]
-    %define .dy     word [bp-22]
-    %define .sx     word [bp-24]
-    %define .sy     word [bp-26]
-    %define .err    word [bp-28]
+	; --- Definitions locales ---
+	; BP pointe sur l'ancien BP.
+	; PUSHA (16 octets) + PUSH ES (2 octets) = 18 octets
+	; Les variables locales commencent donc à BP-18
+	%define .dx     word [bp-20]
+	%define .dy     word [bp-22]
+	%define .sx     word [bp-24]
+	%define .sy     word [bp-26]
+	%define .err    word [bp-28]
 
-    ; --- Initialisation Bresenham ---
-    ; dx = abs(x2 - x1), sx = sign(x2 - x1)
-    mov     ax, .x2
-    sub     ax, .x1
-    mov     bx, 1           ; sx = 1
-    jge     .calc_dx
-    neg     ax
-    neg     bx              ; sx = -1
+	; --- Initialisation Bresenham ---
+	; dx = abs(x2 - x1), sx = sign(x2 - x1)
+	mov     ax, .x2
+	sub     ax, .x1
+	mov     bx, 1           ; sx = 1
+	jge     .calc_dx
+	neg     ax
+	neg     bx              ; sx = -1
 
-    .calc_dx:
-    mov     .dx, ax      ; save dx
-    mov     .sx, bx      ; save sx
+	.calc_dx:
+	mov     .dx, ax      ; save dx
+	mov     .sx, bx      ; save sx
 
-    ; dy = abs(y2 - y1), sy = sign(y2 - y1)
-    mov     ax, .y2
-    sub     ax, .y1
-    mov     bx, 1           ; sy = 1
-    jge     .calc_dy
-    neg     ax
-    neg     bx              ; sy = -1
+	; dy = abs(y2 - y1), sy = sign(y2 - y1)
+	mov     ax, .y2
+	sub     ax, .y1
+	mov     bx, 1           ; sy = 1
+	jge     .calc_dy
+	neg     ax
+	neg     bx              ; sy = -1
 
-    .calc_dy:
-    mov     .dy, ax      ; save dy
-    mov     .sy, bx      ; save sy
+	.calc_dy:
+	mov     .dy, ax      ; save dy
+	mov     .sy, bx      ; save sy
 
-    ; err = dx - dy
-    mov     ax, .dx      ; dx
-    sub     ax, .dy      ; dy
-    mov     .err, ax     ; err
+	; err = dx - dy
+	mov     ax, .dx      ; dx
+	sub     ax, .dy      ; dy
+	mov     .err, ax     ; err
 
-    ; Coordonnées courantes
-    mov     cx, .x1
-    mov     dx, .y1
+	; Coordonnées courantes
+	mov     cx, .x1
+	mov     dx, .y1
 
-    .loop:
-    ; Plot pixel (CX, DX)
-    push    cx
-    push    dx
-    call    cga_calc_addr   ; Out: DI=offset, AH=mask
+	.loop:
+	; Plot pixel (CX, DX)
+	push    cx
+	push    dx
+	call    cga_calc_addr   ; Out: DI=offset, AH=mask
 
-    mov     bl, .color
-    cmp     bl, 0
-    je      .plot_black
-    or      byte [es:di], ah
-    jmp     .plot_next
+	mov     bl, .color
+	cmp     bl, 0
+	je      .plot_black
+	or      byte [es:di], ah
+	jmp     .plot_next
 
-    .plot_black:
-    not     ah
-    and     byte [es:di], ah
+	.plot_black:
+	not     ah
+	and     byte [es:di], ah
 
-    .plot_next:
-    pop     dx
-    pop     cx
+	.plot_next:
+	pop     dx
+	pop     cx
 
-    ; Check fin
-    cmp     cx, .x2
-    jne     .step
-    cmp     dx, .y2
-    je      .done
+	; Check fin
+	cmp     cx, .x2
+	jne     .step
+	cmp     dx, .y2
+	je      .done
 
-    .step:
-    mov     ax, .err     ; e2 = err
-    shl     ax, 1           ; e2 = 2*err
+	.step:
+	mov     ax, .err     ; e2 = err
+	shl     ax, 1           ; e2 = 2*err
 
-    mov     bx, .dy      ; dy
-    neg     bx              ; -dy
-    cmp     ax, bx
-    jle     .check_y
+	mov     bx, .dy      ; dy
+	neg     bx              ; -dy
+	cmp     ax, bx
+	jle     .check_y
 
-    add     .err, bx     ; err += -dy
-    add     cx, .sx      ; x += sx
+	add     .err, bx     ; err += -dy
+	add     cx, .sx      ; x += sx
 
-    .check_y:
-    mov     bx, .dx      ; dx
-    cmp     ax, bx
-    jge     .loop           ; if e2 >= dx, skip y step
+	.check_y:
+	mov     bx, .dx      ; dx
+	cmp     ax, bx
+	jge     .loop           ; if e2 >= dx, skip y step
 
-    add     .err, bx     ; err += dx
-    add     dx, .sy      ; y += sy
-    jmp     .loop
+	add     .err, bx     ; err += dx
+	add     dx, .sy      ; y += sy
+	jmp     .loop
 
-    .done:
-    call    cga_mouse_show
-    add     sp, 10          ; Libération variables locales
-    jmp     .exit
+	.done:
+	call    cga_mouse_show
+	add     sp, 10          ; Libération variables locales
+	jmp     .exit
 
-    .do_horiz:
-    push    word [bp+12]    ; color
-    push    word [bp+6]     ; y
-    push    word [bp+8]     ; x2
-    push    word [bp+4]     ; x1
-    call    cga_line_horizontal
-    add     sp, 8
-    jmp     .exit
+	.do_horiz:
+	push    word [bp+12]    ; color
+	push    word [bp+6]     ; y
+	push    word [bp+8]     ; x2
+	push    word [bp+4]     ; x1
+	call    cga_line_horizontal
+	add     sp, 8
+	jmp     .exit
 
-    .do_vert:
-    push    word [bp+12]    ; color
-    push    word [bp+10]    ; y2
-    push    word [bp+6]     ; y1
-    push    word [bp+4]     ; x
-    call    cga_line_vertical
-    add     sp, 8
+	.do_vert:
+	push    word [bp+12]    ; color
+	push    word [bp+10]    ; y2
+	push    word [bp+6]     ; y1
+	push    word [bp+4]     ; x
+	call    cga_line_vertical
+	add     sp, 8
 
-    .exit:
-    pop     es
-    popa
-    pop     bp
-    ret
+	.exit:
+	pop     es
+	popa
+	pop     bp
+	ret
 
 %undef .x1
 %undef .y1
@@ -938,46 +938,46 @@ cga_line:
 %define .y2     word [bp+10]
 %define .color  word [bp+12] ; word pour l'alignement pile (mais on utilise byte)
 cga_draw_rect:
-    push    bp
-    mov     bp, sp
-    pusha
+	push    bp
+	mov     bp, sp
+	pusha
 
-    ; 1. Ordonner X (x1 < x2)
-    mov     ax, .x1
-    mov     bx, .x2
-    cmp     ax, bx
-    jle     .x_ok
-    xchg    ax, bx
-    mov     .x1, ax
-    mov     .x2, bx
-    .x_ok:
+	; 1. Ordonner X (x1 < x2)
+	mov     ax, .x1
+	mov     bx, .x2
+	cmp     ax, bx
+	jle     .x_ok
+	xchg    ax, bx
+	mov     .x1, ax
+	mov     .x2, bx
+	.x_ok:
 
-    ; 2. Ordonner Y (y1 < y2)
-    mov     ax, .y1
-    mov     bx, .y2
-    cmp     ax, bx
-    jle     .y_ok
-    xchg    ax, bx
-    mov     .y1, ax
-    mov     .y2, bx
-    .y_ok:
+	; 2. Ordonner Y (y1 < y2)
+	mov     ax, .y1
+	mov     bx, .y2
+	cmp     ax, bx
+	jle     .y_ok
+	xchg    ax, bx
+	mov     .y1, ax
+	mov     .y2, bx
+	.y_ok:
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    ; 3. Dessiner les 4 lignes
-    ; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
-    ; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
+	; 3. Dessiner les 4 lignes
+	; Pour éviter les pixels en double dans les coins, on peut ajuster légèrement,
+	; mais pour un driver simple, tracer les 4 lignes brutes est acceptable.
 
-    GFX     LINE, .x1, .y1, .x2, .y1, .color
-    GFX     LINE, .x1, .y2, .x2, .y2, .color
+	GFX     LINE, .x1, .y1, .x2, .y1, .color
+	GFX     LINE, .x1, .y2, .x2, .y2, .color
 
-    GFX     LINE, .x1, .y1, .x1, .y2, .color
-    GFX     LINE, .x2, .y1, .x2, .y2, .color
+	GFX     LINE, .x1, .y1, .x1, .y2, .color
+	GFX     LINE, .x2, .y1, .x2, .y2, .color
 
-    call    cga_mouse_show
-    popa
-    leave
-    ret
+	call    cga_mouse_show
+	popa
+	leave
+	ret
 ; clean defs
 %undef  .x1
 %undef  .y1
@@ -1002,171 +1002,171 @@ cga_draw_rect:
 %define .pattern_offset word [bp-6]
 
 cga_fill_rect:
-    push    bp
-    mov     bp, sp
-    sub     sp, 6           ; Reserve espace pour .pat_idx et .x_end_idx
-    pusha
-    push    es
+	push    bp
+	mov     bp, sp
+	sub     sp, 6           ; Reserve espace pour .pat_idx et .x_end_idx
+	pusha
+	push    es
 
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    ; calcul de l'offset de départ du pattern
-    mov     ax, .pat_id
-    shl     ax, 3                           ; * 8
-    add     ax, pattern_8x8
-    mov     .pattern_offset, ax
+	; calcul de l'offset de départ du pattern
+	mov     ax, .pat_id
+	shl     ax, 3                           ; * 8
+	add     ax, pattern_8x8
+	mov     .pattern_offset, ax
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    ; --- Tri des coordonnées (X et Y) ---
-    ; Tri X
-    mov     ax, .x1
-    mov     bx, .x2
-    cmp     ax, bx
-    jle     .x_sorted
-    xchg    ax, bx
-    mov     .x1, ax
-    mov     .x2, bx
-    .x_sorted:
+	; --- Tri des coordonnées (X et Y) ---
+	; Tri X
+	mov     ax, .x1
+	mov     bx, .x2
+	cmp     ax, bx
+	jle     .x_sorted
+	xchg    ax, bx
+	mov     .x1, ax
+	mov     .x2, bx
+	.x_sorted:
 
-    ; Tri Y
-    mov     ax, .y1
-    mov     bx, .y2
-    cmp     ax, bx
-    jle     .y_sorted
-    xchg    ax, bx
-    mov     .y1, ax
-    mov     .y2, bx
-    .y_sorted:
+	; Tri Y
+	mov     ax, .y1
+	mov     bx, .y2
+	cmp     ax, bx
+	jle     .y_sorted
+	xchg    ax, bx
+	mov     .y1, ax
+	mov     .y2, bx
+	.y_sorted:
 
-    ; --- Init Pattern Index ---
-    mov     ax, .y1
-    and     ax, 7
-    mov     .pat_idx, ax
+	; --- Init Pattern Index ---
+	mov     ax, .y1
+	and     ax, 7
+	mov     .pat_idx, ax
 
-    ; --- Calcul de la hauteur ---
-    mov     bx, .y2
-    sub     bx, .y1
-    inc     bx              ; BX = Hauteur finale
-    push    bx              ; SAUVEGARDER LA HAUTEUR SUR LA PILE [STACK A]
-                            ; (Car on va utiliser BX dans cga_calc_addr ou juste après)
+	; --- Calcul de la hauteur ---
+	mov     bx, .y2
+	sub     bx, .y1
+	inc     bx              ; BX = Hauteur finale
+	push    bx              ; SAUVEGARDER LA HAUTEUR SUR LA PILE [STACK A]
+							; (Car on va utiliser BX dans cga_calc_addr ou juste après)
 
-    ; --- Calcul adresse de départ ---
-    mov     cx, .x1
-    mov     dx, .y1
+	; --- Calcul adresse de départ ---
+	mov     cx, .x1
+	mov     dx, .y1
 
 
-    ; Note: cga_calc_addr attend CX=x, DX=y et retourne DI
-    ; Si cga_calc_addr modifie BX, la sauvegarde [STACK A] est vitale.
-    call    cga_calc_addr   ; DI = Offset début ligne
+	; Note: cga_calc_addr attend CX=x, DX=y et retourne DI
+	; Si cga_calc_addr modifie BX, la sauvegarde [STACK A] est vitale.
+	call    cga_calc_addr   ; DI = Offset début ligne
 
-    ; --- Préparer les masques ---
-    ; Masque Gauche (DH)
-    mov     cx, .x1
-    and     cx, 7
-    mov     dh, 0xFF
-    shr     dh, cl
+	; --- Préparer les masques ---
+	; Masque Gauche (DH)
+	mov     cx, .x1
+	and     cx, 7
+	mov     dh, 0xFF
+	shr     dh, cl
 
-    ; Masque Droite (AH)
-    mov     cx, .x2
-    and     cx, 7
-    inc     cx
-    mov     ah, 0xFF
-    shr     ah, cl
-    not     ah
+	; Masque Droite (AH)
+	mov     cx, .x2
+	and     cx, 7
+	inc     cx
+	mov     ah, 0xFF
+	shr     ah, cl
+	not     ah
 
-    ; Index octets
-    mov     si, .x1
-    shr     si, 3           ; SI = Index start byte
-    mov     cx, .x2
-    shr     cx, 3           ; CX = Index end byte
-    mov     .x_end_idx, cx  ; Sauvegarde de l'index de fin pour la boucle horizontale
+	; Index octets
+	mov     si, .x1
+	shr     si, 3           ; SI = Index start byte
+	mov     cx, .x2
+	shr     cx, 3           ; CX = Index end byte
+	mov     .x_end_idx, cx  ; Sauvegarde de l'index de fin pour la boucle horizontale
 
-    ; --- Récupérer la hauteur dans un registre sûr ---
-    pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
-                            ; BX est maintenant notre compteur de boucle.
-    ; --- BOUCLE VERTICALE ---
-    .row_loop:
-        push    di          ; Sauve début ligne
-        push    si          ; Sauve index byte
+	; --- Récupérer la hauteur dans un registre sûr ---
+	pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
+							; BX est maintenant notre compteur de boucle.
+	; --- BOUCLE VERTICALE ---
+	.row_loop:
+		push    di          ; Sauve début ligne
+		push    si          ; Sauve index byte
 
-        ; --- Récupérer le byte du motif pour cette ligne ---
-        push    bx
-        mov     bx, .pat_idx
-        push    si
-        mov     si, .pattern_offset
-        mov     dl, [cs:si + bx]    ; DL = Pattern Byte
-        pop     si
-        pop     bx
+		; --- Récupérer le byte du motif pour cette ligne ---
+		push    bx
+		mov     bx, .pat_idx
+		push    si
+		mov     si, .pattern_offset
+		mov     dl, [cs:si + bx]    ; DL = Pattern Byte
+		pop     si
+		pop     bx
 
-        ; --- Remplissage Horizontal ---
-        mov     cx, .x_end_idx  ; Restaurer l'index de fin pour la ligne
+		; --- Remplissage Horizontal ---
+		mov     cx, .x_end_idx  ; Restaurer l'index de fin pour la ligne
 
-        ; Cas Single Byte (Start == End)
-        cmp     si, cx
-        je      .single_byte_row
+		; Cas Single Byte (Start == End)
+		cmp     si, cx
+		je      .single_byte_row
 
-        ; Partie Gauche
-        mov     al, dh
-        call    .apply_mask_fill
-        inc     di
-        inc     si
+		; Partie Gauche
+		mov     al, dh
+		call    .apply_mask_fill
+		inc     di
+		inc     si
 
-        ; Partie Centrale (Boucle tant que SI < CX)
-        jmp     .check_mid
-        .mid_loop:
-            mov     byte [es:di], dl
-            inc     di
-            inc     si
-        .check_mid:
-            cmp     si, cx
-            jl      .mid_loop
+		; Partie Centrale (Boucle tant que SI < CX)
+		jmp     .check_mid
+		.mid_loop:
+			mov     byte [es:di], dl
+			inc     di
+			inc     si
+		.check_mid:
+			cmp     si, cx
+			jl      .mid_loop
 
-        ; Partie Droite
-        mov     al, ah
-        call    .apply_mask_fill
-        jmp     .row_done
+		; Partie Droite
+		mov     al, ah
+		call    .apply_mask_fill
+		jmp     .row_done
 
-        .single_byte_row:
-        mov     al, dh
-        and     al, ah      ; Intersection des masques
-        call    .apply_mask_fill
+		.single_byte_row:
+		mov     al, dh
+		and     al, ah      ; Intersection des masques
+		call    .apply_mask_fill
 
-        .row_done:
-        pop     si
-        pop     di
+		.row_done:
+		pop     si
+		pop     di
 
-        ; Incrémenter index motif pour la prochaine ligne
-        inc     word .pat_idx
-        and     word .pat_idx, 7
+		; Incrémenter index motif pour la prochaine ligne
+		inc     word .pat_idx
+		and     word .pat_idx, 7
 
-        ; --- Passage ligne suivante (CGA Bank Switch) ---
-        xor     di, 0x2000
-        test    di, 0x2000
-        jnz     .bank_switch_ok
-        add     di, 80
-        .bank_switch_ok:
+		; --- Passage ligne suivante (CGA Bank Switch) ---
+		xor     di, 0x2000
+		test    di, 0x2000
+		jnz     .bank_switch_ok
+		add     di, 80
+		.bank_switch_ok:
 
-        dec     bx          ; On décrémente BX (Hauteur) au lieu de BP
-        jnz     .row_loop
+		dec     bx          ; On décrémente BX (Hauteur) au lieu de BP
+		jnz     .row_loop
 
-    call    cga_mouse_show
-    pop     es
+	call    cga_mouse_show
+	pop     es
 
-    popa
-    leave
-    ret
+	popa
+	leave
+	ret
 
-    ; helper
-    .apply_mask_fill:
-    push    ax
-    not     al
-    and     byte [es:di], al
-    pop     ax
-    and     al, dl              ; Motif masqué
-    or      byte [es:di], al    ; Applique
-    ret
+	; helper
+	.apply_mask_fill:
+	push    ax
+	not     al
+	and     byte [es:di], al
+	pop     ax
+	and     al, dl              ; Motif masqué
+	or      byte [es:di], al    ; Applique
+	ret
 ; Nettoyage des defines
 %undef  .x1
 %undef  .y1
@@ -1188,63 +1188,63 @@ cga_fill_rect:
 %define .coord1 word [bp-2]
 %define .coord2 word [bp-4]
 cga_draw_rounded_frame:
-    push    bp
-    mov     bp, sp
-    sub     sp, 4           ; Reserve espace pour .coord1 et .coord2
-    pusha
+	push    bp
+	mov     bp, sp
+	sub     sp, 4           ; Reserve espace pour .coord1 et .coord2
+	pusha
 
-    call    cga_mouse_hide
+	call    cga_mouse_hide
 
-    ; Lignes horizontales (raccourcies de 2px pour laisser place à l'arrondi)
-    mov     ax, .x1
-    add     ax, 2
-    mov     .coord1, ax
-    mov     bx, .x2
-    sub     bx, 2
-    mov     .coord2, bx
-    GFX     LINE, .coord1, .y1, .coord2, .y1, .color
-    GFX     LINE, .coord1, .y2, .coord2, .y2, .color
+	; Lignes horizontales (raccourcies de 2px pour laisser place à l'arrondi)
+	mov     ax, .x1
+	add     ax, 2
+	mov     .coord1, ax
+	mov     bx, .x2
+	sub     bx, 2
+	mov     .coord2, bx
+	GFX     LINE, .coord1, .y1, .coord2, .y1, .color
+	GFX     LINE, .coord1, .y2, .coord2, .y2, .color
 
-    ; Lignes verticales (raccourcies de 1px en haut et en bas)
-    mov     cx, .y1
-    add     cx, 2
-    mov     .coord1, cx
-    mov     dx, .y2
-    sub     dx, 2
-    mov     .coord2, dx
-    GFX     LINE, .x1, .coord1, .x1, .coord2, .color
-    GFX     LINE, .x2, .coord1, .x2, .coord2, .color
+	; Lignes verticales (raccourcies de 1px en haut et en bas)
+	mov     cx, .y1
+	add     cx, 2
+	mov     .coord1, cx
+	mov     dx, .y2
+	sub     dx, 2
+	mov     .coord2, dx
+	GFX     LINE, .x1, .coord1, .x1, .coord2, .color
+	GFX     LINE, .x2, .coord1, .x2, .coord2, .color
 
-    ; Ajout des pixels de transition pour adoucir les coins (chanfrein)
-    mov     ax, .x1
-    inc     ax              ; x1 + 1
-    mov     bx, .y1
-    inc     bx              ; y1 + 1
-    GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-gauche
+	; Ajout des pixels de transition pour adoucir les coins (chanfrein)
+	mov     ax, .x1
+	inc     ax              ; x1 + 1
+	mov     bx, .y1
+	inc     bx              ; y1 + 1
+	GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-gauche
 
-    mov     ax, .x1
-    inc     ax
-    mov     bx, .y2
-    dec     bx              ; y2 - 1
-    GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-gauche
+	mov     ax, .x1
+	inc     ax
+	mov     bx, .y2
+	dec     bx              ; y2 - 1
+	GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-gauche
 
-    mov     ax, .x2
-    dec     ax              ; x2 - 1
-    mov     bx, .y1
-    inc     bx              ; y1 + 1
-    GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-droite
+	mov     ax, .x2
+	dec     ax              ; x2 - 1
+	mov     bx, .y1
+	inc     bx              ; y1 + 1
+	GFX     PUTPIXEL, ax, bx, .color        ; Coin haut-droite
 
-    mov     ax, .x2
-    dec     ax
-    mov     bx, .y2
-    dec     bx              ; y2 - 1
-    GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-droite
+	mov     ax, .x2
+	dec     ax
+	mov     bx, .y2
+	dec     bx              ; y2 - 1
+	GFX     PUTPIXEL, ax, bx, .color        ; Coin bas-droite
 
-    call    cga_mouse_show
+	call    cga_mouse_show
 
-    popa
-    leave
-    ret
+	popa
+	leave
+	ret
 %undef  .x1
 %undef  .y1
 %undef  .x2
@@ -1262,59 +1262,59 @@ cga_draw_rounded_frame:
 ;
 ; ------------------------------------------------------------
 cga_mouse_hide:
-    pushf                   ; Sauver l'état des flags (interrupts)
-    cli                     ; Désactiver les interruptions (CRITIQUE)
-    pushad                  ; Sauvegarder TOUS les registres 32-bits
-    push    ds
+	pushf                   ; Sauver l'état des flags (interrupts)
+	cli                     ; Désactiver les interruptions (CRITIQUE)
+	pusha 	                ; Sauvegarder TOUS les registres 32-bits
+	push    ds
 
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
 
-    ; Décrémenter le compteur
-    dec     byte [BDA_MOUSE + mouse.cur_counter]
+	; Décrémenter le compteur
+	dec     byte [BDA_MOUSE + mouse.cur_counter]
 
-    ; Vérifier si on vient juste de passer en mode caché (c-à-d on est à -1)
-    cmp     byte [BDA_MOUSE + mouse.cur_counter], -1
-    jne     .skip_restore   ; Si on est à -2, -3... elle est déjà cachée
+	; Vérifier si on vient juste de passer en mode caché (c-à-d on est à -1)
+	cmp     byte [BDA_MOUSE + mouse.cur_counter], -1
+	jne     .skip_restore   ; Si on est à -2, -3... elle est déjà cachée
 
-    call    cga_cursor_restorebg
+	call    cga_cursor_restorebg
 
-    .skip_restore:
-    pop     ds
-    popad
-    popf                    ; Restaure les interruptions (STI si elles étaient là)
-    ret
+	.skip_restore:
+	pop     ds
+	popa
+	popf                    ; Restaure les interruptions (STI si elles étaient là)
+	ret
 
 ; ------------------------------------------------------------
 ; gère la demande d'affichage du curseur souris
 ;
 ; ------------------------------------------------------------
 cga_mouse_show:
-    pushf
-    cli
-    pushad
-    push    ds
+	pushf
+	cli
+	pusha
+	push    ds
 
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
 
-    ; Incrémenter le compteur
-    inc     byte [BDA_MOUSE + mouse.cur_counter]
+	; Incrémenter le compteur
+	inc     byte [BDA_MOUSE + mouse.cur_counter]
 
-    ; Vérifier si on est revenu à 0 (Visible)
-    cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
-    jne     .skip_draw      ; Si on est encore à -1, -2... on reste caché
+	; Vérifier si on est revenu à 0 (Visible)
+	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	jne     .skip_draw      ; Si on est encore à -1, -2... on reste caché
 
-    ; C'est la transition Caché -> Visible : On affiche le curseur
-    ; IMPORTANT : On sauve le fond ACTUEL (qui a peut-être changé pendant le hide)
-    call    cga_cursor_savebg
-    call    cga_cursor_draw
+	; C'est la transition Caché -> Visible : On affiche le curseur
+	; IMPORTANT : On sauve le fond ACTUEL (qui a peut-être changé pendant le hide)
+	call    cga_cursor_savebg
+	call    cga_cursor_draw
 
-    .skip_draw:
-    pop     ds
-    popad
-    popf                ; restore également le flag d'interruption
-    ret
+	.skip_draw:
+	pop     ds
+	popa
+	popf                ; restore également le flag d'interruption
+	ret
 
 
 ; ------------------------------------------------------------
@@ -1330,8 +1330,8 @@ cga_mouse_cursor_move:
 	mov		ax, BDA_DATA_SEG
 	mov		ds, ax
 
-    cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
-    jl      .done       ; Si < 0, on ne dessine rien !
+	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	jl      .done       ; Si < 0, on ne dessine rien !
 
 	cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
 	jne		.done
@@ -1347,7 +1347,7 @@ cga_mouse_cursor_move:
 
 	call 	cga_cursor_draw
 	mov 	byte [BDA_MOUSE + mouse.cur_drawing],0
-    .done:
+	.done:
 	pop 	es
 	pop 	ds
 	popad
@@ -1359,82 +1359,82 @@ cga_mouse_cursor_move:
 ; Stocke 16 DWORDs: chaque DWORD contient les 4 bytes de la ligne
 ; ------------------------------------------------------------
 cga_cursor_savebg:
-    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
-    jne     .done
+	cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
+	jne     .done
 
-    push    es
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	push    es
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    ; mémoriser position courante (utilisée pour restore)
-    mov     cx, [BDA_MOUSE + mouse.x]
-    mov     dx, [BDA_MOUSE + mouse.y]
-    mov     [BDA_MOUSE + mouse.cur_x], cx
-    mov     [BDA_MOUSE + mouse.cur_y], dx
+	; mémoriser position courante (utilisée pour restore)
+	mov     cx, [BDA_MOUSE + mouse.x]
+	mov     dx, [BDA_MOUSE + mouse.y]
+	mov     [BDA_MOUSE + mouse.cur_x], cx
+	mov     [BDA_MOUSE + mouse.cur_y], dx
 
-    ; calcule ES:DI pour (x,y)
-    call    cga_calc_addr
+	; calcule ES:DI pour (x,y)
+	call    cga_calc_addr
 
-    mov     [BDA_MOUSE + mouse.cur_addr_start], di
-    lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+	mov     [BDA_MOUSE + mouse.cur_addr_start], di
+	lea     si, [BDA_MOUSE + mouse.bkg_buffer]
 
-    mov     cx,16
+	mov     cx,16
 
-    .row_loop:
-    ; ---- ligne bank courant ----
-    mov     eax, [es:di]               ; lit b0 b1 b2 b3
-    mov     [ds:si], eax               ; stocke 4 bytes (le byte haut sera 0)
-    add     si, 4
+	.row_loop:
+	; ---- ligne bank courant ----
+	mov     eax, [es:di]               ; lit b0 b1 b2 b3
+	mov     [ds:si], eax               ; stocke 4 bytes (le byte haut sera 0)
+	add     si, 4
 
-    xor     di, 0x2000
-    test    di, 0x2000
-    jnz     .next_line
-    add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
+	xor     di, 0x2000
+	test    di, 0x2000
+	jnz     .next_line
+	add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
 
-    .next_line:
-    loop    .row_loop
+	.next_line:
+	loop    .row_loop
 
-    pop     es
+	pop     es
 
-    .done:
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 1       ; Flag mis à jour après la copie
-    ret
+	.done:
+	mov     byte [BDA_MOUSE + mouse.bkg_saved], 1       ; Flag mis à jour après la copie
+	ret
 
 ; ------------------------------------------------------------
 ; cga_cursor_restorebg
 ; Restaure 16 lignes sauvegardées.
 ; ------------------------------------------------------------
 cga_cursor_restorebg:
-    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
-    je      .done
+	cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
+	je      .done
 
-    push    es
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	push    es
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    ; restaurer depuis la dernière position sauvegardée
-    mov     di, [BDA_MOUSE + mouse.cur_addr_start]
-    lea     si, [BDA_MOUSE + mouse.bkg_buffer]
-    mov     cx, 16
+	; restaurer depuis la dernière position sauvegardée
+	mov     di, [BDA_MOUSE + mouse.cur_addr_start]
+	lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+	mov     cx, 16
 
-    .row_loop:
-    ; ---- ligne bank courant ----
-    mov     eax, [ds:si]               ; saved (32 bits)
-    mov     [es:di], eax               ; restore line
-    add     si, 4
+	.row_loop:
+	; ---- ligne bank courant ----
+	mov     eax, [ds:si]               ; saved (32 bits)
+	mov     [es:di], eax               ; restore line
+	add     si, 4
 
-    xor     di, 0x2000
-    test    di, 0x2000
-    jnz     .next_line
-    add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
+	xor     di, 0x2000
+	test    di, 0x2000
+	jnz     .next_line
+	add     di, CGA_STRIDE            ; avance de 2 lignes dans bank courant
 
-    .next_line:
-    loop    .row_loop
+	.next_line:
+	loop    .row_loop
 
-    pop     es
-    .done:
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; Flag mis à jour après la restauration
-    ret
+	pop     es
+	.done:
+	mov     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; Flag mis à jour après la restauration
+	ret
 
 ; ============================================================
 ; gfx_cursor_draw_rm16_i386_self
@@ -1443,153 +1443,161 @@ cga_cursor_restorebg:
 ; Sortie: rien
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
+%define .height word [bp-2]
+%define .mask   dword [bp-6]
 cga_cursor_draw:
-    pushad
-    push    ds
-    push    es
-    push    gs
+	push    bp
+	mov     bp, sp
+	sub     sp, 6                   ; Reserve space for locals
 
-    mov     ax, BDA_DATA_SEG
-    mov     ds, ax
-    mov     ax, VIDEO_SEG
-    mov     es, ax
+	pushad
+	push    ds
+	push    es
+	push    gs
 
-    ; --- CLIPPING VERTICAL ---
-    mov     dx, [ds:BDA_MOUSE + mouse.y]
-    cmp     dx, 200
-    jae     .exit_total
+	cld                             ; Sécurité : Direction avant
+	mov     ax, BDA_DATA_SEG
+	mov     ds, ax
+	mov     ax, VIDEO_SEG
+	mov     es, ax
 
-    mov     bp, 16
-    mov     ax, 200
-    sub     ax, dx                                  ; 200-y
-    cmp     bp, ax
-    jbe     .y_ok                                   ; y<= 200-16
+	; --- CLIPPING VERTICAL ---
+	mov     dx, [ds:BDA_MOUSE + mouse.y]
+	cmp     dx, 200
+	jae     .exit_total
 
-    mov     bp, ax
+	mov     ax, 16
+	mov     bx, 200
+	sub     bx, dx                                  ; 200-y
+	cmp     ax, bx
+	jbe     .y_ok                                   ; y<= 200-16
 
-    .y_ok:
-    ; On calcule si les 4 octets vont dépasser la ligne (80 octets)
-    ; X est en bits (0-639). X >> 3 donne l'octet de départ (0-79).
-    ; Si StartByte >= 77, on déborde.
+	mov     ax, bx
 
-    mov     cx, [BDA_MOUSE + mouse.x]
-    shr     cx, 3                   ; CX = Byte Offset (0-79)
-    xor     esi, esi                ; ESI = Masque de protection (0 = tout dessiner)
+	.y_ok:
+	mov     .height, ax
 
-    cmp     cx, 76                  ; 76 est le dernier offset sûr (76,77,78,79)
-    jbe     .mask_ready             ; Si <= 76, pas de débordement
+	; On calcule si les 4 octets vont dépasser la ligne (80 octets)
+	; X est en bits (0-639). X >> 3 donne l'octet de départ (0-79).
+	; Si StartByte >= 77, on déborde.
 
-    ; Calcul du débordement
-    ; Si CX=77 (Déborde 1 byte) -> Masque 0x000000FF (LSB car bswap)
-    ; Si CX=78 (Déborde 2 bytes)-> Masque 0x0000FFFF
-    ; Si CX=79 (Déborde 3 bytes)-> Masque 0x00FFFFFF
+	mov     cx, [BDA_MOUSE + mouse.x]
+	shr     cx, 3                   ; CX = Byte Offset (0-79)
+	xor     esi, esi                ; ESI = Masque de protection (0 = tout dessiner)
 
-    cmp     cx, 77
-    jne     .check_78
-    mov     esi, 0x000000FF
-    jmp     .mask_ready
+	cmp     cx, 76                  ; 76 est le dernier offset sûr (76,77,78,79)
+	jbe     .mask_ready             ; Si <= 76, pas de débordement
 
-    .check_78:
-    cmp     cx, 78
-    jne     .check_79
-    mov     esi, 0x0000FFFF
-    jmp     .mask_ready
+	; Calcul du débordement
+	; Si CX=77 (Déborde 1 byte) -> Masque 0x000000FF (LSB car bswap)
+	; Si CX=78 (Déborde 2 bytes)-> Masque 0x0000FFFF
+	; Si CX=79 (Déborde 3 bytes)-> Masque 0x00FFFFFF
 
-    .check_79:
-    mov     esi, 0x00FFFFFF         ; Cas extrême (bord droit)
+	cmp     cx, 77
+	jne     .check_78
+	mov     esi, 0x000000FF
+	jmp     .mask_ready
 
-    .mask_ready:
-    ; On sauvegarde ce masque pour l'utiliser dans la boucle
-    ; On utilise la pile pour libérer les registres
-    push    esi                     ; [ESP] contient maintenant le masque
+	.check_78:
+	cmp     cx, 78
+	jne     .check_79
+	mov     esi, 0x0000FFFF
+	jmp     .mask_ready
 
-    ; --- ADRESSAGE ---
-    mov     cx, [BDA_MOUSE + mouse.x]
-    mov     dx, [BDA_MOUSE + mouse.y]
-    call    cga_calc_addr                           ; DI = Offset VRAM
+	.check_79:
+	mov     esi, 0x00FFFFFF         ; Cas extrême (bord droit)
 
-    mov     ax, [BDA_MOUSE + mouse.cur_seg]
-    mov     gs, ax
-    mov     si, [BDA_MOUSE + mouse.cur_ofs]
+	.mask_ready:
+	mov     .mask, esi
 
-    ; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
-    mov     ax, 0x2000          ; Banque +1
-    mov     cx, [BDA_MOUSE + mouse.y]
-    test    cx, 1
-    jz      .setup_done
-    neg     ax                  ; banque -1
+	; --- ADRESSAGE ---
+	mov     cx, [BDA_MOUSE + mouse.x]
+	mov     dx, [BDA_MOUSE + mouse.y]
+	call    cga_calc_addr                           ; DI = Offset VRAM
 
-    .setup_done:
-    mov     cx, ax
+	mov     ax, [BDA_MOUSE + mouse.cur_seg]
+	mov     gs, ax
+	mov     si, [BDA_MOUSE + mouse.cur_ofs]
 
-    .row_loop:
-    ; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
-    push    cx                  ; préserver la banque "suivante"
-    mov     cl, [BDA_MOUSE + mouse.x]
-    and     cl, 0x07
+	; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
+	mov     ax, 0x2000          ; Banque +1
+	mov     cx, [BDA_MOUSE + mouse.y]
+	test    cx, 1
+	jz      .setup_done
+	neg     ax                  ; banque -1
 
-    ; --- MASQUE AND (EAX) ---
-    mov     eax, 0xFFFFFFFF
-    mov     ax, [gs:si]             ; masque AND
-    xchg    al, ah                  ; Redresser pour l'ordre des pixels CGA
-    ;bswap   eax                    ; equivalence i386+
-    xchg    ah, al                  ; Échange les octets de poids faible (AL <-> AH)
-    rol     eax, 16                 ; Bascule les 16 bits de poids fort vers le bas
-    xchg    ah, al                  ; Échange les nouveaux octets de poids faible
-    ; fin bswap eax equivalence i386+
+	.setup_done:
+	mov     cx, ax
 
-    ror     eax, cl
+	.row_loop:
+	; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
+	push    cx                  ; préserver la banque "suivante"
+	mov     cl, [BDA_MOUSE + mouse.x]
+	and     cl, 0x07
 
-    or      eax, [esp+2]            ; Force les bits clippés à 1 (garde le fond)
+	; --- MASQUE AND (EAX) ---
+	mov     eax, 0xFFFFFFFF
+	mov     ax, [gs:si]             ; masque AND
+	xchg    al, ah                  ; Redresser pour l'ordre des pixels CGA
+	;bswap   eax                    ; equivalence i386+
+	xchg    ah, al                  ; Échange les octets de poids faible (AL <-> AH)
+	rol     eax, 16                 ; Bascule les 16 bits de poids fort vers le bas
+	xchg    ah, al                  ; Échange les nouveaux octets de poids faible
+	; fin bswap eax equivalence i386+
 
-    ; --- MASQUE XOR (EBX) ---
-    xor     ebx, ebx
-    mov     bx, [gs:si+32]          ; masque XOR
-    ;xchg    bl, bh
-    ;bswap   ebx
-    rol     ebx, 16
-    xchg    bh, bl
-    ror     ebx, cl
+	ror     eax, cl
 
-    mov     edx, [esp+2]            ; charge le masque de protection
-    not     edx                     ; inverse le masque de protection
-    and     ebx, edx                ; applique le masque de protection
+	or      eax, .mask              ; Force les bits clippés à 1 (garde le fond)
+
+	; --- MASQUE XOR (EBX) ---
+	xor     ebx, ebx
+	mov     bx, [gs:si+32]          ; masque XOR
+	;xchg    bl, bh
+	;bswap   ebx
+	rol     ebx, 16
+	xchg    bh, bl
+	ror     ebx, cl
+
+	mov     edx, .mask              ; charge le masque de protection
+	not     edx                     ; inverse le masque de protection
+	and     ebx, edx                ; applique le masque de protection
 
 
-    ; --- LECTURE ET MODIFICATION (EDX) ---
-    mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
-    ; bswap   edx
-    xchg    dh, dl
-    rol     edx, 16
-    xchg    dh, dl
+	; --- LECTURE ET MODIFICATION (EDX) ---
+	mov     edx, [es:di]        ; lecture des 16 bits a la position du curseur
+	; bswap   edx
+	xchg    dh, dl
+	rol     edx, 16
+	xchg    dh, dl
 
-    and     edx, eax            ; application du masque AND (AX)
-    xor     edx, ebx            ; application du masque XOR (BX)
-    ; bswap   edx
-    xchg    dh, dl
-    rol     edx, 16
-    xchg    dh, dl
+	and     edx, eax            ; application du masque AND (AX)
+	xor     edx, ebx            ; application du masque XOR (BX)
+	; bswap   edx
+	xchg    dh, dl
+	rol     edx, 16
+	xchg    dh, dl
 
-    mov     [es:di], edx        ; ecriture du résultat
+	mov     [es:di], edx        ; ecriture du résultat
 
-    ; --- GESTION DES BANQUES ---
-    pop     cx
-    add     di, cx              ; banque suivante
-    test    cx,0x8000
-    jz      .next_line
-    add     di,80
+	; --- GESTION DES BANQUES ---
+	pop     cx
+	add     di, cx              ; banque suivante
+	test    cx,0x8000
+	jz      .next_line
+	add     di,80
 
-    .next_line:
-    neg     cx                  ; prochaine banque = -banque
-    add     si, 2               ; Prochaine ligne du sprite
-    dec     bp
-    jnz     .row_loop
+	.next_line:
+	neg     cx                  ; prochaine banque = -banque
+	add     si, 2               ; Prochaine ligne du sprite
+	dec     .height
+	jnz     .row_loop
 
-    pop     esi
-
-    .exit_total:
-    pop     gs
-    pop     es
-    pop     ds
-    popad
-    ret
+	.exit_total:
+	pop     gs
+	pop     es
+	pop     ds
+	popad
+	leave
+	ret
+	%undef .height
+	%undef .mask

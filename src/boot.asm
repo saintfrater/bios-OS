@@ -152,14 +152,14 @@ main_loop:
 	pop		ds
 
 	DEBUG	1
-	ISADBG	ISA_RED, 1
+	ISADBG	ISA_LEFT, 1
 
 	; Init du système GUI
 	call    gui_init_system
 
 
 	DEBUG	2
-	ISADBG	ISA_RED, 2
+	ISADBG	ISA_LEFT, 2
 
 	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
 
@@ -180,7 +180,7 @@ main_loop:
 	GUI     OBJ_SET_TEXT, ax, cs, str_option3
 
 	DEBUG	3
-	ISADBG	ISA_RED, 3
+	ISADBG	ISA_LEFT, 3
 
     ; Créer Slider (Drag)
     GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
@@ -197,7 +197,7 @@ main_loop:
 	mov		.value, 0xFADE
 
 	DEBUG	4
-	ISADBG	ISA_RED, 4
+	ISADBG	ISA_LEFT, 4
 
     .loop:
 		call    gui_process_all

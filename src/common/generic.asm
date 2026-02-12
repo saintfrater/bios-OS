@@ -20,45 +20,59 @@
 ;
 ; =============================================================================
 
-%macro		DEBUG 1
-	GFX		GOTOXY, 0, 0
-	mov		ax, %1
-	call	print_word_hex
-%endmacro
+%define		DISABLE_DEBUGER
 
-;
-; Debugger for 86Box
-;
-%define		ISA_DBG_PORT	0x007a
-;
-%define		ISA_RED			0
-%define		ISA_GREEN		1
-%define		ISA_RIGHT		2
-%define		ISA_LEFT		3
-%define		ISA_RESET		0xff
+%ifndef		DISABLE_DEBUGER
 
-%macro		ISADBG			2
-	push	dx
-	push	ax
-	mov		dx, ISA_DBG_PORT
-	mov		al, byte %1
-	out		dx, al
-	inc		dx
-	mov		al, byte %2
-	out		dx, al
-	pop		ax
-	pop		dx
-%endmacro
+	%macro		DEBUG 1
+		GFX		GOTOXY, 0, 0
+		mov		ax, %1
+		call	print_word_hex
+	%endmacro
 
-%macro		ISADBG_RESET 	0
-	push	dx
-	push	ax
-	mov		dx, ISA_DBG_PORT
-	mov		al, ISA_RESET
-	out		dx, al
-	pop		ax
-	pop		dx
-%endmacro
+	;
+	; Debugger for 86Box
+	;
+	%define		ISA_DBG_PORT	0x007a
+	;
+	%define		ISA_RED			0
+	%define		ISA_GREEN		1
+	%define		ISA_RIGHT		2
+	%define		ISA_LEFT		3
+	%define		ISA_RESET		0xff
+
+	%macro		ISADBG			2
+		push	dx
+		push	ax
+		mov		dx, ISA_DBG_PORT
+		mov		al, byte %1
+		out		dx, al
+		inc		dx
+		mov		al, byte %2
+		out		dx, al
+		pop		ax
+		pop		dx
+	%endmacro
+
+	%macro		ISADBG_RESET 	0
+		push	dx
+		push	ax
+		mov		dx, ISA_DBG_PORT
+		mov		al, ISA_RESET
+		out		dx, al
+		pop		ax
+		pop		dx
+	%endmacro
+%else
+	%macro		DEBUG 			1
+	%endmacro
+
+	%macro		ISADBG			2
+	%endmacro
+
+	%macro		ISADBG_RESET 	0
+	%endmacro
+%endif
 
 ; -----------------------------------------------------------------------------------
 ; PC components I/O ports
