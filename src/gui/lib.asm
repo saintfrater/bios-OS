@@ -21,7 +21,7 @@
 ; =============================================================================
 
 ; --- Configuration ---
-%define GUI_RAM_SEG         0x060       ; Segment de données UI (Safe: après Stack, avant Heap)
+%define GUI_RAM_SEG         0x080       ; Segment de données UI (Safe: après Stack, avant Heap)
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
 ; Dimensions
@@ -94,17 +94,18 @@ struc widget
 	.h          resw 1      		; Hauteur
 	.text_ofs   resw 1      		; Offset du texte
 	.text_seg   resw 1      		; Segment du texte
-	.event_click      resw 1      	; adresse de la fonction "on click"
-	.event_drag       resw 1      	; adresse de la fonction "on drag"
+	.event_click    resw 1      	; adresse de la fonction "on click"
+	.event_drag     resw 1      	; adresse de la fonction "on drag"
 
-	.attr_mode        resb 1      	; 0=None, 1=Horiz, 2=Vert
-	.attr_min         resw 1      	; Valeur/Position Min
-	.attr_max         resw 1      	; Valeur/Position Max
-	.attr_val         resw 1      	; Valeur/Position Actuelle
+	.attr_mode      resb 1      	; 0=None, 1=Horiz, 2=Vert
+	.attr_min       resw 1      	; Valeur/Position Min
+	.attr_max       resw 1      	; Valeur/Position Max
+	.attr_val    	resw 1 			; Valeur/Position Actuelle
 
-	.thumb_pct        resb 1      	; Taille du curseur en % (1-100)
+	.thumb_pos      resw 1      	; Valeur/Position Actuelle en pixel pour le dessin.
+	.thumb_pct      resb 1      	; Taille du curseur en % (1-100)
 
-	.attr_anchor      resw 1      	; interne Offset pour le drag
+	.attr_anchor    resw 1      	; interne Offset pour le drag
 	alignb      2           		; Alignement mémoire pour performance
 endstruc
 ; actuellement 34 octets
@@ -144,6 +145,8 @@ gui_api_slider_attr:
 	mov		word [gs:si + widget.attr_val], ax
 	mov		ax, .pct
 	mov		byte [gs:si + widget.thumb_pct], al
+
+	call	gui_slider_update_pixels
 
 	.err:
 	pop		ax
@@ -317,10 +320,10 @@ gui_api_get_val:
 	push    bp
 	mov     bp, sp
 
-	mov     ax, .id         ; ID
 	call    gui_get_widget_ptr
-	jc      .err
+	;jc      .err
 
+	call    gui_slider_update_value
 	mov     ax, [gs:si + widget.attr_val]
 	jmp     .done
 
@@ -347,7 +350,7 @@ gui_api_set_val:
 	jc      .err
 
 	mov     ax, .val
-	mov     [gs:si + widget.attr_val], ax
+	mov     [gs:si + widget.thumb_pos], ax
 
 .err:
 	leave
@@ -391,26 +394,32 @@ gui_api_destroy:
 gui_get_widget_ptr:
 	push    bp
 	mov     bp, sp
+	push    ax
+    push    cx
 
 	mov		ax, .id
-	stc
-
 	cmp     ax, GUI_MAX_WIDGETS
-	je   	.done
+	jae   	.error
 
-	push    dx
 	mov     cx, widget_size
+	xor		dx, dx
 	mul     cx              ; AX = Offset
 	mov     si, ax
-	pop     dx
 
 	mov     ax, GUI_RAM_SEG
 	mov     gs, ax
 
 	clc
-.done:
+	jmp		.done
+	.error:
+	stc
+	.done:
+	pop		cx
+	pop		ax
 	leave
 	ret
+%undef .id
+
 
 ; =============================================================================
 ;  SECTION : GESTION MÉMOIRE (ALLOCATION / LIBÉRATION)
@@ -430,6 +439,7 @@ gui_init_system:
 	mov     ax, GUI_RAM_SEG
 	mov     es, ax
 
+	cld
 	xor     di, di
 	mov     cx, (widget_size * GUI_MAX_WIDGETS) / 2
 	xor     ax, ax
@@ -500,6 +510,7 @@ gui_free_widget:
 	mov     ax, GUI_RAM_SEG
 	mov     es, ax
 
+	cld
 	mov     di, si
 	mov     cx, (widget_size)
 	shr     cx, 2           ; cx / 4
@@ -704,6 +715,137 @@ gui_logic_button:
 	xor     ax, ax
 	ret
 
+
+; -----------------------------------------------------------------------------
+; gui_slider_update_value
+; In: GS:SI = widget
+; Calcule .attr_val à partir de .thumb_pos (pixels)
+; -----------------------------------------------------------------------------
+gui_slider_update_value:
+    push	eax
+	push	ebx
+	push	ecx
+	push	edx
+
+	cmp		byte [gs:si + widget.type], OBJ_TYPE_SLIDER
+	jne		.done
+
+    ; Calculer RangePix (Amplitude totale de mouvement en pixels)
+    movzx   eax, word [gs:si + widget.w]     ; Largeur par défaut
+    cmp     byte [gs:si + widget.attr_mode], SLIDER_VERTICAL
+    jne     .calc_thumb
+    movzx   eax, word [gs:si + widget.h]     ; Hauteur si vertical
+
+	.calc_thumb:
+    push    eax                              ; Sauvegarde la dimension totale
+    movzx   ebx, byte [gs:si + widget.thumb_pct]
+    mul     ebx                              ; EAX = Dim * pct
+    mov     ebx, 100
+    xor     edx, edx
+    div     ebx                              ; EAX = Taille physique du curseur
+
+    pop     ebx                              ; EBX = Dimension totale
+    sub     ebx, eax                         ; EBX = RangePix (Place disponible)
+    jz      .done                            ; Si 0, division impossible
+
+
+    ; Calculer DeltaPix (Distance parcourue par le curseur)
+    movzx   eax, word [gs:si + widget.thumb_pos]
+    movzx   ecx, word [gs:si + widget.x]     ; Origine X par défaut
+    cmp     byte [gs:si + widget.attr_mode], 2
+    jne     .do_sub
+    movzx   ecx, word [gs:si + widget.y]     ; Origine Y si vertical
+	.do_sub:
+    sub     eax, ecx                         ; EAX = DeltaPix (pixels relatifs)
+
+    ; Produit en croix : (DeltaPix * RangeLogique) / RangePix
+    movzx   ecx, word [gs:si + widget.attr_max]
+    movzx   edx, word [gs:si + widget.attr_min]
+    sub     ecx, edx                         ; ECX = RangeLogique (Max - Min)
+
+    mul     ecx                              ; EAX = DeltaPix * RangeLogique
+    xor     edx, edx                         ; Nettoyage EDX pour div 32 bits
+    div     ebx                              ; EAX = Valeur métier relative
+
+    ; Ajouter le Min métier et stocker
+    movzx   edx, word [gs:si + widget.attr_min]
+    add     eax, edx                         ; EAX = Valeur métier finale
+    mov     [gs:si + widget.attr_val], ax    ; Stockage (tronqué en 16 bits)
+
+	.done:
+    pop		edx
+	pop		ecx
+	pop		ebx
+	pop		eax
+    ret
+
+; -----------------------------------------------------------------------------
+; gui_slider_update_pixels
+; In: GS:SI = widget
+; Calcule .thumb_pos (pixels) à partir de .attr_val (métier)
+; -----------------------------------------------------------------------------
+gui_slider_update_pixels:
+    pushad                          ; Sauvegarde EAX, ECX, EDX, EBX, ESP, EBP, ESI, EDI
+
+    ; Calculer la dimension totale du widget (W ou H)
+    movzx   eax, word [gs:si + widget.w]
+    cmp     byte [gs:si + widget.attr_mode], 2 ; Mode Vertical ?
+    jne     .calc_range
+    movzx   eax, word [gs:si + widget.h]
+
+	.calc_range:
+    ; Calculer RangePix (Amplitude max du mouvement)
+    ; RangePix = DimensionTotale - (DimensionTotale * thumb_pct / 100)
+    push    eax                             ; Sauvegarde DimTotale
+    movzx   ebx, byte [gs:si + widget.thumb_pct]
+    mul     ebx                             ; EAX = Dim * pct
+    mov     ebx, 100
+    xor     edx, edx
+    div     ebx                             ; EAX = Taille physique du thumb
+
+    pop     ebx                             ; EBX = DimTotale
+    sub     ebx, eax                        ; EBX = RangePix (Amplitude)
+    jz      .done                           ; Sécurité : si RangePix = 0
+
+    ; Calculer DeltaLogique (Progression métier)
+    movzx   eax, word [gs:si + widget.attr_val]
+    movzx   ecx, word [gs:si + widget.attr_min]
+    sub     eax, ecx                        ; EAX = DeltaLogique (Val - Min)
+    js      .set_min                        ; Sécurité si Val < Min
+
+    ; Produit en croix : (DeltaLogique * RangePix) / RangeLogique
+    movzx   ecx, word [gs:si + widget.attr_max]
+    movzx   edx, word [gs:si + widget.attr_min]
+    sub     ecx, edx                        ; ECX = RangeLogique (Max - Min)
+    jz      .done                           ; Sécurité : RangeLogique ne peut être 0
+
+    mul     ebx                             ; EAX = DeltaLogique * RangePix
+    xor     edx, edx
+    div     ecx                             ; EAX = Offset pixel relatif
+
+    ; 5. Ajouter l'origine physique (X ou Y)
+    movzx   edx, word [gs:si + widget.x]
+    cmp     byte [gs:si + widget.attr_mode], 2
+    jne     .store
+    movzx   edx, word [gs:si + widget.y]
+	.store:
+    add     eax, edx                        ; EAX = Position pixel finale
+    mov     [gs:si + widget.thumb_pos], ax
+    jmp     .done
+
+	.set_min:
+    ; Si la valeur est sous le minimum, on colle au début
+    movzx   ax, word [gs:si + widget.x]
+    cmp     byte [gs:si + widget.attr_mode], 2
+    jne     .force_store
+    movzx   ax, word [gs:si + widget.y]
+	.force_store:
+    mov     [gs:si + widget.thumb_pos], ax
+
+	.done:
+    popad                           ; Restauration propre
+    ret
+
 ; --- Logique spécifique Slider ---
 gui_logic_slider:
 	test    bl, 1           ; Bouton enfoncé ?
@@ -735,7 +877,7 @@ gui_logic_slider:
 	div     bx                      ; AX = Thumb Width
 
 	; Check collision avec le thumb actuel
-	mov     bx, [gs:si + widget.attr_val]
+	mov     bx, [gs:si + widget.thumb_pos]
 	cmp     cx, bx
 	jb      .click_outside_h        ; Click avant le thumb
 	add     bx, ax
@@ -744,7 +886,7 @@ gui_logic_slider:
 
 	; Click DANS le thumb : Anchor = MouseX - AttrVal
 	mov     ax, cx
-	sub     ax, [gs:si + widget.attr_val]
+	sub     ax, [gs:si + widget.thumb_pos]
 	mov     [gs:si + widget.attr_anchor], ax
 	jmp     .init_done
 
@@ -763,7 +905,7 @@ gui_logic_slider:
 	div     bx                      ; AX = Thumb Height
 
 	; Check collision avec le thumb actuel
-	mov     bx, [gs:si + widget.attr_val]
+	mov     bx, [gs:si + widget.thumb_pos]
 	cmp     dx, bx
 	jb      .click_outside_v
 	add     bx, ax
@@ -772,7 +914,7 @@ gui_logic_slider:
 
 	; Click DANS le thumb
 	mov     ax, dx
-	sub     ax, [gs:si + widget.attr_val]
+	sub     ax, [gs:si + widget.thumb_pos]
 	mov     [gs:si + widget.attr_anchor], ax
 	jmp     .init_done
 
@@ -867,9 +1009,9 @@ gui_logic_slider:
 	mov     ax, bx
 
 	.apply_pos:
-	cmp     ax, [gs:si + widget.attr_val]
+	cmp     ax, [gs:si + widget.thumb_pos]
 	je      .no_change
-	mov     [gs:si + widget.attr_val], ax
+	mov     [gs:si + widget.thumb_pos], ax
 
 	; Appel du callback on_drag
 	cmp     word [gs:si + widget.event_drag], 0
@@ -905,7 +1047,7 @@ gui_logic_checkbox:
 	jne     .hover
 
 	; Clic validé ! Toggle value
-	xor     word [gs:si + widget.attr_val], 1
+	xor     word [gs:si + widget.thumb_pos], 1
 	mov     byte [gs:si + widget.oldstate], 255 ; Force redraw
 
 	mov     al, 1

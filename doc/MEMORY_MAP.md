@@ -6,22 +6,21 @@
 
 The processor starts in Real Mode, addressing 1 MB of memory.
 
-| Physical Start | Physical End | Size | Description | Segment | Source File |
+| Physical Start | Physical End | Size | Description | Segment | Source/Definied |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`0x00000`** | **`0x003FF`** | 1 KB | **IVT** (Interrupt Vector Table) | `0x0000` | `memory.asm` |
 | **`0x00400`** | **`0x004FF`** | 256 B | **BDA** (BIOS Data Area) Standard | `0x0040` | `memory.asm` |
-| **`0x00500`** | **`0x005FF`** | ~256 B | **Custom BDA** (Driver Data) | `0x0050` | `memory.asm` |
+| **`0x00500`** | **`0x005FF`** | 256 B | **Custom BDA** (Driver Data) | `0x0050` | `memory.asm` |
 | **`0x00600`** | **`0x00AFF`** | 1.25 KB | **GUI RAM** (Widget Allocation) | `0x0060` | `gui/lib.asm` |
 | **`0x00B00`** | **`0x07FFF`** | 29 KB | **Free** (Low Memory) | | |
-| **`0x08000`** | **`0x17FFF`** | 64 KB | **Stack** (Grows downwards) | `0x0800` | `memory.asm` |
-| **`0x18000`** | **`0x9FBFF`** | 543 KB | **Free** (Conventional RAM) | | |
-| **`0x9FC00`** | **`0x9FFFF`** | 1 KB | **EBDA** (Extended BIOS Data Area) | `0x9FC0` | `memory.asm` |
+| **`0x08000`** | **`0x17FFF`** | 64 KB | **Stack** (Grows downwards) | `0x0800` | `boot.asm` |
+| **`0x18000`** | **`0x9FFFF`** | 544 KB | **Free** (Conventional RAM) | | |
 | **`0xA0000`** | **`0xAFFFF`** | 64 KB | **VGA RAM** (Graphics Modes) | `0xA000` | `Hardware` |
 | **`0xB0000`** | **`0xB7FFF`** | 32 KB | **MDA RAM** (Monochrome Text) | `0xB000` | `Hardware` |
-| **`0xB8000`** | **`0xBFFFF`** | 32 KB | **VRAM** (CGA / MCGA) | `0xB800` | `memory.asm` |
-| **`0xC0000`** | **`0xDFFFF`** | 128 KB | **Option ROMs** (e.g., VGA BIOS) | `0xC000` | `memory.asm` |
+| **`0xB8000`** | **`0xBFFFF`** | 32 KB | **VRAM** (CGA / MCGA) | `0xB800` | `generic.asm` |
+| **`0xC0000`** | **`0xDFFFF`** | 128 KB | **Option ROMs** (e.g., VGA BIOS) | `0xC000` | `generic.asm` |
 | **`0xE0000`** | **`0xEFFFF`** | 64 KB | **System Reserved** (BIOS Extension) | `0xE000` | `Hardware` |
-| **`0xF0000`** | **`0xFFFFF`** | 64 KB | **System BIOS ROM** (Code) | `0xF000` | `memory.asm` |
+| **`0xF0000`** | **`0xFFFFF`** | 64 KB | **System BIOS ROM** (Code) | `0xF000` | `Hardware` |
 
 ### Detailed Zones
 
@@ -43,7 +42,7 @@ The project separates the standard IBM BDA from its own variables to avoid confl
         *   **Layout**: Located in low memory (`0x0060`) to avoid any collision with the Stack (`0x0800`).
 
 #### Stack
-*   **Stack**: Segment `0x0800`, SP `0xFFFE`. Grows downwards from physical address `0x17FFE`.
+*   **Stack**: Grows downwards from physical address `0xFFFE` (16-bit aligned) of the "Stack Segment" defined by `STACK_SEG`.
 
 #### Video RAM (CGA High-Res)
 *   **Segment**: `0xB800`
@@ -68,22 +67,21 @@ The project separates the standard IBM BDA from its own variables to avoid confl
 
 Le processeur démarre en mode réel, adressant 1 Mo de mémoire.
 
-| Adresse Physique (Début) | Adresse Physique (Fin) | Taille | Description | Segment | Fichier Source |
+| Physical Start | Physical End | Size | Description | Segment | Source/Definied |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`0x00000`** | **`0x003FF`** | 1 Ko | **IVT** (Interrupt Vector Table) | `0x0000` | `memory.asm` |
-| **`0x00400`** | **`0x004FF`** | 256 o | **BDA** (BIOS Data Area) Standard | `0x0040` | `memory.asm` |
-| **`0x00500`** | **`0x005FF`** | ~256 o | **Custom BDA** (Données Drivers) | `0x0050` | `memory.asm` |
-| **`0x00600`** | **`0x00AFF`** | 1.25 Ko | **GUI RAM** (Allocation Widgets) | `0x0060` | `gui/lib.asm` |
-| **`0x00B00`** | **`0x07FFF`** | 29 Ko | **Libre** (Mémoire Basse) | | |
-| **`0x08000`** | **`0x17FFF`** | 64 Ko | **Pile** (Stack) | `0x0800` | `memory.asm` |
-| **`0x18000`** | **`0x9FBFF`** | 543 Ko | **Libre** (RAM Conventionnelle) | | |
-| **`0x9FC00`** | **`0x9FFFF`** | 1 Ko | **EBDA** (Extended BIOS Data Area) | `0x9FC0` | `memory.asm` |
-| **`0xA0000`** | **`0xAFFFF`** | 64 Ko | **VGA RAM** (Modes Graphiques) | `0xA000` | `Matériel` |
-| **`0xB0000`** | **`0xB7FFF`** | 32 Ko | **MDA RAM** (Texte Monochrome) | `0xB000` | `Matériel` |
-| **`0xB8000`** | **`0xBFFFF`** | 32 Ko | **VRAM** (CGA / MCGA) | `0xB800` | `memory.asm` |
-| **`0xC0000`** | **`0xDFFFF`** | 128 Ko | **Option ROMs** (ex: VGA BIOS) | `0xC000` | `memory.asm` |
-| **`0xE0000`** | **`0xEFFFF`** | 64 Ko | **Réservé Système** (Extension BIOS) | `0xE000` | `Matériel` |
-| **`0xF0000`** | **`0xFFFFF`** | 64 Ko | **System BIOS ROM** (Code) | `0xF000` | `memory.asm` |
+| **`0x00000`** | **`0x003FF`** | 1 KB | **IVT** (Interrupt Vector Table) | `0x0000` | `memory.asm` |
+| **`0x00400`** | **`0x004FF`** | 256 B | **BDA** (BIOS Data Area) Standard | `0x0040` | `memory.asm` |
+| **`0x00500`** | **`0x005FF`** | 256 B | **Custom BDA** (Driver Data) | `0x0050` | `memory.asm` |
+| **`0x00600`** | **`0x00AFF`** | 1.25 KB | **GUI RAM** (Widget Allocation) | `0x0060` | `gui/lib.asm` |
+| **`0x00B00`** | **`0x07FFF`** | 29 KB | **Free** (Low Memory) | | |
+| **`0x08000`** | **`0x17FFF`** | 64 KB | **Stack** (Grows downwards) | `0x0800` | `boot.asm` |
+| **`0x18000`** | **`0x9FFFF`** | 544 KB | **Free** (Conventional RAM) | | |
+| **`0xA0000`** | **`0xAFFFF`** | 64 KB | **VGA RAM** (Graphics Modes) | `0xA000` | `Hardware` |
+| **`0xB0000`** | **`0xB7FFF`** | 32 KB | **MDA RAM** (Monochrome Text) | `0xB000` | `Hardware` |
+| **`0xB8000`** | **`0xBFFFF`** | 32 KB | **VRAM** (CGA / MCGA) | `0xB800` | `generic.asm` |
+| **`0xC0000`** | **`0xDFFFF`** | 128 KB | **Option ROMs** (e.g., VGA BIOS) | `0xC000` | `generic.asm` |
+| **`0xE0000`** | **`0xEFFFF`** | 64 KB | **System Reserved** (BIOS Extension) | `0xE000` | `Hardware` |
+| **`0xF0000`** | **`0xFFFFF`** | 64 KB | **System BIOS ROM** (Code) | `0xF000` | `Hardware` |
 
 ### Détails des Zones
 
@@ -105,7 +103,7 @@ Le projet sépare la BDA standard IBM de ses propres variables pour éviter les 
         *   **Organisation** : Située en mémoire basse (`0x0060`) pour éviter toute collision avec la Pile (`0x0800`).
 
 #### Stack
-*   **Stack** : Segment `0x0800`, SP `0xFFFE`. Grandit vers le bas depuis l'adresse physique `0x17FFE`.
+*   **Stack** : Grandit vers le bas depuis l'adresse physique `0xFFFE` (Alignement sur 16 bits) du "stack Segment" défini par `STACK_SEG`.
 
 
 #### Video RAM (CGA High-Res)

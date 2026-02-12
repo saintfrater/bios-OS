@@ -78,16 +78,6 @@ endstruc
 %define BDA_MOUSE               0x0000
 %define BDA_GFX                 (BDA_MOUSE + mouse_size)
 
-;
-; memory map
-;
-;   0x00000-0x003FF : IVT (1kB)
-;   0x00400-0x007FF : BDA (1kB) pour les options 'ROMS' carte graphique, etc...
-;   0x00800-0x009FF : Varibles custom.
-;
-;   0x03C00-0x08000 : stack segment
-;   0x
-
 ; -----------------------------------------------------------------------------------
 ;  bda_setup
 ;  Initialise la BDA à zéro

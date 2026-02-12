@@ -60,17 +60,24 @@ section     .text
 %include	"./gui/lib.asm"
 %include	"./gui/draw.asm"
 
+; --- Données texte ---
+str_quit  db "Quitter", 0
+str_hello db "Hello", 0
+str_option1 db "option 1", 0
+str_option2 db "option 2", 0
+str_option3 db "option 3", 0
+
 entrycode:
 	cli
-	; il n'existe aucun 'stack' par défaut
-	mov		ax, STACK_SEG
+	mov		ax, STACK_SEG	; creation du stack par défaut
 	mov 	ss, ax
 	mov 	sp, 0xFFFE     	; haut du segment (64ko de stack), mot-aligné
 	cld
 
-	; installé une table d'interruption "dummy"
-	call 	ivt_setup
-	call	bda_setup
+	call 	ivt_setup		; configuration d'une table d'interruption "dummy"
+	call	bda_setup		; initialisation du BDA
+
+	ISADBG	ISA_GREEN, 1
 
 	; Install IRQ 0 : timer_isr
 	mov		ax,cs
@@ -80,14 +87,22 @@ entrycode:
 
 	call	ivt_setvector
 
+	ISADBG	ISA_GREEN, 2
+
 	; initialisation des PIC 8259A
 	call 	pic_init
+
+	ISADBG	ISA_GREEN, 4
 
 	; load Roms
 	call 	setup_load_rom
 
+	ISADBG	ISA_GREEN, 8
+
 	; on vérifie que le BIOS VGA a installé une INT 10h
 	call	setup_check_vga
+
+	ISADBG	ISA_GREEN, 16
 
 	; enable IRQ 0
 	mov     ah,IRQ_ENABLED
@@ -97,13 +112,24 @@ entrycode:
 	call	kbd_init
 	sti
 
+	DEBUG	0xFADE
+
+	ISADBG	ISA_GREEN, 32
+
 	; on active le mode graphique
 	GFX		INIT
 	call	mouse_init
-	GFX		MOUSE_MOVE
-	GFX		MOUSE_SHOW
 
+	GFX		MOUSE_MOVE
+	ISADBG	ISA_RED, 0x80
+
+ 	GFX		MOUSE_SHOW
+
+	ISADBG	ISA_RED, 0x81
+
+	.loops:
     call    main_loop
+	jmp     .loops
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
 on_click_quit:
@@ -111,18 +137,29 @@ on_click_quit:
 	jmp     on_click_quit
     ret
 
-%define     .oldval     word [bp-2]
-%define     .slider     word [bp-4]
+on_click_hello:
+	ret
+
+%define     .oldval     	word [bp-2]
+%define     .my_slider     	word [bp-4]
+%define		.value			word [bp-6]
 main_loop:
     push    bp
     mov     bp, sp
-    sub     sp, 4
+    sub     sp, 6
 
 	push	cs
 	pop		ds
 
+	DEBUG	1
+	ISADBG	ISA_RED, 1
+
 	; Init du système GUI
 	call    gui_init_system
+
+
+	DEBUG	2
+	ISADBG	ISA_RED, 2
 
 	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
 
@@ -130,7 +167,7 @@ main_loop:
     GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16
 	GUI     OBJ_SET_TEXT, ax, cs, str_quit
 	; Créer Bouton 2 "HELLO"
-    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16,
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16
 	GUI     OBJ_SET_TEXT, ax, cs, str_hello
 	; Créer checkbox 3 "option 1"
     GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15
@@ -142,42 +179,51 @@ main_loop:
     GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15
 	GUI     OBJ_SET_TEXT, ax, cs, str_option3
 
+	DEBUG	3
+	ISADBG	ISA_RED, 3
+
     ; Créer Slider (Drag)
     GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
 	GUI		OBJ_SET_MODE, ax, SLIDER_HORIZONTAL
 	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 10, 15
 
 	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
-	mov     .slider, ax
-	GUI		OBJ_SET_MODE, .slider, SLIDER_VERTICAL
-	GUI		OBJ_SLIDER_SET_ATTR, .slider, 0, 15, 15, 20
-    mov     .oldval, -1
+	mov     .my_slider, ax
+
+	GUI		OBJ_SET_MODE, .my_slider, SLIDER_VERTICAL
+	GUI		OBJ_SLIDER_SET_ATTR, .my_slider, 0, 15, 15, 12
+
+    mov     .oldval, 0x1256
+	mov		.value, 0xFADE
+
+	DEBUG	4
+	ISADBG	ISA_RED, 4
 
     .loop:
-	call    gui_process_all
- 	GUI		OBJ_GET_VAL, .slider		; slider
+		call    gui_process_all
+ 		GUI		OBJ_GET_VAL, .my_slider
+		mov		.value, ax
 
-    cmp     ax,.oldval
-    je      .loop
+    	cmp     ax,.oldval
+    	je      .loop
 
-	; debug
-    mov     .oldval, ax
-    GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
-	GFX		GOTOXY, 8, 150
+		; debug
+    	mov     .oldval, ax
+    	GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
+		GFX		GOTOXY, 8, 150
 
-	call	print_word_hex
-	; end debug
+		mov		ax, .value
+		call	print_word_hex
+		; end debug
+
+		mov		dx, 0x3d9
+		mov		ax, .value
+		and 	ax, 0x000F
+		out		dx, al
 
 	jmp     .loop
 	leave
 	ret
-
-; --- Données ROM ---
-str_quit  db "Quitter", 0
-str_hello db "Hello", 0
-str_option1 db "option 1", 0
-str_option2 db "option 2", 0
-str_option3 db "option 3", 0
 
 ; -----------------------------------------------------------
 ; timer ISR (IRQ -> INT)

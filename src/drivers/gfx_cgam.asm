@@ -120,7 +120,6 @@ cga_init:
 	mov		al, GFX_MODE
 	int 	0x10
 
-    ; mov     byte [BDA_GFX + gfx.cur_mode], 1
 	; dessine un background "check-board"
 	call	cga_background
 	ret
@@ -160,7 +159,6 @@ cga_calc_addr:
     mov     ah, 0x80
     shr     ah, cl
 	ret
-
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_writemode (mode)
@@ -418,6 +416,7 @@ cga_write:
     mov     ax, .txt_seg
     mov     ds, ax
     mov     si, .txt_ofs
+    cld
 
     .loops:
     lodsb
@@ -529,6 +528,7 @@ cga_background:
 	mov		es,ax
 	mov		di,0x0000
 	mov		eax,0xaaaaaaaa
+	cld
 	mov		cx,0x800
 	rep		stosd
 	mov		di,0x2000
@@ -1019,7 +1019,7 @@ cga_fill_rect:
 
     call    cga_mouse_hide
 
-    ; --- 1. Tri des coordonnées (X et Y) ---
+    ; --- Tri des coordonnées (X et Y) ---
     ; Tri X
     mov     ax, .x1
     mov     bx, .x2
@@ -1045,14 +1045,14 @@ cga_fill_rect:
     and     ax, 7
     mov     .pat_idx, ax
 
-    ; --- 2. Calcul de la hauteur ---
+    ; --- Calcul de la hauteur ---
     mov     bx, .y2
     sub     bx, .y1
     inc     bx              ; BX = Hauteur finale
     push    bx              ; SAUVEGARDER LA HAUTEUR SUR LA PILE [STACK A]
                             ; (Car on va utiliser BX dans cga_calc_addr ou juste après)
 
-    ; --- 3. Calcul adresse de départ ---
+    ; --- Calcul adresse de départ ---
     mov     cx, .x1
     mov     dx, .y1
 
@@ -1061,7 +1061,7 @@ cga_fill_rect:
     ; Si cga_calc_addr modifie BX, la sauvegarde [STACK A] est vitale.
     call    cga_calc_addr   ; DI = Offset début ligne
 
-    ; --- 4. Préparer les masques ---
+    ; --- Préparer les masques ---
     ; Masque Gauche (DH)
     mov     cx, .x1
     and     cx, 7
@@ -1083,7 +1083,7 @@ cga_fill_rect:
     shr     cx, 3           ; CX = Index end byte
     mov     .x_end_idx, cx  ; Sauvegarde de l'index de fin pour la boucle horizontale
 
-    ; --- 5. Récupérer la hauteur dans un registre sûr ---
+    ; --- Récupérer la hauteur dans un registre sûr ---
     pop     bx              ; RESTAURER HAUTEUR DANS BX [STACK A]
                             ; BX est maintenant notre compteur de boucle.
     ; --- BOUCLE VERTICALE ---
@@ -1313,7 +1313,7 @@ cga_mouse_show:
     .skip_draw:
     pop     ds
     popad
-    popf
+    popf                ; restore également le flag d'interruption
     ret
 
 

@@ -27,6 +27,7 @@
 ; Dessine le widget pointé par SI
 gui_draw_single_widget:
 	pusha
+	push	es
 
 	GFX     MOUSE_HIDE              ; On cache la souris AVANT de commencer le dessin du widget
 
@@ -88,6 +89,7 @@ gui_draw_single_widget:
 
 	.done:
 	GFX     MOUSE_SHOW              ; On réaffiche la souris APRES, capturant le widget fini
+	pop		es
 	popa
 	ret
 
@@ -127,8 +129,8 @@ draw_slider:
 	mov     bx, 100
 	div     bx                      ; AX = Thumb Width
 
-	; Thumb X1 = attr_val
-	mov     cx, [gs:si + widget.attr_val]
+	; Thumb X1 = thumb_pos
+	mov     cx, [gs:si + widget.thumb_pos]
 
 	; --- CLAMP X1 (Fix Overflow) ---
 	; Max X1 = TrackX2 - ThumbW
@@ -166,8 +168,8 @@ draw_slider:
 	mov     bx, 100
 	div     bx                      ; AX = Thumb Height
 
-	; Thumb Y1 = attr_val
-	mov     cx, [gs:si + widget.attr_val]
+	; Thumb Y1 = thumb_pos
+	mov     cx, [gs:si + widget.thumb_pos]
 
 	; --- CLAMP Y1 (Fix Overflow) ---
 	; Max Y1 = TrackY2 - ThumbH
@@ -413,7 +415,7 @@ draw_checkbox:
 	GFX     RECTANGLE, ax, bx, cx, dx, 0
 
 	; Check if checked
-	cmp     word [gs:si + widget.attr_val], 0
+	cmp     word [gs:si + widget.thumb_pos], 0
 	je      .draw_label
 
 	; Dessin du X (Diagonales)
@@ -465,6 +467,7 @@ draw_label:
 ; affiche le texte au centre du widget gs:si
 ;
 draw_text:
+	push	es
 	; --- Centrage Texte ---
 	mov     es, [gs:si + widget.text_seg]
 	mov     di, [gs:si + widget.text_ofs]
@@ -499,4 +502,5 @@ draw_text:
 	mov     dx, [gs:si + widget.text_seg]
 	mov     ax, [gs:si + widget.text_ofs]
 	GFX     WRITE, dx, ax
+	pop		es
 	ret
