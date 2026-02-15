@@ -42,8 +42,7 @@ dump_ram_words:
 	call print_word_hex     	; Affiche AX sous forme "XXXX"
 
 	; (Optionnel) Ajouter un espace entre chaque mot pour la lisibilité
-	mov  al, ' '
-	call cga_putc
+	GFX		PUTCH, ' '
 
 	pop  si                 	; Restaure SI
 	pop  cx                 	; Restaure CX
@@ -77,9 +76,7 @@ print_word_hex:
 
 	xor     bx, bx
 	mov     bl, al
-	push    bx
-	call    cga_putc
-	add     sp, 2
+	GFX		PUTCH, bx
 	loop    .next_digit        ; Répète 4 fois
 
 	popa

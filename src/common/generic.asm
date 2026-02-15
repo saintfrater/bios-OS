@@ -20,16 +20,12 @@
 ;
 ; =============================================================================
 
-%define		DISABLE_DEBUGER
-
-%ifndef		DISABLE_DEBUGER
-
+%ifdef		DEBUGER_ENABLED
 	%macro		DEBUG 1
 		GFX		GOTOXY, 0, 0
 		mov		ax, %1
 		call	print_word_hex
 	%endmacro
-
 	;
 	; Debugger for 86Box
 	;
@@ -110,6 +106,26 @@
 
 %define IRQ_ENABLED             0x00
 %define IRQ_DISABLED            0x01
+
+; ---------------------------------------------------------------------------
+; CGA/MDA Controler
+; ---------------------------------------------------------------------------
+;
+; MDA 6845
+%define CRTC_6845_MONO				0x03b4
+%define CRTC_6845_MONO_REGISTER		0x03b5
+;
+; CGA 6845
+%define CRTC_6845_COLOR				0x03d4
+%define CRTC_6845_COLOR_REGISTER 	0x03d4
+%define CRTC_COLOR_REGISTER			0x03d5
+
+%define CRTC_COLOR_CTRL				0x03d8
+%define CRTC_COLOR_DATA				0x03d9
+
+%define EGAVGA_CONTROLLER			0x03ce
+
+%define VGA_SEQUENCER				0x03c4
 
 ; ---------------------------------------------------------------------------
 ; Détection les ROM supplementaires

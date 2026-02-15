@@ -31,7 +31,6 @@
 
 %define CGA_STRIDE      80
 %define CGA_ODD_BANK    0x2000
-
 ;
 ; bit : descr
 ;  0  : text color : 0=black, 1=white
@@ -78,6 +77,7 @@
 %define MOUSE_HIDE      11
 %define MOUSE_SHOW      12
 %define MOUSE_MOVE      13
+%define MOUSE_DRAW		14
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -105,6 +105,7 @@ graph_driver:
 	dw cga_mouse_hide           ; déplacement du curseur
 	dw cga_mouse_show           ; déplacement du curseur
  	dw cga_mouse_cursor_move    ; déplacement du curseur
+	dw cga_cursor_draw
 
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
@@ -112,7 +113,7 @@ graph_driver:
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
 cga_init:
-	mov     ax, BDA_DATA_SEG
+	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
 
 	; init graphics mode
@@ -180,7 +181,7 @@ cga_set_writemode:
 
 	push    fs
 	push    ax
-	mov     ax, BDA_DATA_SEG
+	mov     ax, BDA_CUSTOM_SEG
 	mov     fs,ax
 
 	mov     ax, .mode
@@ -211,7 +212,7 @@ cga_set_charpos:
 	pusha
 	push    fs
 
-	mov     ax,BDA_DATA_SEG
+	mov     ax,BDA_CUSTOM_SEG
 	mov     fs,ax
 
 	; store x,y en pixel
@@ -314,7 +315,7 @@ cga_putc:
 
 	mov     bx, VIDEO_SEG
 	mov     es, bx
-	mov     bx, BDA_DATA_SEG
+	mov     bx, BDA_CUSTOM_SEG
 	mov     fs, bx
 
 	mov     ax, .car
@@ -1267,7 +1268,7 @@ cga_mouse_hide:
 	pusha 	                ; Sauvegarder TOUS les registres 32-bits
 	push    ds
 
-	mov     ax, BDA_DATA_SEG
+	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
 
 	; Décrémenter le compteur
@@ -1295,7 +1296,7 @@ cga_mouse_show:
 	pusha
 	push    ds
 
-	mov     ax, BDA_DATA_SEG
+	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
 
 	; Incrémenter le compteur
@@ -1327,7 +1328,7 @@ cga_mouse_cursor_move:
 	push 	es
 
 	; move Data Segment
-	mov		ax, BDA_DATA_SEG
+	mov		ax, BDA_CUSTOM_SEG
 	mov		ds, ax
 
 	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
@@ -1437,10 +1438,7 @@ cga_cursor_restorebg:
 	ret
 
 ; ============================================================
-; gfx_cursor_draw_rm16_i386_self
-; Entrée:
-;   DS = BDA_DATA_SEG
-; Sortie: rien
+; cga_cursor_draw
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
 %define .height word [bp-2]
@@ -1456,24 +1454,23 @@ cga_cursor_draw:
 	push    gs
 
 	cld                             ; Sécurité : Direction avant
-	mov     ax, BDA_DATA_SEG
+	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
 	mov     ax, VIDEO_SEG
 	mov     es, ax
 
 	; --- CLIPPING VERTICAL ---
 	mov     dx, [ds:BDA_MOUSE + mouse.y]
-	cmp     dx, 200
+	mov     bx, GFX_HEIGHT
+	cmp     dx, bx
 	jae     .exit_total
 
 	mov     ax, 16
-	mov     bx, 200
 	sub     bx, dx                                  ; 200-y
 	cmp     ax, bx
 	jbe     .y_ok                                   ; y<= 200-16
 
 	mov     ax, bx
-
 	.y_ok:
 	mov     .height, ax
 

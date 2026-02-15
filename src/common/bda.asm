@@ -24,11 +24,9 @@
 ; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/informations/bios_data_area
 ;
 
-%define BDA_SEGMENT		    0x0040			    ; segment BDA
-
-; custom vars
-%define BDA_INFO_MEM_SIZE	0x0014		        ; Memory size in Kbytes
-%define BDA_INFO_MEM_SEG	BDA_INFO_MEM_SIZE+2	; highest Memory Segment
+%define BDA_SEGMENT		    0x0040			    ; segment BDA (historically)
+%define BDA_CUSTOM_SEG	    0x0050              ; custom data (mouse, gfx cursor, etc..)
+%define BDA_GUI_WIDGET      0x0070              ; Segment de données UI (Safe: après Stack, avant Heap)
 
 ; video related information (compatible with VGA bios)
 %define BDA_VIDEO_CURR_MODE	0x0049
@@ -38,7 +36,8 @@
 ;
 ; information relative à la souris
 ;
-%define BDA_DATA_SEG	        0x0050
+
+%define BDA_BitPP	    		4
 
 %define BKG_DWORDS_PER_LINE     1          ; 1 dword stocké par ligne
 %define BKG_LINES               16
@@ -63,7 +62,8 @@ struc  mouse
     .cur_ofs        resw    1       ;
     .bkg_saved      resb    1       ; background saved
     alignb                  4       ; alignement 4 bytes
-    .bkg_buffer     resd    16      ; buffer for saved background
+    ; buffer for saved background
+    .bkg_buffer     resd    16*BDA_BitPP
 endstruc
 
 struc   gfx
@@ -86,7 +86,7 @@ bda_setup:
             pusha
             push        ds
 
-            mov 	ax, BDA_DATA_SEG
+            mov 	ax, BDA_CUSTOM_SEG
             mov 	es, ax
 
             mov 	ax, 0x5F

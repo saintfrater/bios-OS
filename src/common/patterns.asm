@@ -13,9 +13,16 @@
 
 align   8
 pattern_8x8:
-    dq 0x0000000000000000               ; pattern_black (Tout à 0 = Noir)
-    dq 0x2200880022008800               ; pattern_gray_dark (Majorité de 0)
-    dq 0x2288228822882288               ; pattern_gray_mid
-    dq 0xAA55AA55AA55AA55               ; pattern_gray_light (50/50)
-    dq 0x77DD77DD77DD77DD               ; pattern_white_light (Majorité de 1 = Clair)
-    dq 0xFFFFFFFFFFFFFFFF               ; pattern_white (Tout à 1 = Blanc)
+    dq 0x0000000000000000               ; 0 : pattern_black (Tout à 0 = Noir)
+    dq 0x2200880022008800               ; 1 : pattern_gray_dark (Majorité de 0)
+    dq 0x2288228822882288               ; 2 : pattern_gray_mid
+    dq 0xAA55AA55AA55AA55               ; 3 : pattern_gray_light (50/50)
+    dq 0x77DD77DD77DD77DD               ; 4 : pattern_white_light (Majorité de 1 = Clair)
+    dq 0xFFFFFFFFFFFFFFFF               ; 5 : pattern_white (Tout à 1 = Blanc)
+
+
+%macro  PATTERN_PTR 		1
+    mov     ax, cs
+    mov     ds, ax
+	lea     esi, [pattern_8x8 + (%1 * 8)]
+%endmacro
