@@ -23,7 +23,7 @@
 %define 	DEBUG_PORT	0xe9		; 0x402 ou 0xe9
 
 debug_puts:
-.next:
+	.next:
 	push 	dx
 	mov		dx, DEBUG_PORT
 	lodsb                    	; AL = *SI++
@@ -31,7 +31,7 @@ debug_puts:
 	jz   	.done
 	out		dx, al
 	jmp  	.next
-.done:
+	.done:
 	pop 	dx
 	ret
 
@@ -49,9 +49,9 @@ debug_puthex4:
 	jbe 	.num
 	add 	al, 'A' - 10
 	jmp 	.pout
-.num:
+	.num:
     add 	al, '0'
-.pout:
+	.pout:
     call debug_putc
     ret
 
@@ -88,6 +88,8 @@ scr_gotoxy:
 
 scr_putc:
 	mov 	ah, 0x0E
+	mov		bh, 0x00
+	mov		bl, 0x0f
 	int 	10h
 	ret
 
@@ -98,12 +100,14 @@ scr_puthex4:
 	jbe 	.num		; yes
 	add 	al, 'A' - 10	; convert to 'A'..'F'
 	jmp 	.pout
-.num:
-    		add 	al, '0'	; convert to '0'..'9'
-.pout:
-    		mov 	ah, 0x0E
+	.num:
+    add 	al, '0'		; convert to '0'..'9'
+	.pout:
+    mov 	ah, 0x0e
+	mov		bh, 0x00
+	mov		bl, 0x0f
 	int 	10h
-    		ret
+    ret
 
 ; AL = byte -> print 2 hex digits
 scr_puthex8:

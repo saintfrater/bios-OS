@@ -172,12 +172,11 @@ cga_calc_addr:
 ; si le mode n'est pas transparent, la couleur de fond
 ; est l'inverse de la couleur du texte
 ; ---------------------------------------------------------------------------
+; --- Définition des arguments ---
+%define .mode   word [bp+4]
 cga_set_writemode:
 	push    bp
 	mov     bp, sp
-
-	; --- Définition des arguments ---
-	%define .mode   word [bp+4]
 
 	push    fs
 	push    ax
@@ -186,12 +185,13 @@ cga_set_writemode:
 
 	mov     ax, .mode
 
-	mov     byte [fs:BDA_GFX + gfx.cur_mode], al
+	mov     byte [fs:PTR_GFX + gfx.cur_mode], al
 
 	pop     ax
 	pop     fs
 	leave
 	ret
+%undef      .mode
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos (x,y)
@@ -219,12 +219,12 @@ cga_set_charpos:
 	mov     cx, .x
 	mov     dx, .y
 
-	mov     [fs:BDA_GFX + gfx.cur_x], cx
-	mov     [fs:BDA_GFX + gfx.cur_y], dx
+	mov     [fs:PTR_GFX + gfx.cur_x], cx
+	mov     [fs:PTR_GFX + gfx.cur_y], dx
 
 	mov     ax, cx
 	and     ax, 0x07
-	mov     [fs:BDA_GFX + gfx.cur_shift], al
+	mov     [fs:PTR_GFX + gfx.cur_shift], al
 
 	; calcul de l'offset de la position 'x,y':
 	; si 'y' est paire, DI < 0x2000 & add = 0x2000
@@ -247,8 +247,8 @@ cga_set_charpos:
 	neg     ax
 	add     ax, CGA_STRIDE
 	.even:
-	mov     [fs:BDA_GFX + gfx.cur_line_ofs], ax
-	mov     [fs:BDA_GFX + gfx.cur_offset], bx
+	mov     [fs:PTR_GFX + gfx.cur_line_ofs], ax
+	mov     [fs:PTR_GFX + gfx.cur_offset], bx
 
 	pop     fs
 
@@ -323,10 +323,10 @@ cga_putc:
 	call    get_glyph_offset
 
 	; Base offset VRAM pour la scanline Y
-	mov     di, [fs:BDA_GFX + gfx.cur_offset]
-	mov     bx, [fs:BDA_GFX + gfx.cur_line_ofs]
-	mov     ch, [fs:BDA_GFX + gfx.cur_mode]
-	mov     cl, [fs:BDA_GFX + gfx.cur_shift]
+	mov     di, [fs:PTR_GFX + gfx.cur_offset]
+	mov     bx, [fs:PTR_GFX + gfx.cur_line_ofs]
+	mov     ch, [fs:PTR_GFX + gfx.cur_mode]
+	mov     cl, [fs:PTR_GFX + gfx.cur_shift]
 
 	mov     .cpt, 4
 
@@ -391,8 +391,8 @@ cga_putc:
 	jnz     .row_loop
 
 	; Avancer curseur d'un caractère (8 pixels)
-	inc     word [fs:BDA_GFX + gfx.cur_offset]
-	add     word [fs:BDA_GFX + gfx.cur_x], 8
+	inc     word [fs:PTR_GFX + gfx.cur_offset]
+	add     word [fs:PTR_GFX + gfx.cur_x], 8
 
 	call    cga_mouse_show      ; Restauration souris
 
@@ -1272,10 +1272,10 @@ cga_mouse_hide:
 	mov     ds, ax
 
 	; Décrémenter le compteur
-	dec     byte [BDA_MOUSE + mouse.cur_counter]
+	dec     byte [PTR_MOUSE + mouse.cur_counter]
 
 	; Vérifier si on vient juste de passer en mode caché (c-à-d on est à -1)
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], -1
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], -1
 	jne     .skip_restore   ; Si on est à -2, -3... elle est déjà cachée
 
 	call    cga_cursor_restorebg
@@ -1300,10 +1300,10 @@ cga_mouse_show:
 	mov     ds, ax
 
 	; Incrémenter le compteur
-	inc     byte [BDA_MOUSE + mouse.cur_counter]
+	inc     byte [PTR_MOUSE + mouse.cur_counter]
 
 	; Vérifier si on est revenu à 0 (Visible)
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
 	jne     .skip_draw      ; Si on est encore à -1, -2... on reste caché
 
 	; C'est la transition Caché -> Visible : On affiche le curseur
@@ -1331,13 +1331,13 @@ cga_mouse_cursor_move:
 	mov		ax, BDA_CUSTOM_SEG
 	mov		ds, ax
 
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
 	jl      .done       ; Si < 0, on ne dessine rien !
 
-	cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
+	cmp		byte [PTR_MOUSE + mouse.cur_drawing],0
 	jne		.done
 
-	mov 	byte [BDA_MOUSE + mouse.cur_drawing],1
+	mov 	byte [PTR_MOUSE + mouse.cur_drawing],1
 
 	mov		ax, VIDEO_SEG
 	mov		es, ax
@@ -1347,7 +1347,7 @@ cga_mouse_cursor_move:
 	call	cga_cursor_savebg
 
 	call 	cga_cursor_draw
-	mov 	byte [BDA_MOUSE + mouse.cur_drawing],0
+	mov 	byte [PTR_MOUSE + mouse.cur_drawing],0
 	.done:
 	pop 	es
 	pop 	ds
@@ -1360,7 +1360,7 @@ cga_mouse_cursor_move:
 ; Stocke 16 DWORDs: chaque DWORD contient les 4 bytes de la ligne
 ; ------------------------------------------------------------
 cga_cursor_savebg:
-	cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
+	cmp     byte [PTR_MOUSE + mouse.bkg_saved], 0       ; le buffer n'a pas encore été restauré
 	jne     .done
 
 	push    es
@@ -1368,16 +1368,16 @@ cga_cursor_savebg:
 	mov     es, ax
 
 	; mémoriser position courante (utilisée pour restore)
-	mov     cx, [BDA_MOUSE + mouse.x]
-	mov     dx, [BDA_MOUSE + mouse.y]
-	mov     [BDA_MOUSE + mouse.cur_x], cx
-	mov     [BDA_MOUSE + mouse.cur_y], dx
+	mov     cx, [PTR_MOUSE + mouse.x]
+	mov     dx, [PTR_MOUSE + mouse.y]
+	mov     [PTR_MOUSE + mouse.cur_x], cx
+	mov     [PTR_MOUSE + mouse.cur_y], dx
 
 	; calcule ES:DI pour (x,y)
 	call    cga_calc_addr
 
-	mov     [BDA_MOUSE + mouse.cur_addr_start], di
-	lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+	mov     [PTR_MOUSE + mouse.cur_addr_start], di
+	lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 
 	mov     cx,16
 
@@ -1398,7 +1398,7 @@ cga_cursor_savebg:
 	pop     es
 
 	.done:
-	mov     byte [BDA_MOUSE + mouse.bkg_saved], 1       ; Flag mis à jour après la copie
+	mov     byte [PTR_MOUSE + mouse.bkg_saved], 1       ; Flag mis à jour après la copie
 	ret
 
 ; ------------------------------------------------------------
@@ -1406,7 +1406,7 @@ cga_cursor_savebg:
 ; Restaure 16 lignes sauvegardées.
 ; ------------------------------------------------------------
 cga_cursor_restorebg:
-	cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
+	cmp     byte [PTR_MOUSE + mouse.bkg_saved], 0
 	je      .done
 
 	push    es
@@ -1414,8 +1414,8 @@ cga_cursor_restorebg:
 	mov     es, ax
 
 	; restaurer depuis la dernière position sauvegardée
-	mov     di, [BDA_MOUSE + mouse.cur_addr_start]
-	lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+	mov     di, [PTR_MOUSE + mouse.cur_addr_start]
+	lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 	mov     cx, 16
 
 	.row_loop:
@@ -1434,18 +1434,20 @@ cga_cursor_restorebg:
 
 	pop     es
 	.done:
-	mov     byte [BDA_MOUSE + mouse.bkg_saved], 0       ; Flag mis à jour après la restauration
+	mov     byte [PTR_MOUSE + mouse.bkg_saved], 0       ; Flag mis à jour après la restauration
 	ret
 
 ; ============================================================
 ; cga_cursor_draw
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
-%define .height word [bp-2]
-%define .mask   dword [bp-6]
 cga_cursor_draw:
 	push    bp
 	mov     bp, sp
+
+	; variables
+	%define .height 	word [bp-2]
+	%define .mask   	dword [bp-6]
 	sub     sp, 6                   ; Reserve space for locals
 
 	pushad
@@ -1460,7 +1462,7 @@ cga_cursor_draw:
 	mov     es, ax
 
 	; --- CLIPPING VERTICAL ---
-	mov     dx, [ds:BDA_MOUSE + mouse.y]
+	mov     dx, [ds:PTR_MOUSE + mouse.y]
 	mov     bx, GFX_HEIGHT
 	cmp     dx, bx
 	jae     .exit_total
@@ -1478,7 +1480,7 @@ cga_cursor_draw:
 	; X est en bits (0-639). X >> 3 donne l'octet de départ (0-79).
 	; Si StartByte >= 77, on déborde.
 
-	mov     cx, [BDA_MOUSE + mouse.x]
+	mov     cx, [PTR_MOUSE + mouse.x]
 	shr     cx, 3                   ; CX = Byte Offset (0-79)
 	xor     esi, esi                ; ESI = Masque de protection (0 = tout dessiner)
 
@@ -1508,17 +1510,17 @@ cga_cursor_draw:
 	mov     .mask, esi
 
 	; --- ADRESSAGE ---
-	mov     cx, [BDA_MOUSE + mouse.x]
-	mov     dx, [BDA_MOUSE + mouse.y]
+	mov     cx, [PTR_MOUSE + mouse.x]
+	mov     dx, [PTR_MOUSE + mouse.y]
 	call    cga_calc_addr                           ; DI = Offset VRAM
 
-	mov     ax, [BDA_MOUSE + mouse.cur_seg]
+	mov     ax, [PTR_MOUSE + mouse.cur_seg]
 	mov     gs, ax
-	mov     si, [BDA_MOUSE + mouse.cur_ofs]
+	mov     si, [PTR_MOUSE + mouse.cur_ofs]
 
 	; --- CALCUL de l'offset entre 2 lignes +0x2000 ou -0x2000 ---
 	mov     ax, 0x2000          ; Banque +1
-	mov     cx, [BDA_MOUSE + mouse.y]
+	mov     cx, [PTR_MOUSE + mouse.y]
 	test    cx, 1
 	jz      .setup_done
 	neg     ax                  ; banque -1
@@ -1529,28 +1531,20 @@ cga_cursor_draw:
 	.row_loop:
 	; --- CONSTRUCTION DES MASQUES (EAX/EBX) ---
 	push    cx                  ; préserver la banque "suivante"
-	mov     cl, [BDA_MOUSE + mouse.x]
+	mov     cl, [PTR_MOUSE + mouse.x]
 	and     cl, 0x07
 
 	; --- MASQUE AND (EAX) ---
-	mov     eax, 0xFFFFFFFF
 	mov     ax, [gs:si]             ; masque AND
-	xchg    al, ah                  ; Redresser pour l'ordre des pixels CGA
-	;bswap   eax                    ; equivalence i386+
-	xchg    ah, al                  ; Échange les octets de poids faible (AL <-> AH)
 	rol     eax, 16                 ; Bascule les 16 bits de poids fort vers le bas
+	mov     ax, 0xFFFF
 	xchg    ah, al                  ; Échange les nouveaux octets de poids faible
-	; fin bswap eax equivalence i386+
-
 	ror     eax, cl
-
 	or      eax, .mask              ; Force les bits clippés à 1 (garde le fond)
 
 	; --- MASQUE XOR (EBX) ---
 	xor     ebx, ebx
 	mov     bx, [gs:si+32]          ; masque XOR
-	;xchg    bl, bh
-	;bswap   ebx
 	rol     ebx, 16
 	xchg    bh, bl
 	ror     ebx, cl

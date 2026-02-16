@@ -23,7 +23,7 @@ gui_process_all:
 	push    ds
 	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
-	mov     bl, [BDA_MOUSE + mouse.status]
+	mov     bl, [PTR_MOUSE + mouse.status]
 	pop     ds
 
 	mov     si, 0                   ; Pointeur début tableau
@@ -97,8 +97,8 @@ gui_update_logic:
 	xor     ax, ax
 
 	; les macros peuvent modifer les registres cx, dx & bx
-	mov     cx, [BDA_MOUSE + mouse.x]
-	mov     dx, [BDA_MOUSE + mouse.y]
+	mov     cx, [PTR_MOUSE + mouse.x]
+	mov     dx, [PTR_MOUSE + mouse.y]
 
 	; --- Hit Test ---
 	cmp     cx, [gs:si + widget.x]
@@ -115,7 +115,7 @@ gui_update_logic:
 	cmp     dx, bx
 	ja      .miss                               ; mouse.y >= widget.y ?
 
-	mov     bl, [BDA_MOUSE + mouse.status]
+	mov     bl, [PTR_MOUSE + mouse.status]
 
 	.case_0:
 	cmp     byte [gs:si + widget.type], OBJ_TYPE_LABEL
@@ -437,7 +437,7 @@ gui_logic_slider:
 	push    ds
 	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
-	mov     ax, [BDA_MOUSE + mouse.x]
+	mov     ax, [PTR_MOUSE + mouse.x]
 	pop     ds
 
 	sub     ax, [gs:si + widget.attr_anchor]
@@ -465,7 +465,7 @@ gui_logic_slider:
 	push    ds
 	mov     ax, BDA_CUSTOM_SEG
 	mov     ds, ax
-	mov     ax, [BDA_MOUSE + mouse.y]
+	mov     ax, [PTR_MOUSE + mouse.y]
 	pop     ds
 
 	sub     ax, [gs:si + widget.attr_anchor]

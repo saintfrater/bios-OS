@@ -28,6 +28,7 @@
 %define GFX_MODE		0x12			; VGA HiRes (640x480x16)
 %define GFX_WIDTH		640
 %define GFX_HEIGHT		480
+%define GFX_OFFSET      80
 ;
 ; bit : descr
 ;  0  : text color : 0=black, 1=white
@@ -74,7 +75,6 @@
 %define MOUSE_HIDE      11
 %define MOUSE_SHOW      12
 %define MOUSE_MOVE      13
-%define MOUSE_DRAW		14
 
 ; ------------------------------------------------------------
 ; COMMENTAIRE SUR LA MÉTHODE D'APPEL
@@ -91,10 +91,10 @@ graph_driver:
 	dw vga_init                 ; init de la carte graphique
 	dw vga_putpixel             ; dessin d'un pixel
 	dw vga_none                 ; lecture d'un pixel
-	dw vga_none                 ; gotoxy
-	dw vga_none                 ; mode texte
-	dw vga_none                 ; dessin d'un caractère
-	dw vga_none                 ; dessin d'une chaine de caractère
+	dw vga_set_charpos          ; gotoxy
+	dw vga_set_writemode        ; mode texte
+	dw vga_putc                 ; dessin d'un caractère
+	dw vga_write                ; dessin d'une chaine de caractère
 	dw vga_none                 ; dessin d'une ligne (Bresenham) avec décision horizontale/verticale
 	dw vga_none                 ; dessin d'un rectangle
 	dw vga_none                 ; dessin d'un rectangle plein
@@ -102,7 +102,6 @@ graph_driver:
 	dw vga_mouse_hide           ; cache la souris
 	dw vga_mouse_show           ; montre la souris
 	dw vga_mouse_cursor_move    ; déplacement du curseur
-	dw vga_cursor_draw
 
 ; ------------------------------------------------------------
 ; dummy function
@@ -116,7 +115,7 @@ vga_none:
 ; ------------------------------------------------------------
 ; initialise le mode graphique (via l'int 10h)
 ;
-; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
+; ce mode est divisé en bitplane; 4 bits/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
 vga_init:
 	; init graphics mode
@@ -132,7 +131,6 @@ vga_init:
 	PATTERN_PTR PATTERN_GRAY_LIGHT
 	mov     bl, 15
  	call	vga_background
-	ISADBG	ISA_GREEN, 0x88
 	ret
 
 ; ------------------------------------------------------------
@@ -190,7 +188,7 @@ vga_background:
 
     ; Boucle principale (480 lignes)
     xor 	edx, edx        	; EDX servira d'index pour le pattern (0-7)
-    mov 	ecx, 480
+    mov 	ecx, GFX_HEIGHT
 
 	.line_loop:
     mov 	al, [esi + edx]		; Charger l'octet du pattern pour la ligne actuelle
@@ -220,6 +218,259 @@ vga_background:
     out 	dx, ax
 ;    popad
     ret
+
+
+; ---------------------------------------------------------------------------
+; gfx_set_writemode (mode)
+;  Défini le mode d'écriture :
+;
+; bit : descr
+;  0  : text color : 0=black, 1=white
+;  1  : transparent : 1=apply background attribut
+;
+; si le mode n'est pas transparent, la couleur de fond
+; est l'inverse de la couleur du texte
+; ---------------------------------------------------------------------------
+; --- Définition des arguments ---
+%define .mode   word [bp+4]
+vga_set_writemode:
+	push    bp
+	mov     bp, sp
+
+	push    fs
+	push    ax
+	mov     ax, BDA_CUSTOM_SEG
+	mov     fs,ax
+
+	mov     ax, .mode
+
+	mov     byte [fs:PTR_GFX + gfx.cur_mode], al
+
+	pop     ax
+	pop     fs
+	leave
+	ret
+%undef      .mode
+
+; ---------------------------------------------------------------------------
+; gfx_set_charpos (x,y)
+; In : CX = x (pixels), DX = y (pixels)
+; Out: variables DS:GFX_CUR_*
+; Notes:
+;  - calcule l'offset VRAM de la scanline y: base = (y&1?2000:0) + (y>>1)*80 + (x>>3)
+;  - stocke aussi shift = x&7
+; ---------------------------------------------------------------------------
+; --- Définition des arguments ---
+%define .x     word [bp+4]
+%define .y     word [bp+6]
+vga_set_charpos:
+	push    bp
+	mov     bp, sp
+
+	pusha
+	push    fs
+
+	mov     ax,BDA_CUSTOM_SEG
+	mov     fs,ax
+
+	; store x,y en pixel
+	mov     cx, .x
+	mov     dx, .y
+
+	mov     [fs:PTR_GFX + gfx.cur_x], cx
+	mov     [fs:PTR_GFX + gfx.cur_y], dx
+
+	mov     ax, cx
+	and     ax, 0x07
+	mov     [fs:PTR_GFX + gfx.cur_shift], al
+
+    call    vga_calc_addr
+
+    mov     [fs:PTR_GFX + gfx.cur_offset], bx
+	pop     fs
+
+    popa
+	leave
+	ret
+; clean defs
+%undef  .x
+%undef  .y
+
+; ---------------------------------------------------------------------------
+; get_glyph_offset
+; In : AL = char (ASCII)
+; Out: CS:SI -> 8 bytes
+; ---------------------------------------------------------------------------
+get_glyph_offset:
+	cmp     al, 0x20
+	jb      .qmark              ; al < 20h (' '
+	cmp     al, 0x7E
+	ja      .qmark              ; al > 7Eh ('~')
+	sub     al, 0x20
+	jmp     .ok
+
+	.qmark:
+	mov     al, '?'
+	sub     al, 0x20
+
+	.ok:
+	xor     ah, ah
+	mov     si, ax
+	shl     si, 3
+	add     si, font8x8
+	ret
+
+; ---------------------------------------------------------------------------
+; cga_putc_unalign (car)
+;   - x non aligné (x&7 != 0)
+;   - écrit sur 2 bytes (di et di+1) dans chaque banque
+; ---------------------------------------------------------------------------
+; convert al -> AX aligned with "cl"
+%macro ALIGN_BYTE 0
+		mov     ah,al
+		xor     al,al
+		shr     ax,cl
+		xchg    ah,al
+%endmacro
+
+; --- Définition des arguments ---
+%define .car    word [bp+4]
+vga_putc:
+	push    bp
+	mov     bp, sp
+	; --- Définition des variables locales ---
+	%define .cpt    word [bp-2]
+    sub     sp, 2               ; 1 word variable locale
+
+	pusha
+	push    fs
+	push    es
+
+	call    vga_mouse_hide      ; Protection souris
+
+	mov     bx, VIDEO_SEG
+	mov     es, bx
+	mov     bx, BDA_CUSTOM_SEG
+	mov     fs, bx
+
+	mov     ax, .car
+	call    get_glyph_offset
+
+	; Base offset VRAM pour la scanline Y
+	mov     di, [fs:PTR_GFX + gfx.cur_offset]
+	mov     ch, [fs:PTR_GFX + gfx.cur_mode]
+	mov     cl, [fs:PTR_GFX + gfx.cur_shift]
+    mov     bx, GFX_OFFSET
+
+	mov     .cpt, 4
+
+	.row_loop:
+	; gestion du fond de texte
+	test    ch, 00000010b               ; transparent background ?
+	jz      .skip_attribut              ; oui
+
+	test    ch, 00000001b               ; background blanc ?
+	je      .bkg_black
+
+	; background = white
+	mov     ax, 0xFF00
+	shr     ax, cl
+	xchg    al, ah
+	or      [es:di], ax
+	or      [es:di+bx], ax
+	jmp     .skip_attribut
+
+	.bkg_black:                        ; OK
+	; background = black
+	mov     ax, 0xFF00
+	shr     ax, cl
+	xchg    al, ah
+	not     ax
+	and     [es:di], ax
+	and     [es:di+bx], ax
+
+	.skip_attribut:
+	; ligne "paire" du gylphe
+	xor     ax, ax
+	mov     al, [cs:si]
+	inc     si
+	ALIGN_BYTE
+	mov     dx, ax
+
+	; ligne "impaire" du gylphe
+	mov     al, [cs:si]
+	inc     si
+	ALIGN_BYTE
+	xchg    ax, dx
+
+	test   ch,00000001b
+	jz     .black_text
+
+	; white text
+	not      ax
+	not      dx
+	and      [es:di], ax
+	and      [es:di+bx], dx
+
+	jmp     .next
+
+	.black_text:
+	or      [es:di], ax
+	or      [es:di+bx], dx
+
+	.next:
+	; add     di,CGA_STRIDE
+
+	dec     .cpt
+	jnz     .row_loop
+
+	; Avancer curseur d'un caractère (8 pixels)
+	inc     word [fs:PTR_GFX + gfx.cur_offset]
+	add     word [fs:PTR_GFX + gfx.cur_x], 8
+
+	call    vga_mouse_show      ; Restauration souris
+
+	pop     es
+	pop     fs
+	popa
+	leave
+	ret
+%undef      .car
+%undef      .cpt
+
+;
+; write string from [DS:SI] to screen
+;
+; --- Définition des arguments ---
+%define .txt_seg   word [bp+4]
+%define .txt_ofs   word [bp+6]
+vga_write:
+	push    bp
+	mov     bp, sp
+	push    ax
+	push    ds
+
+	mov     ax, .txt_seg
+	mov     ds, ax
+	mov     si, .txt_ofs
+	cld
+
+	.loops:
+	lodsb
+	cmp     al,0
+	je      .done
+	push    ax
+	call    vga_putc
+	jmp     .loops
+
+	.done:
+	pop     ds
+	pop     ax
+	leave
+	ret
+%undef  .txt_seg
+%undef  .txt_ofs
+
 
 ; Entrée: AX = X (0-639), BX = Y (0-479), CL = Couleur (0-15)
 %define .x      word [bp+4]
@@ -302,10 +553,10 @@ vga_mouse_hide:
 	mov     ds, ax
 
 	; Décrémenter le compteur
-	dec     byte [BDA_MOUSE + mouse.cur_counter]
+	dec     byte [PTR_MOUSE + mouse.cur_counter]
 
 	; Vérifier si on vient juste de passer en mode caché (c-à-d on est à -1)
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], -1
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], -1
 	jne     .skip_restore   ; Si on est à -2, -3... elle est déjà cachée
 
 	call    vga_cursor_restorebg
@@ -330,10 +581,10 @@ vga_mouse_show:
 	mov     ds, ax
 
 	; Incrémenter le compteur
-	inc     byte [BDA_MOUSE + mouse.cur_counter]
+	inc     byte [PTR_MOUSE + mouse.cur_counter]
 
 	; Vérifier si on est revenu à 0 (Visible)
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
 	jne     .skip_draw      ; Si on est encore à -1, -2... on reste caché
 
 	; C'est la transition Caché -> Visible : On affiche le curseur
@@ -361,18 +612,18 @@ vga_mouse_cursor_move:
 	mov		ax, BDA_CUSTOM_SEG
 	mov		ds, ax
 
-	cmp     byte [BDA_MOUSE + mouse.cur_counter], 0
+	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
 	jl      .done       ; Si < 0, on ne dessine rien !
 
-	cmp		byte [BDA_MOUSE + mouse.cur_drawing],0
+	cmp		byte [PTR_MOUSE + mouse.cur_drawing],0
 	jne		.done
 
-	mov 	byte [BDA_MOUSE + mouse.cur_drawing],1
+	mov 	byte [PTR_MOUSE + mouse.cur_drawing],1
 
 	call 	vga_cursor_restorebg
 	call	vga_cursor_savebg
 	call 	vga_cursor_draw
-	mov 	byte [BDA_MOUSE + mouse.cur_drawing],0
+	mov 	byte [PTR_MOUSE + mouse.cur_drawing],0
 	.done:
 	pop 	es
 	pop 	ds
@@ -382,7 +633,7 @@ vga_mouse_cursor_move:
 ; Buffer requis : 192 octets (16 lignes * 3 octets * 4 plans)
 ; ATTENTION : Vérifiez que mouse.bkg_buffer dans bda.asm est assez grand !
 vga_cursor_savebg:
-    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
+    cmp     byte [PTR_MOUSE + mouse.bkg_saved], 0
     jne     .done
 
     push    es
@@ -390,12 +641,12 @@ vga_cursor_savebg:
     mov     es, ax
 
     ; Calculer l'adresse de départ (y * 80 + x / 8)
-    mov     cx, [BDA_MOUSE + mouse.x]
-    mov     dx, [BDA_MOUSE + mouse.y]
+    mov     cx, [PTR_MOUSE + mouse.x]
+    mov     dx, [PTR_MOUSE + mouse.y]
     call    vga_calc_addr   ; Doit retourner DI = offset VRAM
-    mov     [BDA_MOUSE + mouse.cur_addr_start], di
+    mov     [PTR_MOUSE + mouse.cur_addr_start], di
 
-    lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+    lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 
     mov     dx, EGAVGA_CONTROLLER      ; Graphics Controller Port
     mov     al, 0x04        ; Read Plane Select Register
@@ -429,20 +680,20 @@ vga_cursor_savebg:
     out     dx, ax
 
     pop     es
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 1
+    mov     byte [PTR_MOUSE + mouse.bkg_saved], 1
 	.done:
     ret
 
 vga_cursor_restorebg:
-    cmp     byte [BDA_MOUSE + mouse.bkg_saved], 0
+    cmp     byte [PTR_MOUSE + mouse.bkg_saved], 0
     je      .done
 
     push    es
     mov     ax, VIDEO_SEG
     mov     es, ax
 
-    mov     di, [BDA_MOUSE + mouse.cur_addr_start]
-    lea     si, [BDA_MOUSE + mouse.bkg_buffer]
+    mov     di, [PTR_MOUSE + mouse.cur_addr_start]
+    lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 
     ; Sécurité : S'assurer que ES pointe bien vers la vidéo pour le restore
     mov     ax, VIDEO_SEG
@@ -490,7 +741,7 @@ vga_cursor_restorebg:
     out     dx, ax
 
     pop     es
-    mov     byte [BDA_MOUSE + mouse.bkg_saved], 0
+    mov     byte [PTR_MOUSE + mouse.bkg_saved], 0
 	.done:
     ret
 
@@ -498,13 +749,16 @@ vga_cursor_restorebg:
 ; vga_cursor_draw
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
+%define     BYTES_SHIFT     3
+
 vga_cursor_draw:
     push    bp
     mov     bp, sp
-    sub     sp, 4           	; [bp-2]: height, [bp-4]: x_bit_offset
-	; local variables
-	%define .height 	word [bp-2]
-	%define .bit_ofs   	word [bp-4]
+    ; local variables
+    %define .height     word [bp-2]
+    %define .bit_ofs    word [bp-4]
+    %define .mask       dword [bp-6]
+    sub     sp, 8           	; [bp-2]: height, [bp-4]: x_bit_offset
 
     pushad
     push    ds
@@ -519,7 +773,7 @@ vga_cursor_draw:
     mov     es, ax
 
     ; --- CLIPPING VERTICAL ---
-    mov     dx, [BDA_MOUSE + mouse.y]
+    mov     dx, [PTR_MOUSE + mouse.y]
 	mov		bx, GFX_HEIGHT
 	cmp		dx, bx
 	jae		.exit_total
@@ -533,8 +787,41 @@ vga_cursor_draw:
 	.y_ok:
     mov     .height, ax
 
+    ; --- CLIPPING HORIZONTAL ---
+    ; On calcule si les 4 octets vont dépasser la ligne (80 octets)
+	; X est en bits (0-639). X >> 3 donne l'octet de départ (0-79).
+	; Si StartByte >= 77, on déborde.
+
+	mov     cx, [PTR_MOUSE + mouse.x]
+	shr     cx, 3                   ; CX = Byte Offset (0-79)
+	xor     eax, eax                ; ESI = Masque de protection (0 = tout dessiner)
+
+	cmp     cx, 76                  ; 76 est le dernier offset sûr (76,77,78,79)
+	jbe     .mask_ready             ; Si <= 76, pas de débordement
+
+	; Calcul du débordement
+	; Si CX=77 (Déborde 1 byte) -> Masque 0x000000FF (LSB car bswap)
+	; Si CX=78 (Déborde 2 bytes)-> Masque 0x0000FFFF
+	; Si CX=79 (Déborde 3 bytes)-> Masque 0x00FFFFFF
+	cmp     cx, 77
+	jne     .check_78
+	mov     eax, 0x000000FF
+	jmp     .mask_ready
+
+	.check_78:
+	cmp     cx, 78
+	jne     .check_79
+	mov     eax, 0x0000FFFF
+	jmp     .mask_ready
+
+	.check_79:
+	mov     eax, 0x00FFFFFF         ; Cas extrême (bord droit)
+
+	.mask_ready:
+	mov     .mask, eax
+
     ; --- Calcul Adresse et Shift ---
-    mov     ax, [BDA_MOUSE + mouse.x]
+    mov     ax, [PTR_MOUSE + mouse.x]
 	mov		cx, ax
     and     ax, 7           	; Reste (0-7) = décalage de bit
     mov     .bit_ofs, ax
@@ -545,7 +832,7 @@ vga_cursor_draw:
     mov     ax, 0x0F02      	; Map Mask = All planes
     out     dx, ax
 
-    mov     dx, 0x3CE       	; Graphics Controller
+    mov     dx, EGAVGA_CONTROLLER
     mov     ax, 0x0005      	; Mode 0
     out     dx, ax
     mov     ax, 0x0001      	; Enable Set/Reset = 0 (CPU Data)
@@ -554,53 +841,65 @@ vga_cursor_draw:
     out     dx, ax
 
     ; Source du Sprite -> (GS:SI)
-    mov     ax, [BDA_MOUSE + mouse.cur_seg]
+    mov     ax, [PTR_MOUSE + mouse.cur_seg]
     mov     gs, ax
-    mov     si, [BDA_MOUSE + mouse.cur_ofs]
+    mov     si, [PTR_MOUSE + mouse.cur_ofs]
 
 	.row_loop:
-    ; --- PREPARE MASKS ---
-    ; On récupère le masque de l'image (AND) et du curseur (XOR)
-    mov     ax, [gs:si]         ; AX = AND Mask (16 bits)
-    xchg    al, ah              ; Souvent nécessaire selon l'endianness du sprite
-    xor     ebx, ebx
-    mov     bx, ax
-    not     ebx                 ; On veut des 1 partout sauf là où le curseur est présent
-
-    ; Décalage pour l'alignement au pixel près
-    mov     cx, .bit_ofs
-    ror     ebx, cl             ; Rotation pour ne pas perdre de bits
-
-    ; --- CONFIG VGA POUR AND ---
-    mov     dx, 0x3CE
+    mov     dx, EGAVGA_CONTROLLER
     mov     ax, 0x0803          ; Data Rotate/Function Select: AND (bits 3-4 = 01b)
     out     dx, ax
 
-    ; Application sur 3 octets (pour couvrir les 16 pixels + le shift)
-    %rep 3
-        mov     al, [es:di]     ; CHARGE LES LATCHES (Indispensable)
-        mov     eax, ebx
-        shr     eax, 16         ; Récupère la partie haute (si 32-bit shift utilisé)
-        stosb                   ; Écrit AL et DI++ (Applique le AND sur les 4 plans)
-    %endrep
-    sub     di, 3               ; Revient au début de la ligne pour le XOR
+    ; --- PASSE 1 : MASQUE AND (Effacement du fond) ---
+    mov     ax, [gs:si]         ; Charger 16 pixels (0=curseur, 1=fond)
+    shl     eax, 16             ; décalage de AX vers le poid for: XXXX0000
+    mov     ax, 0xFFFF
+    mov     cx, .bit_ofs
+    ror     eax, cl             ; Décaler : 1 là où on veut effacer (0 ailleurs)
+    or      eax, .mask          ; Appliquer le masque de clipping à droite
 
-    ; --- CONFIG VGA POUR XOR ---
+
+    mov     ebx, eax            ; EBX contient le masque AND sur 3 octets
+    mov     cx, BYTES_SHIFT     ; Appliquer sur 3 octets (24 pixels potentiels)
+    .block_AND:
+        mov     al, [es:di]     ; Charger les latches VGA
+        rol     ebx, 8          ; Extraire l'octet suivant (poids fort d'abord)
+        mov     al, bl
+        stosb                   ; Écrire et DI++
+    loop    .block_AND
+    sub     di, BYTES_SHIFT     ; Revenir au début de la ligne pour le XOR
+
     mov     ax, 0x1803          ; Data Rotate/Function Select: XOR (bits 3-4 = 11b)
     out     dx, ax
 
-    ; Récupération du masque XOR (la forme blanche/noire du curseur)
-    mov     ax, [gs:si+32]
-    ; ... (Appliquer le même décalage et stosb que pour le AND) ...
+    ; --- PASSE 2 : MASQUE XOR (Dessin du curseur) ---
+    xor     eax, eax
+    mov     ax, [gs:si+32]      ; Charger 16 pixels (1=blanc, 0=transparent)
+    movzx   eax, ax             ; S'assurer que le reste est à 0
+    shl     eax, 16             ; Aligner
+    mov     cx, .bit_ofs
+    shr     eax, cl             ; Décaler (les bits de padding restent à 0)
+    mov     ebx, .mask          ; Appliquer le masque de clipping à droite
+    not     ebx
+    and     eax, ebx            ; Appliquer le masque de clipping à droite
+
+    mov     ebx, eax            ; EBX contient le masque XOR sur 3 octets
+    mov     cx, BYTES_SHIFT
+    .block_XOR:
+        mov     al, [es:di]     ; Charger les latches
+        rol     ebx, 8
+        mov     al, bl
+        stosb
+    loop    .block_XOR
 
     ; --- NEXT ROW ---
-    add     di, 80 - 3          ; Ligne suivante (80 octets par ligne)
+    add     di, 80 - BYTES_SHIFT        ; Ligne suivante en VRAM (80 octets/ligne)
     add     si, 2
     dec     word .height
     jnz     .row_loop
 
     ; --- RESTORE VGA ---
-    mov     dx, 0x3CE
+    mov     dx, EGAVGA_CONTROLLER
     mov     ax, 0x0003      	; Function = Replace
     out     dx, ax
     mov     ax, 0xFF08      	; Bit Mask = 0xFF
@@ -614,6 +913,8 @@ vga_cursor_draw:
     pop     ds
     popad
     leave
+    %undef  .height
+    %undef  .bit_ofs
+    %undef  .mask
     ret
-%undef  .height
-%undef  .mask
+

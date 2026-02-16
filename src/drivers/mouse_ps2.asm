@@ -47,28 +47,28 @@ mouse_reset:
 	mov		fs,ax
 
 	; effacer les variables du drivers
-	mov		byte  [fs:BDA_MOUSE + mouse.idx],0
-	mov		dword [fs:BDA_MOUSE + mouse.buffer],0
-	mov		byte  [fs:BDA_MOUSE + mouse.packetlen],3	; 3 bytes par défaut
-	mov		byte  [fs:BDA_MOUSE + mouse.status],0
+	mov		byte  [fs:PTR_MOUSE + mouse.idx],0
+	mov		dword [fs:PTR_MOUSE + mouse.buffer],0
+	mov		byte  [fs:PTR_MOUSE + mouse.packetlen],3		; 3 bytes par défaut
+	mov		byte  [fs:PTR_MOUSE + mouse.status],0
 
-	mov		word  [fs:BDA_MOUSE + mouse.x],GFX_WIDTH / 2
-	mov		word  [fs:BDA_MOUSE + mouse.y],GFX_HEIGHT / 2
+	mov		word  [fs:PTR_MOUSE + mouse.x],GFX_WIDTH / 2
+	mov		word  [fs:PTR_MOUSE + mouse.y],GFX_HEIGHT / 2
 
-	mov     word  [fs:BDA_MOUSE + mouse.cur_x], 0
-	mov     word  [fs:BDA_MOUSE + mouse.cur_y], 0
+	mov     word  [fs:PTR_MOUSE + mouse.cur_x], 0
+	mov     word  [fs:PTR_MOUSE + mouse.cur_y], 0
 
 
-	mov     byte [BDA_MOUSE + mouse.cur_counter], -1 	; Force l'état caché au départ
-    mov     byte [BDA_MOUSE + mouse.cur_drawing], 0  	; Reset du verrou de dessin
-	mov		byte [BDA_MOUSE + mouse.bkg_saved],0		; flag image saved
+	mov     byte [fs:PTR_MOUSE + mouse.cur_counter], -1 	; Force l'état caché au départ
+    mov     byte [fs:PTR_MOUSE + mouse.cur_drawing], 0  	; Reset du verrou de dessin
+	mov		byte [fs:PTR_MOUSE + mouse.bkg_saved],0			; flag image saved
 
 	mov 	ax, cs
-	mov 	word  [fs:BDA_MOUSE + mouse.cur_seg], ax
-	mov 	word  [fs:BDA_MOUSE + mouse.cur_ofs], mouse_arrow
+	mov 	word  [fs:PTR_MOUSE + mouse.cur_seg], ax
+	mov 	word  [fs:PTR_MOUSE + mouse.cur_ofs], mouse_arrow
 
 	; experiemntal
-	mov		byte  [fs:BDA_MOUSE + mouse.wheel],0
+	mov		byte  [fs:PTR_MOUSE + mouse.wheel],0
 	ret
 
 ; ------------------------------------------------------------
@@ -157,7 +157,7 @@ mouse_detect_packet_len:
 	mov		ax, BDA_CUSTOM_SEG
 	mov		fs,ax
 
-	mov 	byte [fs:BDA_MOUSE + mouse.packetlen], 3
+	mov 	byte [fs:PTR_MOUSE + mouse.packetlen], 3
 
 	; SET_RATE + 200
 	mov 	bl, MOUSE_SET_RATE
@@ -188,7 +188,7 @@ mouse_detect_packet_len:
 	je  	.is4
 	ret
 .is4:
-	mov		byte [fs:BDA_MOUSE + mouse.packetlen], 4
+	mov		byte [fs:PTR_MOUSE + mouse.packetlen], 4
 	ret
 
 ; ------------------------------------------------------------
@@ -280,7 +280,7 @@ mouse_sendcmd:
 ; ------------------------------------------------------------
 isr_mouse_handler:
 	; sauvegarder tout les registres
-	pusha
+	pushad
 	push	ds
 
 	; use BDA segment
@@ -290,7 +290,7 @@ isr_mouse_handler:
 	; lire un octet depuis le contrôleur et le stocker dans le buffer
 	in  	al, i8042_PS2_DATA   						; lire octet souris
 
-	movzx 	bx, byte [BDA_MOUSE + mouse.idx]
+	movzx 	bx, byte [PTR_MOUSE + mouse.idx]
 	cmp		bl,0
 	jne		.read_packet
 
@@ -298,88 +298,88 @@ isr_mouse_handler:
 	test	al, 00001000b								; bit 3 = 1
 	jz		.done_eoi									; allignement erroné
 
-.read_packet:
-	mov 	byte [BDA_MOUSE + mouse.buffer + bx], al
-	inc		byte [BDA_MOUSE + mouse.idx]
+	.read_packet:
+	mov 	byte [PTR_MOUSE + mouse.buffer + bx], al
+	inc		byte [PTR_MOUSE + mouse.idx]
 
 	; vérifier si le packet est complet
-	mov 	al, [BDA_MOUSE + mouse.packetlen]
-	cmp 	byte [BDA_MOUSE + mouse.idx], al
+	mov 	al, byte [PTR_MOUSE + mouse.packetlen]
+	cmp 	byte [PTR_MOUSE + mouse.idx], al
 	jb 		.done_eoi
 
 	; packet complet, on decode les données (ou on jette si c'est incorrect)
-	mov 	byte [BDA_MOUSE + mouse.idx], 0				; reset de l'index de lecture
+	mov 	byte [PTR_MOUSE + mouse.idx], 0				; reset de l'index de lecture
 
 	; debut du décodage des données
-	mov 	bl, [BDA_MOUSE + mouse.buffer]				; status
+	mov 	bl, byte [PTR_MOUSE + mouse.buffer]			; status
 
 	; --- BOUTONS ---
-	mov 	al,bl										; extraction des boutons
+	mov 	al, bl										; extraction des boutons
     and     al, 00000111b       						; Bits 0, 1, 2 = Gauche, Droite, Milieu
-    mov 	[BDA_MOUSE + mouse.status], al
+    mov 	[PTR_MOUSE + mouse.status], al
 
 	xor 	ax,ax
-	mov 	al, byte [BDA_MOUSE + mouse.buffer+1]		; delta X
-	test	bl,00010000b								; signe X (4eme bit)
+	mov 	al, byte [PTR_MOUSE + mouse.buffer+1]		; delta X
+	test	bl, 00010000b								; signe X (4eme bit)
 	jz		.x_pos
 	mov		ah,0xff										; X est négatif
-.x_pos:
-	add		[BDA_MOUSE + mouse.x], ax
+	.x_pos:
+	add		[PTR_MOUSE + mouse.x], ax
 
 	xor 	ax,ax
-	mov		al, byte [BDA_MOUSE + mouse.buffer+2]		; delta Y
-	test	bl,00100000b								; signe Y (5eme bit)
+	mov		al, byte [PTR_MOUSE + mouse.buffer+2]		; delta Y
+	test	bl, 00100000b								; signe Y (5eme bit)
 	jz		.y_pos
-	mov		ah,0xff										; y est négatif
-.y_pos:
-	sub		[BDA_MOUSE + mouse.y], ax
+	mov		ah, 0xff									; y est négatif
+	.y_pos:
+	sub		[PTR_MOUSE + mouse.y], ax
 
 	; --- CLAMPING X ---
     ; Check minimum (0)
-    cmp     word [BDA_MOUSE + mouse.x], 0
+    cmp     word [PTR_MOUSE + mouse.x], 0
     jge     .check_x_max
-    mov     word [BDA_MOUSE + mouse.x], 0
+    mov     word [PTR_MOUSE + mouse.x], 0
     jmp     .done_x
-.check_x_max:
+	.check_x_max:
     ; Check maximum (e.g., 639 for graphics, or pixel width)
-    cmp     word [BDA_MOUSE + mouse.x], GFX_WIDTH-1 ; Replace with variable or define
+    cmp     word [PTR_MOUSE + mouse.x], GFX_WIDTH-1 ; Replace with variable or define
     jle     .done_x
-    mov     word [BDA_MOUSE + mouse.x], GFX_WIDTH-1
-.done_x:
+    mov     word [PTR_MOUSE + mouse.x], GFX_WIDTH-1
+	.done_x:
 
     ; --- CLAMPING Y ---
     ; Check minimum (0)
-    cmp     word [BDA_MOUSE + mouse.y], 0
+    cmp     word [PTR_MOUSE + mouse.y], 0
     jge     .check_y_max
-    mov     word [BDA_MOUSE + mouse.y], 0
+    mov     word [PTR_MOUSE + mouse.y], 0
     jmp     .done_y
-.check_y_max:
+	.check_y_max:
     ; Check maximum
-    cmp     word [BDA_MOUSE + mouse.y], GFX_HEIGHT-1 ; Replace with variable or define
+    cmp     word [PTR_MOUSE + mouse.y], GFX_HEIGHT-1 ; Replace with variable or define
     jle     .done_y
-    mov     word [BDA_MOUSE + mouse.y], GFX_HEIGHT-1
-.done_y:
+    mov     word [PTR_MOUSE + mouse.y], GFX_HEIGHT-1
+	.done_y:
 
 	; check si il y a un 4eme byte a traiter
-	mov 	al, [BDA_MOUSE + mouse.packetlen]
+	mov 	al, [PTR_MOUSE + mouse.packetlen]
 	cmp		al,4
 	jne		.done
 
 	; si packetlen = 4, gérer la molette; experimental et non fonctionnel
-	movsx	ax, byte [BDA_MOUSE + mouse.buffer+3]		; delta Wheel
-	add		word [BDA_MOUSE + mouse.wheel], ax
+	movsx	ax, byte [PTR_MOUSE + mouse.buffer+3]		; delta Wheel
+	add		word [PTR_MOUSE + mouse.wheel], ax
 
-.done:
+	.done:
 	; update la position du curseur sur l'écran
 	; en ce moment c'est commented out (debug)
 	; call 	cga_mouse_cursor_move
 	GFX		MOUSE_MOVE
-.done_eoi:
+	.done_eoi:
 	mov 	al, 0x20
 	out 	i8259_SLAVE_CMD, al      					; EOI PIC esclave
 	out 	i8259_MASTER_CMD, al     					; EOI PIC maître
 
 	; restaurer tous les registres
 	pop		ds
-	popa
+	popad
 	iret
