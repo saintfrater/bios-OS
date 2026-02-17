@@ -25,7 +25,7 @@
 ;
 
 %define BDA_SEGMENT		    0x0040			    ; segment BDA (historically)
-%define BDA_CUSTOM_SEG	    0x0050              ; custom data (mouse, gfx cursor, etc..)
+%define SEG_BDA_CUSTOM	    0x0050              ; custom data (mouse, gfx cursor, etc..)
 %define BDA_GUI_WIDGET      0x0070              ; Segment de données UI (Safe: après Stack, avant Heap)
 
 %define PTR_MOUSE           0x0000
@@ -86,7 +86,7 @@ bda_setup:
 			pusha
 			push        ds
 
-			mov 	ax, BDA_CUSTOM_SEG
+			mov 	ax, SEG_BDA_CUSTOM
 			mov 	es, ax
 
 			mov 	ax, 0x5F

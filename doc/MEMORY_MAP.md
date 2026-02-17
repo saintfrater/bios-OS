@@ -37,7 +37,7 @@ The processor starts in Real Mode, addressing 1 MB of memory.
 The project separates the standard IBM BDA from its own variables to avoid conflicts with the VGA BIOS loaded at `0xC000`.
 
 *   **Standard BDA (`0040:0000`)**: Used mainly by the VGA BIOS (loaded via QEMU) to store video modes (`0x0049`) and column count (`0x004A`).
-*   **Custom BDA (`0050:0000`)**: Defined by `BDA_CUSTOM_SEG`. Stores driver states:
+*   **Custom BDA (`0050:0000`)**: Defined by `SEG_BDA_CUSTOM`. Stores driver states:
     *   **Mouse**: Input buffer, status, coordinates, background buffer (for cursor).
     *   **Gfx**: Text cursor position, attributes.
     *   **GUI RAM**: Segment `0x0063` (Physical `0x00630`).
@@ -100,7 +100,7 @@ Le processeur démarre en mode réel, adressant 1 Mo de mémoire.
 Le projet sépare la BDA standard IBM de ses propres variables pour éviter les conflits avec le BIOS VGA chargé en `0xC000`.
 
 *   **BDA Standard (`0040:0000`)** : Utilisée principalement par le BIOS VGA (chargé via QEMU) pour stocker les modes vidéo (`0x0049`) et le nombre de colonnes (`0x004A`).
-*   **Custom BDA (`0050:0000`)** : Définie par `BDA_CUSTOM_SEG`. Stocke l'état des drivers :
+*   **Custom BDA (`0050:0000`)** : Définie par `SEG_BDA_CUSTOM`. Stocke l'état des drivers :
     *   **Souris** : Buffer d'entrée, état, coordonnées, buffer de sauvegarde du fond (pour le curseur).
     *   **Gfx** : Position du curseur texte, attributs.
     *   **GUI RAM** : Segment `0x0063` (Physique `0x00630`).

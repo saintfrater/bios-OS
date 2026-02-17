@@ -241,7 +241,7 @@ timer_isr:
 	push	ax
 
 	push    fs
-	mov     ax,BDA_CUSTOM_SEG
+	mov     ax,SEG_BDA_CUSTOM
 	mov		fs,ax
 ; exemple de fonctionnement:
 ; 	inc		byte [fs:BDA_TIMER]

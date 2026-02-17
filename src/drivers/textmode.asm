@@ -23,10 +23,10 @@
 
 ;
 ; text mod functions
-; 
+;
 ;
 
-vid_seg			dw				VIDEO_SEG
+vid_seg			dw				SEG_VIDEO
 cursor_ofs 	dw 				0
 txt_attr		db				VIDEO_ATTR
 
@@ -118,11 +118,11 @@ txtmode_newline:
 						jb  			.set
 						xor 			ax, ax                      ; si dépasse, revient en haut (simple)
 .set:
-						
+
 						mov 			cx, 160											; cursor_ofs = ligne * 160
 						mul 			cx                          ; DX:AX = AX*CX ; ici AX suffit
 						mov 			[cursor_ofs], ax
-			
+
 						pop 			dx
 						pop 			ax
 						ret

@@ -21,7 +21,7 @@ gui_process_all:
 
 	; Charger l'état de la souris pour toute la passe
 	push    ds
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 	mov     bl, [PTR_MOUSE + mouse.status]
 	pop     ds
@@ -85,7 +85,7 @@ gui_update_logic:
 	push    ds
 	push    gs
 
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 	mov		ax, BDA_GUI_WIDGET
 	mov		gs, ax
@@ -435,7 +435,7 @@ gui_logic_slider:
 	; 4. Target Pos = MouseX - Anchor
 	; On recharge MouseX depuis la BDA pour être sûr
 	push    ds
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 	mov     ax, [PTR_MOUSE + mouse.x]
 	pop     ds
@@ -463,7 +463,7 @@ gui_logic_slider:
 	; 4. Target Pos = MouseY - Anchor
 	; On recharge MouseY depuis la BDA pour être sûr
 	push    ds
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 	mov     ax, [PTR_MOUSE + mouse.y]
 	pop     ds

@@ -23,7 +23,7 @@
 ;
 ; graphics drivers pour carte video/mode CGA-Mono (640x200x2)
 ;
-%define VIDEO_SEG    	0xB800        	; ou 0xB000
+%define SEG_VIDEO    	0xB800        	; ou 0xB000
 
 %define GFX_MODE		0x06			; MCGA HiRes (B/W)
 %define GFX_WIDTH		640
@@ -113,7 +113,7 @@ graph_driver:
 ; ce mode est entrelacé, un bit/pixel, 8 pixels par octet
 ; ------------------------------------------------------------
 cga_init:
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 
 	; init graphics mode
@@ -132,7 +132,7 @@ cga_none:
 ; ------------------------------------------------------------
 ; Calcule DI + AH=mask pour (CX=x, DX=y) en mode CGA 640x200
 ;
-; Out: ES=VIDEO_SEG, DI=offset, AH=bitmask (0x80 >> (x&7))
+; Out: ES=SEG_VIDEO, DI=offset, AH=bitmask (0x80 >> (x&7))
 ; ------------------------------------------------------------
 cga_calc_addr:
 	; calcul de l'offset 'y':
@@ -180,7 +180,7 @@ cga_set_writemode:
 
 	push    fs
 	push    ax
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     fs,ax
 
 	mov     ax, .mode
@@ -212,7 +212,7 @@ cga_set_charpos:
 	pusha
 	push    fs
 
-	mov     ax,BDA_CUSTOM_SEG
+	mov     ax,SEG_BDA_CUSTOM
 	mov     fs,ax
 
 	; store x,y en pixel
@@ -313,9 +313,9 @@ cga_putc:
 
 	call    cga_mouse_hide      ; Protection souris
 
-	mov     bx, VIDEO_SEG
+	mov     bx, SEG_VIDEO
 	mov     es, bx
-	mov     bx, BDA_CUSTOM_SEG
+	mov     bx, SEG_BDA_CUSTOM
 	mov     fs, bx
 
 	mov     ax, .car
@@ -441,7 +441,7 @@ cga_write:
 ;
 ;   CX = x (0..639)
 ;   DX = y (0..199)
-;   ES = Target Segment (usually VIDEO_SEG)
+;   ES = Target Segment (usually SEG_VIDEO)
 ;   BL = color (0=black, !=0=white)
 ; ------------------------------------------------------------
 ; --- Définition des arguments ---
@@ -453,7 +453,7 @@ cga_putpixel:
 	mov     bp, sp
 	pusha
 
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	call    cga_mouse_hide      ; Protection souris
@@ -503,7 +503,7 @@ cga_getpixel:
 	mov     cx, .x
 	mov     dx, .y
 
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 	call    cga_calc_addr
 
@@ -525,7 +525,7 @@ cga_getpixel:
 ;
 ; ------------------------------------------------------------
 cga_background:
-	mov		ax,VIDEO_SEG
+	mov		ax,SEG_VIDEO
 	mov		es,ax
 	mov		di,0x0000
 	mov		eax,0xaaaaaaaa
@@ -554,7 +554,7 @@ cga_line_vertical:
 	push    es
 
 	; Setup ES = Video Segment
-	mov     ax, VIDEO_SEG       ; Utiliser AX plutot que SI pour setup ES
+	mov     ax, SEG_VIDEO       ; Utiliser AX plutot que SI pour setup ES
 	mov     es, ax
 
 	call    cga_mouse_hide
@@ -637,7 +637,7 @@ cga_line_horizontal:
 	push    es
 
 	; Setup ES = Video Segment
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	call    cga_mouse_hide
@@ -790,7 +790,7 @@ cga_line:
 	je      .do_vert
 
 	; --- Bresenham ---
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	call    cga_mouse_hide
@@ -1009,7 +1009,7 @@ cga_fill_rect:
 	pusha
 	push    es
 
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	; calcul de l'offset de départ du pattern
@@ -1268,7 +1268,7 @@ cga_mouse_hide:
 	pusha 	                ; Sauvegarder TOUS les registres 32-bits
 	push    ds
 
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 
 	; Décrémenter le compteur
@@ -1296,7 +1296,7 @@ cga_mouse_show:
 	pusha
 	push    ds
 
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 
 	; Incrémenter le compteur
@@ -1328,7 +1328,7 @@ cga_mouse_cursor_move:
 	push 	es
 
 	; move Data Segment
-	mov		ax, BDA_CUSTOM_SEG
+	mov		ax, SEG_BDA_CUSTOM
 	mov		ds, ax
 
 	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
@@ -1339,7 +1339,7 @@ cga_mouse_cursor_move:
 
 	mov 	byte [PTR_MOUSE + mouse.cur_drawing],1
 
-	mov		ax, VIDEO_SEG
+	mov		ax, SEG_VIDEO
 	mov		es, ax
 
 	call 	cga_cursor_restorebg
@@ -1364,7 +1364,7 @@ cga_cursor_savebg:
 	jne     .done
 
 	push    es
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	; mémoriser position courante (utilisée pour restore)
@@ -1410,7 +1410,7 @@ cga_cursor_restorebg:
 	je      .done
 
 	push    es
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	; restaurer depuis la dernière position sauvegardée
@@ -1456,9 +1456,9 @@ cga_cursor_draw:
 	push    gs
 
 	cld                             ; Sécurité : Direction avant
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
-	mov     ax, VIDEO_SEG
+	mov     ax, SEG_VIDEO
 	mov     es, ax
 
 	; --- CLIPPING VERTICAL ---

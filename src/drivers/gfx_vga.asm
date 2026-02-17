@@ -23,7 +23,7 @@
 ;
 ; graphics drivers pour carte video/mode CGA-Mono (640x200x2)
 ;
-%define VIDEO_SEG    	0A000h
+%define SEG_VIDEO    	0A000h
 
 %define GFX_MODE		0x12			; VGA HiRes (640x480x16)
 %define GFX_WIDTH		640
@@ -181,7 +181,7 @@ vga_background:
     out 	dx, ax
 
     ; Initialisation mémoire
-    mov 	ax, VIDEO_SEG
+    mov 	ax, SEG_VIDEO
     mov 	es, ax
     xor 	edi, edi        	; ES:EDI = Début mémoire vidéo
     movzx   esi, si             ; Nettoyer ESI (garder SI) pour l'adressage
@@ -239,7 +239,7 @@ vga_set_writemode:
 
 	push    fs
 	push    ax
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     fs,ax
 
 	mov     ax, .mode
@@ -254,10 +254,10 @@ vga_set_writemode:
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos (x,y)
-; In : CX = x (pixels), DX = y (pixels)
+; In : x (pixels), y (pixels)
 ; Out: variables DS:GFX_CUR_*
 ; Notes:
-;  - calcule l'offset VRAM de la scanline y: base = (y&1?2000:0) + (y>>1)*80 + (x>>3)
+;  - calcule l'offset VRAM de la scanline y: base = (y*80) + (x>>3)
 ;  - stocke aussi shift = x&7
 ; ---------------------------------------------------------------------------
 ; --- Définition des arguments ---
@@ -270,7 +270,7 @@ vga_set_charpos:
 	pusha
 	push    fs
 
-	mov     ax,BDA_CUSTOM_SEG
+	mov     ax,SEG_BDA_CUSTOM
 	mov     fs,ax
 
 	; store x,y en pixel
@@ -286,7 +286,7 @@ vga_set_charpos:
 
     call    vga_calc_addr
 
-    mov     [fs:PTR_GFX + gfx.cur_offset], bx
+    mov     [fs:PTR_GFX + gfx.cur_offset], di
 	pop     fs
 
     popa
@@ -325,13 +325,6 @@ get_glyph_offset:
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
 ; ---------------------------------------------------------------------------
-; convert al -> AX aligned with "cl"
-%macro ALIGN_BYTE 0
-		mov     ah,al
-		xor     al,al
-		shr     ax,cl
-		xchg    ah,al
-%endmacro
 
 ; --- Définition des arguments ---
 %define .car    word [bp+4]
@@ -348,10 +341,29 @@ vga_putc:
 
 	call    vga_mouse_hide      ; Protection souris
 
-	mov     bx, VIDEO_SEG
+	mov     dx, EGAVGA_CONTROLLER
+	; Forcer le mode de remplacement (écrase la VRAM avec la donnée CPU)
+    mov     ax, 0x0003  		; Index 3: Data Rotate = 0, Function = REPLACE
+    out     dx, ax
+	; S'assurer que le mode d'écriture est 0 (Standard)
+    mov     ax, 0x0005  		; index 1: Enable Set/Reset
+    out     dx, ax
+	; Désactiver Set/Reset pour laisser passer AX
+    mov     ax, 0x0001      ; Index 1: Enable Set/Reset = 0
+    out     dx, ax
+
+	mov     ax, 0xFF08  		; Bit Mask: 0xFF (on autorise l'écriture sur tous les pixels)
+    out     dx, ax
+
+	mov     bx, SEG_VIDEO
 	mov     es, bx
-	mov     bx, BDA_CUSTOM_SEG
+	mov     bx, SEG_BDA_CUSTOM
 	mov     fs, bx
+
+	; Configuration VGA : Activer l'écriture sur les 4 plans pour le texte
+    mov     dx, VGA_SEQUENCER   ; Sequencer
+    mov     ax, 0x0F02          ; Index 2 (Map Mask) = 0x0F (tous les plans)
+    out     dx, ax
 
 	mov     ax, .car
 	call    get_glyph_offset
@@ -362,81 +374,84 @@ vga_putc:
 	mov     cl, [fs:PTR_GFX + gfx.cur_shift]
     mov     bx, GFX_OFFSET
 
-	mov     .cpt, 4
-
+	mov     .cpt, 8
 	.row_loop:
+	push	di
+	mov		al, byte[es:di]
+
+	xor		ax,ax
+	mov		al, [cs:si]
+	inc		si
+
+	; convert al -> AX aligned with "cl"
+	mov     ah,al
+	xor     al,al
+	shr     ax,cl
+	xchg    ah,al
+	; ----- ALIGN_BYTE
+
 	; gestion du fond de texte
 	test    ch, 00000010b               ; transparent background ?
-	jz      .skip_attribut              ; oui
+	jnz     .draw_text_only             ; oui
 
-	test    ch, 00000001b               ; background blanc ?
-	je      .bkg_black
+	; --- Dessin du Fond (Opaque) ---
+    mov     bx, 0xFF00          ; Masque de 8 pixels pleins
+    push    cx
+    shr     bx, cl              ; Aligner le masque de fond
+    pop     cx
+    xchg    bl, bh
 
-	; background = white
-	mov     ax, 0xFF00
-	shr     ax, cl
-	xchg    al, ah
-	or      [es:di], ax
-	or      [es:di+bx], ax
-	jmp     .skip_attribut
+    test    ch, 00000001b       ; Couleur texte (pour déduire le fond)
+    jnz     .bg_black           ; Si texte blanc, fond noir
 
-	.bkg_black:                        ; OK
-	; background = black
-	mov     ax, 0xFF00
-	shr     ax, cl
-	xchg    al, ah
-	not     ax
-	and     [es:di], ax
-	and     [es:di+bx], ax
+    ; Fond Blanc (OR)
+    or      [es:di], bx         ; Écrit sur 2 octets (di et di+1)
+    jmp     .draw_text_only
+	.bg_black:
+    not     bx                  ; Inverser pour faire un masque AND
+    and     [es:di], bx
 
-	.skip_attribut:
-	; ligne "paire" du gylphe
-	xor     ax, ax
-	mov     al, [cs:si]
-	inc     si
-	ALIGN_BYTE
-	mov     dx, ax
+	.draw_text_only:
+    ; --- Dessin du Texte ---
+    test    ch, 00000001b       ; Bit 0: 1=White, 0=Black
+    jz      .text_black
 
-	; ligne "impaire" du gylphe
-	mov     al, [cs:si]
-	inc     si
-	ALIGN_BYTE
-	xchg    ax, dx
+    ; Texte Blanc (OR)
+    or      [es:di], ax
+    jmp     .next_row
 
-	test   ch,00000001b
-	jz     .black_text
+	.text_black:
+    ; Texte Noir (AND NOT)
+    not     ax
+    and     [es:di], ax
 
-	; white text
-	not      ax
-	not      dx
-	and      [es:di], ax
-	and      [es:di+bx], dx
+	.next_row:
+    pop     di                  ; Récupérer le DI du début de ligne
+    add     di, 80              ; Passer à la ligne VRAM suivante (linéaire)
+    ; dec     .cpt
+    jnz     .row_loop
 
-	jmp     .next
 
-	.black_text:
-	or      [es:di], ax
-	or      [es:di+bx], dx
+    ; Mise à jour des variables de position
+    add     word [fs:PTR_GFX + gfx.cur_x], 8
+    ; Recalculer l'offset pour le prochain caractère (gère le changement d'octet)
+    mov     cx, [fs:PTR_GFX + gfx.cur_x]
+    mov     dx, [fs:PTR_GFX + gfx.cur_y]
+    call    vga_calc_addr
+    mov     [fs:PTR_GFX + gfx.cur_offset], di
+    ; Note: calc_addr doit mettre le résultat dans DI ou BX selon ton usage
 
-	.next:
-	; add     di,CGA_STRIDE
-
-	dec     .cpt
-	jnz     .row_loop
-
-	; Avancer curseur d'un caractère (8 pixels)
-	inc     word [fs:PTR_GFX + gfx.cur_offset]
-	add     word [fs:PTR_GFX + gfx.cur_x], 8
-
-	call    vga_mouse_show      ; Restauration souris
-
-	pop     es
-	pop     fs
-	popa
-	leave
-	ret
+    call    vga_mouse_show
+    pop     es
+    pop     fs
+    popa
+    leave
+    ret
 %undef      .car
 %undef      .cpt
+
+junk:
+
 
 ;
 ; write string from [DS:SI] to screen
@@ -461,6 +476,7 @@ vga_write:
 	je      .done
 	push    ax
 	call    vga_putc
+	pop		ax
 	jmp     .loops
 
 	.done:
@@ -515,7 +531,7 @@ vga_putpixel:
 	out 	dx, ax
 
 	; 4. Écriture (Nécessite une lecture préalable pour charger les Latches)
-	mov 	ax, VIDEO_SEG
+	mov 	ax, SEG_VIDEO
 	mov 	es, ax
 	mov 	al, [es:di]     ; Lecture bidon pour charger les verrous (latches)
 	mov 	[es:di], al     ; L'écriture applique la couleur via le matériel
@@ -549,7 +565,7 @@ vga_mouse_hide:
 	pusha 	                ; Sauvegarder TOUS les registres 32-bits
 	push    ds
 
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 
 	; Décrémenter le compteur
@@ -577,7 +593,7 @@ vga_mouse_show:
 	pusha
 	push    ds
 
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 
 	; Incrémenter le compteur
@@ -609,7 +625,7 @@ vga_mouse_cursor_move:
 	push 	es
 
 	; BDA Data Segment
-	mov		ax, BDA_CUSTOM_SEG
+	mov		ax, SEG_BDA_CUSTOM
 	mov		ds, ax
 
 	cmp     byte [PTR_MOUSE + mouse.cur_counter], 0
@@ -637,7 +653,7 @@ vga_cursor_savebg:
     jne     .done
 
     push    es
-    mov     ax, VIDEO_SEG
+    mov     ax, SEG_VIDEO
     mov     es, ax
 
     ; Calculer l'adresse de départ (y * 80 + x / 8)
@@ -689,14 +705,14 @@ vga_cursor_restorebg:
     je      .done
 
     push    es
-    mov     ax, VIDEO_SEG
+    mov     ax, SEG_VIDEO
     mov     es, ax
 
     mov     di, [PTR_MOUSE + mouse.cur_addr_start]
     lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 
     ; Sécurité : S'assurer que ES pointe bien vers la vidéo pour le restore
-    mov     ax, VIDEO_SEG
+    mov     ax, SEG_VIDEO
     mov     es, ax
 
     ; Sécurité : Réinitialiser le contrôleur graphique pour l'écriture CPU brute
@@ -767,9 +783,9 @@ vga_cursor_draw:
     ; Note: pushad sauvegarde déjà tous les registres généraux (EAX...EDI)
 
 	cld                             ; Sécurité : Direction avant
-	mov     ax, BDA_CUSTOM_SEG
+	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
-    mov     ax, VIDEO_SEG
+    mov     ax, SEG_VIDEO
     mov     es, ax
 
     ; --- CLIPPING VERTICAL ---

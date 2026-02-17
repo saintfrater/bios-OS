@@ -130,8 +130,9 @@ main_loop:
 	push	cs
 	pop		ds
 
+	GFX		TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 	GFX		GOTOXY, 5,5
-	GFX		WRITE, str_hello
+	GFX		WRITE, cs, str_hello
 
 
 	; Init du système GUI
@@ -140,20 +141,20 @@ main_loop:
 	.loop:
 ;		call    gui_process_all
 
-		mov		dh, 1
-		mov		dl, 10
-		call 	scr_gotoxy
-
-		mov		ax, BDA_CUSTOM_SEG
-		mov		fs, ax
-		mov		ax, word [fs:PTR_MOUSE + mouse.x]
-		call	scr_puthex16
-
-		mov		al, ' '
-		call	scr_putc
-
-		mov		ax, word [fs:PTR_MOUSE + mouse.y]
-		call	scr_puthex16
+;		mov		dh, 1
+;		mov		dl, 10
+;		call 	scr_gotoxy
+;
+;		mov		ax, SEG_BDA_CUSTOM
+;		mov		fs, ax
+;		mov		ax, word [fs:PTR_MOUSE + mouse.x]
+;		call	scr_puthex16
+;
+;		mov		al, ' '
+;		call	scr_putc
+;
+;		mov		ax, word [fs:PTR_MOUSE + mouse.y]
+;		call	scr_puthex16
 
 		nop
 	jmp     .loop
@@ -167,7 +168,7 @@ timer_isr:
 	push	ax
 
 	push    fs
-	mov     ax,BDA_CUSTOM_SEG
+	mov     ax,SEG_BDA_CUSTOM
 	mov		fs,ax
 	; exemple de fonctionnement:
 	; 	inc		byte [fs:BDA_TIMER]

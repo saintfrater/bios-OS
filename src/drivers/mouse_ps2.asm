@@ -43,7 +43,7 @@
 ;
 ; ------------------------------------------------------------
 mouse_reset:
-	mov		ax, BDA_CUSTOM_SEG
+	mov		ax, SEG_BDA_CUSTOM
 	mov		fs,ax
 
 	; effacer les variables du drivers
@@ -154,7 +154,7 @@ mouse_init:
 ;
 ; ------------------------------------------------------------
 mouse_detect_packet_len:
-	mov		ax, BDA_CUSTOM_SEG
+	mov		ax, SEG_BDA_CUSTOM
 	mov		fs,ax
 
 	mov 	byte [fs:PTR_MOUSE + mouse.packetlen], 3
@@ -284,7 +284,7 @@ isr_mouse_handler:
 	push	ds
 
 	; use BDA segment
-	mov		ax,BDA_CUSTOM_SEG
+	mov		ax,SEG_BDA_CUSTOM
 	mov		ds,ax
 
 	; lire un octet depuis le contrôleur et le stocker dans le buffer
