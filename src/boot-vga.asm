@@ -130,8 +130,8 @@ main_loop:
 	push	cs
 	pop		ds
 
-	GFX		TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
-	GFX		GOTOXY, 5,5
+	GFX		TXT_MODE, GFX_TXT_WHITE
+	GFX		GOTOXY, 10,50
 	GFX		WRITE, cs, str_hello
 
 

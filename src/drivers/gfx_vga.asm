@@ -31,13 +31,15 @@
 %define GFX_OFFSET      80
 ;
 ; bit : descr
-;  0  : text color : 0=black, 1=white
-;  1  : transparent : 1=apply background attribut
+;  0..3  : text color : 0=black .. 15=white
+;  4 	 : transparent : 1=apply background attribut
+;  5..7  : free
+;  8..F  : background color (si bit 4 = 1)
 ;
-%define GFX_TXT_WHITE_TRANSPARENT   00000000b
-%define GFX_TXT_BLACK_TRANSPARENT   00000001b
-%define GFX_TXT_WHITE               00000010b
-%define GFX_TXT_BLACK               00000011b
+%define GFX_TXT_WHITE_TRANSPARENT   000001111b
+%define GFX_TXT_BLACK_TRANSPARENT   000000000b
+%define GFX_TXT_WHITE               111110000b
+%define GFX_TXT_BLACK               100001111b
 
 %macro GFX 1-*
 	; %1 est l'index de la fonction
@@ -131,6 +133,30 @@ vga_init:
 	PATTERN_PTR PATTERN_GRAY_LIGHT
 	mov     bl, 15
  	call	vga_background
+	ret
+
+; ---------------------------------------------------------------------------
+; get_glyph_offset
+; In : AL = char (ASCII)
+; Out: CS:SI -> 8 bytes
+; ---------------------------------------------------------------------------
+get_glyph_offset:
+	cmp     al, 0x20
+	jb      .qmark              ; al < 20h (' '
+	cmp     al, 0x7E
+	ja      .qmark              ; al > 7Eh ('~')
+	sub     al, 0x20
+	jmp     .ok
+
+	.qmark:
+	mov     al, '?'
+	sub     al, 0x20
+
+	.ok:
+	xor     ah, ah
+	mov     si, ax
+	shl     si, 3
+	add     si, font8x8
 	ret
 
 ; ------------------------------------------------------------
@@ -297,30 +323,6 @@ vga_set_charpos:
 %undef  .y
 
 ; ---------------------------------------------------------------------------
-; get_glyph_offset
-; In : AL = char (ASCII)
-; Out: CS:SI -> 8 bytes
-; ---------------------------------------------------------------------------
-get_glyph_offset:
-	cmp     al, 0x20
-	jb      .qmark              ; al < 20h (' '
-	cmp     al, 0x7E
-	ja      .qmark              ; al > 7Eh ('~')
-	sub     al, 0x20
-	jmp     .ok
-
-	.qmark:
-	mov     al, '?'
-	sub     al, 0x20
-
-	.ok:
-	xor     ah, ah
-	mov     si, ax
-	shl     si, 3
-	add     si, font8x8
-	ret
-
-; ---------------------------------------------------------------------------
 ; cga_putc_unalign (car)
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
@@ -343,16 +345,17 @@ vga_putc:
 
 	mov     dx, EGAVGA_CONTROLLER
 	; Forcer le mode de remplacement (écrase la VRAM avec la donnée CPU)
-    mov     ax, 0x0003  		; Index 3: Data Rotate = 0, Function = REPLACE
-    out     dx, ax
-	; S'assurer que le mode d'écriture est 0 (Standard)
-    mov     ax, 0x0005  		; index 1: Enable Set/Reset
-    out     dx, ax
-	; Désactiver Set/Reset pour laisser passer AX
-    mov     ax, 0x0001      ; Index 1: Enable Set/Reset = 0
+    mov     ax, 0x0205  		; Index 5 (Mode) : Mode	2
     out     dx, ax
 
-	mov     ax, 0xFF08  		; Bit Mask: 0xFF (on autorise l'écriture sur tous les pixels)
+	; Opération logique : REPLACE (0)
+    ; (On pourrait mettre 0x1003 pour faire du OR matériel si besoin)
+    mov     ax, 0x0003          ; Index 3 (Data Rotate) = REPLACE
+    out     dx, ax
+
+	; Configuration VGA : Activer l'écriture sur les 4 plans pour le texte
+    mov     dx, VGA_SEQUENCER   ; Sequencer
+    mov     ax, 0x0F02          ; Index 2 (Map Mask) = 0x0F (tous les plans)
     out     dx, ax
 
 	mov     bx, SEG_VIDEO
@@ -360,79 +363,67 @@ vga_putc:
 	mov     bx, SEG_BDA_CUSTOM
 	mov     fs, bx
 
-	; Configuration VGA : Activer l'écriture sur les 4 plans pour le texte
-    mov     dx, VGA_SEQUENCER   ; Sequencer
-    mov     ax, 0x0F02          ; Index 2 (Map Mask) = 0x0F (tous les plans)
-    out     dx, ax
-
 	mov     ax, .car
 	call    get_glyph_offset
 
 	; Base offset VRAM pour la scanline Y
 	mov     di, [fs:PTR_GFX + gfx.cur_offset]
-	mov     ch, [fs:PTR_GFX + gfx.cur_mode]
 	mov     cl, [fs:PTR_GFX + gfx.cur_shift]
+	mov     ch, [fs:PTR_GFX + gfx.cur_mode]
     mov     bx, GFX_OFFSET
 
-	mov     .cpt, 8
+	; On définit la couleur de texte (Ici simplifiée : bit 0 du mode)
+    ; Si bit 0 = 1, on écrit en couleur 15 (blanc), sinon couleur 0 (noir)
+    mov     ax,
+    test    bl, 00000001b
+    jz      .color_ok
+    mov     bh, 0x0F            ; Couleur Blanche (tous les plans à 1)
+	.color_ok:
+
+    mov     .cpt, 8
+    mov     dx, EGAVGA_CONTROLLER
+
 	.row_loop:
-	push	di
-	mov		al, byte[es:di]
+	lodsb                       ; AL = octet du glyphe
 
-	xor		ax,ax
-	mov		al, [cs:si]
-	inc		si
+    ; Gestion du décalage horizontal (X non aligné sur 8)
+    xor     ah, ah              ; AX = 00:Glyphe
+    shr     ax, cl              ; AH:AL = Glyphe décalé sur 16 bits
 
-	; convert al -> AX aligned with "cl"
-	mov     ah,al
-	xor     al,al
-	shr     ax,cl
-	xchg    ah,al
-	; ----- ALIGN_BYTE
+    ; --- DESSIN DE L'OCTET 1 (DI) ---
+    push    ax
+    mov     ah, al              ; AH = partie du glyphe pour cet octet
+    mov     al, 0x08            ; Index 8 : Bit Mask
+    out     dx, ax              ; On définit quels pixels seront modifiés
 
-	; gestion du fond de texte
-	test    ch, 00000010b               ; transparent background ?
-	jnz     .draw_text_only             ; oui
+    mov     al, [es:di]         ; LATCH LOAD : Aspire les 4 plans dans le GPU
+    mov     [es:di], bh         ; WRITE : Applique la couleur BH à travers le masque
+    pop     ax
 
-	; --- Dessin du Fond (Opaque) ---
-    mov     bx, 0xFF00          ; Masque de 8 pixels pleins
-    push    cx
-    shr     bx, cl              ; Aligner le masque de fond
-    pop     cx
-    xchg    bl, bh
+    ; --- DESSIN DE L'OCTET 2 (DI+1) ---
+    test    cl, cl              ; Y a-t-il un décalage ?
+    jz      .next_line          ; Non, on saute l'octet suivant
 
-    test    ch, 00000001b       ; Couleur texte (pour déduire le fond)
-    jnz     .bg_black           ; Si texte blanc, fond noir
+    mov     al, 0x08
+    ; AH contient déjà le reste du glyphe décalé
+    out     dx, ax              ; Nouveau Bit Mask pour l'octet adjacent
 
-    ; Fond Blanc (OR)
-    or      [es:di], bx         ; Écrit sur 2 octets (di et di+1)
-    jmp     .draw_text_only
-	.bg_black:
-    not     bx                  ; Inverser pour faire un masque AND
-    and     [es:di], bx
+    mov     al, [es:di+1]       ; LATCH LOAD
+    mov     [es:di+1], bh       ; WRITE
 
-	.draw_text_only:
-    ; --- Dessin du Texte ---
-    test    ch, 00000001b       ; Bit 0: 1=White, 0=Black
-    jz      .text_black
-
-    ; Texte Blanc (OR)
-    or      [es:di], ax
-    jmp     .next_row
-
-	.text_black:
-    ; Texte Noir (AND NOT)
-    not     ax
-    and     [es:di], ax
-
-	.next_row:
-    pop     di                  ; Récupérer le DI du début de ligne
-    add     di, 80              ; Passer à la ligne VRAM suivante (linéaire)
-    ; dec     .cpt
+	.next_line:
+    add     di, 80              ; Ligne suivante (640 pixels = 80 octets)
+    dec     .cpt
     jnz     .row_loop
 
+    ; --- NETTOYAGE (TRÈS IMPORTANT pour la souris) ---
+    mov     dx, 0x3CE
+    mov     ax, 0x0005          ; Revenir en Write Mode 0
+    out     dx, ax
+    mov     ax, 0xFF08          ; Bit Mask par défaut
+    out     dx, ax
 
-    ; Mise à jour des variables de position
+    ; Avancer le curseur
     add     word [fs:PTR_GFX + gfx.cur_x], 8
     ; Recalculer l'offset pour le prochain caractère (gère le changement d'octet)
     mov     cx, [fs:PTR_GFX + gfx.cur_x]
@@ -449,9 +440,6 @@ vga_putc:
     ret
 %undef      .car
 %undef      .cpt
-
-junk:
-
 
 ;
 ; write string from [DS:SI] to screen
@@ -476,7 +464,7 @@ vga_write:
 	je      .done
 	push    ax
 	call    vga_putc
-	pop		ax
+	; pop		ax
 	jmp     .loops
 
 	.done:
