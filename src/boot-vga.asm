@@ -60,7 +60,7 @@ section     .text
 %include 	"./common/debug_txt.asm"
 
 ; GUI
-; %include	"./gui/lib-api.asm"
+%include	"./gui/lib-api.asm"
 
 ; --- Données texte ---
 str_quit  db "Quitter", 0
@@ -106,9 +106,11 @@ entrycode:
 	call	mouse_init
  	GFX		MOUSE_SHOW
 
+
+	call    main_testing
 	.loops:
-	    call    main_loop
-	jmp     .loops
+		hlt
+	;jmp     .loops
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
 on_click_quit:
@@ -119,44 +121,99 @@ on_click_quit:
 on_click_hello:
 	ret
 
+
+
+main_testing:
+	GFX 	LINE,10,10,10,67, 15
+	ret
+
+%define     .oldval     	word [bp-2]
+%define     .my_slider     	word [bp-4]
+%define		.value			word [bp-6]
 main_loop:
     push    bp
     mov     bp, sp
-	%define .oldval     	word [bp-2]
-	%define .my_slider     	word [bp-4]
-	%define	.value			word [bp-6]
     sub     sp, 6
 
 	push	cs
 	pop		ds
 
-	GFX		TXT_MODE, GFX_TXT_WHITE
-	GFX		GOTOXY, 10,50
-	GFX		WRITE, cs, str_hello
-
+	DEBUG	1
+	ISADBG	ISA_LEFT, 1
 
 	; Init du système GUI
-; 	call    gui_init_system
+	call    gui_init_system
+	DEBUG	2
+	ISADBG	ISA_LEFT, 2
 
-	.loop:
-;		call    gui_process_all
+	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
 
-;		mov		dh, 1
-;		mov		dl, 10
-;		call 	scr_gotoxy
-;
-;		mov		ax, SEG_BDA_CUSTOM
-;		mov		fs, ax
-;		mov		ax, word [fs:PTR_MOUSE + mouse.x]
-;		call	scr_puthex16
-;
-;		mov		al, ' '
-;		call	scr_putc
-;
-;		mov		ax, word [fs:PTR_MOUSE + mouse.y]
-;		call	scr_puthex16
+	; Créer Bouton 1 "QUITTER"
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 10, 10, 80, 16
+	GUI     OBJ_SET_TEXT, ax, cs, str_quit
+	; Créer Bouton 2 "HELLO"
+    GUI     OBJ_CREATE, OBJ_TYPE_BUTTON_ROUNDED, 100, 50, 80, 16
+	GUI     OBJ_SET_TEXT, ax, cs, str_hello
 
-		nop
+	; Créer 3 checkbox "option"
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option1
+
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option2
+
+    GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15
+	GUI     OBJ_SET_TEXT, ax, cs, str_option3
+
+	DEBUG	3
+	ISADBG	ISA_LEFT, 3
+
+    ; Créer Slider (Drag)
+    GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
+	GUI		OBJ_SET_MODE, ax, SLIDER_HORIZONTAL
+	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 10, 15
+
+	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
+	mov     .my_slider, ax
+
+	GUI		OBJ_SET_MODE, .my_slider, SLIDER_VERTICAL
+	GUI		OBJ_SLIDER_SET_ATTR, .my_slider, 0, 31, 0, 12
+
+    mov     .oldval, 0x1256
+	mov		.value, 0xFADE
+
+	DEBUG	4
+	ISADBG	ISA_LEFT, 4
+
+    .loop:
+		call    gui_process_all
+ 		GUI		OBJ_GET_VAL, .my_slider
+		mov		.value, ax
+
+    	cmp     ax,.oldval
+    	je      .loop
+
+		; debug
+    	mov     .oldval, ax
+    	GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
+		GFX		GOTOXY, 8, 150
+
+		mov		ax, .value
+		call	print_word_hex
+		; end debug
+
+		; change palette...
+		;and 	ax, 0x00FF
+		;mov		bh, 0x00
+		;mov		bl, al
+		;mov		ah, 0x0b
+		;mov		al, 0x00
+		;int 	0x10
+
+		mov		dx, CRTC_COLOR_DATA
+		and		ax, 0x001F
+		out		dx, ax
+
 	jmp     .loop
 	leave
 	ret

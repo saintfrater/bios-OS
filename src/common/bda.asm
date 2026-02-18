@@ -72,10 +72,11 @@ endstruc
 struc   gfx
 	.cur_x          resw    1       ; x,y en pixel
 	.cur_y          resw    1
+	.cur_mode       resw    1       ; mode text
 	.cur_offset     resw    1       ; offset calculé pour le prochain caractère
 	.cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
 	.cur_shift      resb    1       ; x&7 (0..7)
-	.cur_mode       resb    1       ;
+
 endstruc
 
 ; -----------------------------------------------------------------------------------
