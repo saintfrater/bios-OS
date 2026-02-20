@@ -41,6 +41,10 @@
 %define GFX_TXT_WHITE               00000010b
 %define GFX_TXT_BLACK               00000011b
 
+%define GFX_TXT_TRANSPARENT_BKG     11111111b
+%define GFX_TXT_TRANSPARENT_TEXT    00000010b
+
+
 %macro GFX 1-*
 	; %1 est l'index de la fonction
 	; On itère sur les arguments suivants en sens inverse (Convention C)

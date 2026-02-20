@@ -288,6 +288,7 @@ draw_button:
 	je      .paint_pressed
 	cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
 	je      .paint_hover
+	GFX     TXT_MODE, GFX_TXT_BLACK & GFX_TXT_TRANSPARENT_BKG
 
 	.draw_default_style:
 		; Bordure extérieure épaisse (2px)
@@ -313,7 +314,8 @@ draw_button:
 
 	.paint_pressed:
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK, 15, 0
-		GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
+		jmp     .done
+
 
 	.done:
 		; on affiche le texte
@@ -321,7 +323,6 @@ draw_button:
 		mov     ax, [gs:si + widget.x]
 		mov     bx, [gs:si + widget.y]
 
-		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 		call    draw_text
 	ret
 
@@ -500,8 +501,6 @@ draw_text:
 	pop     cx      ; CX = X Final, BX = Y Final
 
 	GFX     GOTOXY, cx, bx
-	GFX     TXT_MODE, GFX_TXT_WHITE & GFX_TXT_TRANSPARENT_BKG
-
 	mov     dx, [gs:si + widget.text_seg]
 	mov     ax, [gs:si + widget.text_ofs]
 	GFX     WRITE, dx, ax
