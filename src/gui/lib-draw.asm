@@ -404,25 +404,13 @@ draw_checkbox:
 	mov     dx, bx
 	add     dx, GUI_CHECKBOX_SIZE         	; Y2
 
-	; Sauvegarde coords pour le X
-	push    ax
-	push    bx
-	push    cx
-	push    dx
-
 	; Fond blanc + Bordure noire
 	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 	GFX     RECTANGLE, ax, bx, cx, dx, 0
 
-	pop     dx
-	pop     cx
-	pop     bx
-	pop     ax
-
 	; Check if checked
 	cmp     word [gs:si + widget.thumb_pos], 0
 	je      .draw_label
-
 
 	; Dessin du X (Diagonales)
 	add     ax, 2
