@@ -20,7 +20,6 @@ pattern_8x8:
     dq 0x77DD77DD77DD77DD               ; 4 : pattern_white_light (Majorité de 1 = Clair)
     dq 0xFFFFFFFFFFFFFFFF               ; 5 : pattern_white (Tout à 1 = Blanc)
 
-
 %macro  PATTERN_PTR 		1
     mov     ax, cs
     mov     ds, ax

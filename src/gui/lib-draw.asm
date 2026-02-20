@@ -1,6 +1,6 @@
 ; =============================================================================
 ;  Project  : Custom BIOS / ROM
-;  File     : gui/draw.asm
+;  File     : gui/lib-draw.asm
 ;  Author   : frater
 ;
 ;  License  : GNU General Public License v3.0 or later (GPL-3.0+)
@@ -114,7 +114,7 @@ draw_slider:
 	mov     .track_y2, dx
 
 	; 1. Dessiner la piste (Track)
-	GFX     RECTANGLE_FILL, .track_x1, .track_y1, .track_x2, .track_y2, PATTERN_WHITE_LIGHT
+	GFX     RECTANGLE_FILL, .track_x1, .track_y1, .track_x2, .track_y2, PATTERN_WHITE_LIGHT, 15, 0
 	GFX     RECTANGLE, .track_x1, .track_y1, .track_x2, .track_y2, 0
 
 	; 2. Calculer la taille du curseur (Thumb)
@@ -199,7 +199,7 @@ draw_slider:
 
 	.draw_thumb:
 	; 3. Dessiner le curseur (Thumb)
-	GFX     RECTANGLE_FILL, .thumb_x1, .thumb_y1, .thumb_x2, .thumb_y2, PATTERN_WHITE
+	GFX     RECTANGLE_FILL, .thumb_x1, .thumb_y1, .thumb_x2, .thumb_y2, PATTERN_WHITE, 15, 0
 	GFX     RECTANGLE, .thumb_x1, .thumb_y1, .thumb_x2, .thumb_y2, 0
 
 	; --- Grip Lines (3 lignes pour un look moderne) ---
@@ -307,12 +307,12 @@ draw_button:
 		jmp		.done
 
 	.paint_hover:
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT, 15, 0
 		GFX     RECTANGLE, ax, bx, cx, dx, 0
 		jmp     .done
 
 	.paint_pressed:
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK, 15, 0
 		GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
 
 	.done:
@@ -336,14 +336,14 @@ draw_round_button:
 	je      .paint_hover
 
 	.paint_normal:
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 		mov     di, 0                       ; Couleur Noire
 		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 		jmp     .draw_text_now
 
 	.paint_hover:
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 		GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
 		; GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
 		mov     di, 0                       ; Couleur Noire
@@ -352,7 +352,7 @@ draw_round_button:
 		jmp     .draw_text_now
 
 	.paint_pressed:
-		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK, 15, 0
 		mov     di, 1                       ; Bordure Blanche sur fond noir
 		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
@@ -379,7 +379,7 @@ draw_round_borders:
 
 draw_checkbox:
 	; met un "fond" blanc
-	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 
 	cmp     byte [gs:si + widget.state], GUI_STATE_HOVER
 	jne      .no_hover
@@ -411,7 +411,7 @@ draw_checkbox:
 	push    dx
 
 	; Fond blanc + Bordure noire
-	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE
+	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 	GFX     RECTANGLE, ax, bx, cx, dx, 0
 
 	; Check if checked
@@ -449,8 +449,10 @@ draw_checkbox:
 	inc     bx
 
 	GFX     GOTOXY, cx, bx
+	GFX     TXT_MODE, GFX_TXT_BLACK & GFX_TXT_TRANSPARENT_BKG
 	mov     dx, [gs:si + widget.text_seg]
 	mov     ax, [gs:si + widget.text_ofs]
+
 	GFX     WRITE, dx, ax
 
 	ret
@@ -459,7 +461,7 @@ draw_checkbox:
 ; dessine un label (texte simple)
 ;
 draw_label:
-	GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+	GFX     TXT_MODE, GFX_TXT_WHITE & GFX_TXT_TRANSPARENT_BKG
 	call    draw_text
 	ret
 
@@ -498,6 +500,7 @@ draw_text:
 	pop     cx      ; CX = X Final, BX = Y Final
 
 	GFX     GOTOXY, cx, bx
+	GFX     TXT_MODE, GFX_TXT_WHITE & GFX_TXT_TRANSPARENT_BKG
 
 	mov     dx, [gs:si + widget.text_seg]
 	mov     ax, [gs:si + widget.text_ofs]

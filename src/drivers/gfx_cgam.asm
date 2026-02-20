@@ -990,22 +990,21 @@ cga_draw_rect:
 ; cga_fill_rect
 ; Dessine un rectangle plein
 ; Entrée : x1, y1, x2, y2, pattern_offset (CS:Offset)
-; ------------------------------------------------------------
 %define .x1     word [bp+4]
 %define .y1     word [bp+6]
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .pat_id word [bp+12]
-
-; Variable locale pour l'index du motif (y % 8)
-%define .pat_idx        word [bp-2]
-%define .x_end_idx      word [bp-4]
-%define .pattern_offset word [bp-6]
-
+; ------------------------------------------------------------
 cga_fill_rect:
 	push    bp
 	mov     bp, sp
 	sub     sp, 6           ; Reserve espace pour .pat_idx et .x_end_idx
+	; Variable locale pour l'index du motif (y % 8)
+	%define .pat_idx        word [bp-2]
+	%define .x_end_idx      word [bp-4]
+	%define .pattern_offset word [bp-6]
+
 	pusha
 	push    es
 

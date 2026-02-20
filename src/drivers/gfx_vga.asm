@@ -103,7 +103,7 @@ graph_driver:
 	dw vga_write                ; dessin d'une chaine de caractère
 	dw vga_line                 ; dessin d'une ligne (Bresenham) avec décision horizontale/verticale
 	dw vga_draw_rect            ; dessin d'un rectangle
-	dw vga_none                 ; dessin d'un rectangle plein
+	dw vga_fill_rect_32         ; dessin d'un rectangle plein
 	dw vga_draw_rounded_frame   ; dessin d'un rectangle arrondi
 	dw vga_mouse_hide           ; cache la souris
 	dw vga_mouse_show           ; montre la souris
@@ -139,11 +139,11 @@ vga_init:
  	call	vga_background
 	ret
 
-; ---------------------------------------------------------------------------
+; ------------------------------------------------------------
 ; get_glyph_offset
 ; In : AL = char (ASCII)
 ; Out: CS:SI -> 8 bytes
-; ---------------------------------------------------------------------------
+; ------------------------------------------------------------
 get_glyph_offset:
 	cmp     al, 0x20
 	jb      .qmark              ; al < 20h (' '
@@ -191,11 +191,10 @@ vga_calc_addr:
 	pop     ax
 	ret
 
-; Entrée: ESI = Pointeur vers le tableau de 8 octets (pattern 8x8)
-;         BL  = Couleur de premier plan (0-15)
+; ------------------------------------------------------------
+; vga_background
+; ------------------------------------------------------------
 vga_background:
-;    pushad
-
 	; Configuration VGA pour le remplissage de masse
 	mov 	dx, VGA_SEQUENCER  	; Sequencer
 	mov 	ax, 0F02h       	; Map Mask (Index 2) = 0Fh (Tous les plans)
@@ -246,11 +245,9 @@ vga_background:
 	mov 	dx, EGAVGA_CONTROLLER
 	mov 	ax, 0005h       	; Reset Write Mode 0
 	out 	dx, ax
-;    popad
 	ret
 
-
-; ---------------------------------------------------------------------------
+; ------------------------------------------------------------
 ; gfx_set_writemode (mode)
 ;  Défini le mode d'écriture :
 ;
@@ -260,9 +257,8 @@ vga_background:
 ;
 ; si le mode n'est pas transparent, la couleur de fond
 ; est l'inverse de la couleur du texte
-; ---------------------------------------------------------------------------
-; --- Définition des arguments ---
 %define .mode   word [bp+4]
+; -------------------------------------------------------------
 vga_set_writemode:
 	push    bp
 	mov     bp, sp
@@ -280,7 +276,7 @@ vga_set_writemode:
 	pop     fs
 	leave
 	ret
-%undef      .mode
+	%undef  .mode
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos (x,y)
@@ -289,10 +285,9 @@ vga_set_writemode:
 ; Notes:
 ;  - calcule l'offset VRAM de la scanline y: base = (y*80) + (x>>3)
 ;  - stocke aussi shift = x&7
-; ---------------------------------------------------------------------------
-; --- Définition des arguments ---
 %define .x     word [bp+4]
 %define .y     word [bp+6]
+; ---------------------------------------------------------------------------
 vga_set_charpos:
 	push    bp
 	mov     bp, sp
@@ -322,18 +317,16 @@ vga_set_charpos:
 	popa
 	leave
 	ret
-; clean defs
-%undef  .x
-%undef  .y
+	; clean defs
+	%undef  .x
+	%undef  .y
 
 ; ---------------------------------------------------------------------------
 ; vga_putc_unalign (car)
 ;   - x non aligné (x&7 != 0)
 ;   - écrit sur 2 bytes (di et di+1) dans chaque banque
-; ---------------------------------------------------------------------------
-
-; --- Définition des arguments ---
 %define .car    word [bp+4]
+; ---------------------------------------------------------------------------
 vga_putc:
     push    bp
     mov     bp, sp
@@ -381,7 +374,7 @@ vga_putc:
     mov     .cpt, 8
     mov     dx, EGAVGA_CONTROLLER
 
-.row_loop:
+	.row_loop:
     lodsb                       ; AL = octet glyphe
     xor     ah, ah
     mov     .glyph_row, ax      ; Image 16 bits du glyphe non décalé
@@ -389,7 +382,7 @@ vga_putc:
     ; --- PASSE 1 : DESSIN DU FOND (SI OPAQUE) ---
     mov     ax, [fs:PTR_GFX + gfx.cur_mode]
     test    ax, GFX_TXT_TRANSPARENT_BKG
-    jnz     .skip_bkg
+    jz	    .skip_bkg
 
     mov     ax, .glyph_row
     not     al                  ; Inverser le glyphe pour le fond
@@ -412,7 +405,7 @@ vga_putc:
     out     dx, ax
     mov     al, [gs:di+1]       ; LATCH LOAD Octet suivant
     mov     [gs:di+1], bh       ; WRITE Fond (BH)
-.skip_bkg:
+	.skip_bkg:
 
     ; --- PASSE 2 : DESSIN DU TEXTE ---
     mov     ax, [fs:PTR_GFX + gfx.cur_mode]
@@ -440,7 +433,7 @@ vga_putc:
     mov     al, [gs:di+1]       ; LATCH LOAD
     mov     [gs:di+1], bl
 
-.next_line:
+	.next_line:
     add     di, 80              ; Ligne suivante
     dec     .cpt
     jnz     .row_loop
@@ -466,16 +459,15 @@ vga_putc:
     popa
     leave
     ret
-; clean defs
-%undef	.cpt
-%undef	.glyph_row
+	; clean defs
+	%undef	.cpt
+	%undef	.glyph_row
 
-;
+; ---------------------------------------------------------------------------
 ; write string from [DS:SI] to screen
-;
-; --- Définition des arguments ---
 %define .txt_seg   word [bp+4]
 %define .txt_ofs   word [bp+6]
+; ---------------------------------------------------------------------------
 vga_write:
 	push    bp
 	mov     bp, sp
@@ -501,18 +493,17 @@ vga_write:
 	pop     ax
 	leave
 	ret
-%undef  .txt_seg
-%undef  .txt_ofs
+	%undef  .txt_seg
+	%undef  .txt_ofs
 
 ; ------------------------------------------------------------
 ; vga_line (x1, y1, x2, y2, color)
-; ------------------------------------------------------------
 %define .x1     word [bp+4]
 %define .y1     word [bp+6]
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .color  byte [bp+12]
-
+; ------------------------------------------------------------
 vga_line:
     push    bp
     mov     bp, sp
@@ -522,6 +513,7 @@ vga_line:
 
     mov     ax, .x1
     mov     bx, .x2
+
     mov     cx, .y1
     mov     dx, .y2
 
@@ -532,9 +524,25 @@ vga_line:
     ; Cas 2 : Ligne Horizontale (y1 == y2)
     cmp     cx, dx
     je      .call_horizontal
+
     ; Cas 3 : Ligne diagonale quelconque (Bresenham)
 	.bresenham:
-    ; ... Algorithme classique utilisant vga_putpixel ...
+
+	push	word .color
+	push	.y2
+	push	.x2
+	push	.y1
+	push	.x1
+
+
+
+	; ... Algorithme classique
+	; call	vga_line_bresenham
+	; ... Algorithme accéléré
+	call	vga_line_fast
+
+	add		sp, 10
+	jmp     .done
 
 	.call_vertical:
     push    word .color
@@ -550,30 +558,29 @@ vga_line:
     push    bx              ; x2
     push    ax              ; x1
     push    cx              ; y1
-    ; call    vga_line_horizontal
+    call    vga_line_horizontal
     add     sp, 8
-;     jmp     .done
 
 	.done:
     call    vga_mouse_show
     popa
     leave
     ret
-; clean defs
-%undef  .x1
-%undef  .y1
-%undef  .x2
-%undef  .y2
-%undef  .color
+	; clean defs
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .color
 
 ; ------------------------------------------------------------
 ; vga_line_bresenham (x1, y1, x2, y2, color)
-; ------------------------------------------------------------
 %define .x1      word [bp+4]
 %define .y1      word [bp+6]
 %define .x2      word [bp+8]
 %define .y2      word [bp+10]
 %define .color   word [bp+12]
+; ------------------------------------------------------------
 vga_line_bresenham:
     push    bp
     mov     bp, sp
@@ -589,7 +596,6 @@ vga_line_bresenham:
     push    es
 
     ; --- Calculs préliminaires Bresenham ---
-    ; dx = abs(x2-x1), sx = x1<x2 ? 1 : -1
     mov     ax, .x2
     sub     ax, .x1
     mov     _sx, 1
@@ -599,7 +605,6 @@ vga_line_bresenham:
 	.dx_ok:
     mov     _dx, ax
 
-    ; dy = -abs(y2-y1), sy = y1<y2 ? 1 : -1
     mov     ax, .y2
     sub     ax, .y1
     mov     _sy, 1
@@ -610,7 +615,6 @@ vga_line_bresenham:
     neg     ax                  ; dy doit être négatif
     mov     _dy, ax
 
-    ; err = dx + dy
     mov     ax, _dx
     add     ax, _dy
     mov     _err, ax
@@ -635,6 +639,7 @@ vga_line_bresenham:
     call    vga_calc_addr       ; DI = offset VRAM, CL = bit shift (0-7)
 
     ; Configurer le Bit Mask (Index 8)
+    and     cl, 7               ; <-- SÉCURITÉ : On force le masque entre 0 et 7
     mov     ah, 0x80
     shr     ah, cl              ; AH = Masque du pixel
     mov     al, 0x08
@@ -644,7 +649,7 @@ vga_line_bresenham:
     ; Écriture Mode 2 (Latches + Couleur)
     mov     al, [es:di]         ; LOAD LATCHES
     mov     ax, .color
-    mov     [es:di], al         ; WRITE Couleur (VGA Mode 2 utilise AL comme couleur)
+    mov     [es:di], al         ; WRITE Couleur
 
     pop     cx
     pop     dx
@@ -684,152 +689,406 @@ vga_line_bresenham:
     out     dx, ax
     mov     ax, 0xFF08          ; Reset Bit Mask
     out     dx, ax
+    mov     ax, 0x0003          ; <-- SÉCURITÉ : Remettre Function Select à 0
+    out     dx, ax
 
     pop     es
     popa
     leave
     ret
-	; clean defs
-%undef  .x1
-%undef  .y1
-%undef  .x2
-%undef  .y2
-%undef  .color
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .color
+	%undef  _dx
+	%undef  _dy
+	%undef  _sx
+	%undef  _sy
+	%undef  _err
+	%undef  _e2
+    ; clean defs
 
+
+; ------------------------------------------------------------
+; vga_line_fast (x1, y1, x2, y2, color)
+%define .x1      word [bp+4]
+%define .y1      word [bp+6]
+%define .x2      word [bp+8]
+%define .y2      word [bp+10]
+%define .color   word [bp+12]
+; ------------------------------------------------------------
+vga_line_fast:
+    push    bp
+    mov     bp, sp
+    sub     sp, 10              ; Variables locales : dx, dy, err, sy_offset, count
+    %define _dx         word [bp-2]
+    %define _dy         word [bp-4]
+    %define _err        word [bp-6]
+    %define _sy_offset  word [bp-8]  ; Vaudra +80 ou -80
+    %define _count      word [bp-10] ; Nombre exact de pixels à tracer
+
+    pusha
+    push    es
+
+	; --- CALCUL DE L'ADRESSE INITIALE ---
+    mov     dx, .y1
+    mov     cx, .x1
+    call    vga_calc_addr       ; DI = Offset, CL = Alignement bit
+    and     cl, 7
+    mov     bh, 0x80            ; <-- CHANGEMENT : On utilise BH temporairement
+    shr     bh, cl              ; BH contient maintenant le Masque de départ
+
+    ; --- CALCUL DE L'ADRESSE INITIALE (UNE SEULE FOIS) ---
+    mov     ax, .x2
+    sub     ax, .x1
+    jns     .dx_ok
+    neg     ax
+	.dx_ok:
+    mov     _dx, ax
+
+    mov     ax, .y2
+    sub     ax, .y1
+    mov     cx, 80              ; Par défaut, on descend
+    jns     .dy_ok
+    neg     ax
+    mov     cx, -80             ; On monte
+	.dy_ok:
+
+    mov     _sy_offset, cx
+    neg     ax                  ; DY doit être négatif
+    mov     _dy, ax
+
+    mov     ax, _dx
+    add     ax, _dy
+    mov     _err, ax
+
+    ; --- CALCUL DU NOMBRE DE PIXELS ---
+    mov     ax, _dx
+    mov     cx, _dy
+    neg     cx                  ; abs(dy)
+    cmp     ax, cx
+    jge     .set_count
+    mov     ax, cx              ; DY est plus grand
+	.set_count:
+    inc     ax
+    mov     _count, ax
+
+	; --- CONFIGURATION VGA ---
+    mov     dx, EGAVGA_CONTROLLER ; 0x03CE
+    mov     ax, 0x0205          ; Write Mode 2 (AX est légal !)
+    out     dx, ax
+    mov     ax, 0x0003          ; Function Replace
+    out     dx, ax
+
+    mov     ax, SEG_VIDEO
+    mov     es, ax
+
+    mov     ah, bh
+
+    ; --- CHOIX DE LA BOUCLE (Gauche ou Droite) ---
+    mov     bx, .x2
+    cmp     .x1, bx
+    jg      .loop_left          ; Si x1 > x2, on trace vers la gauche
+
+    ; ==========================================================
+    ; BOUCLE DE TRACÉ VERS LA DROITE
+    ; ==========================================================
+	.loop_right:
+    ; A. Dessiner le pixel
+    mov     al, 0x08
+    out     dx, ax              ; AL=0x08, AH=Masque courant
+    mov     al, [es:di]         ; Latch
+    mov     cl, byte .color
+    mov     [es:di], cl         ; Write
+
+    ; B. Vérifier la fin
+    dec     word _count
+    jz      .exit_line
+
+    ; C. Mise à jour Bresenham
+    mov     bx, _err
+    shl     bx, 1               ; e2 = 2 * err
+
+    ; Pas sur Y ? (if e2 <= dx)
+    mov     cx, _dx
+    cmp     bx, cx
+    jg      .check_x_right
+    add     _err, cx            ; err += dx
+    add     di, _sy_offset      ; DI glisse d'une ligne (+80 ou -80)
+
+	.check_x_right:
+    ; Pas sur X ? (if e2 >= dy)
+    mov     cx, _dy
+    cmp     bx, cx
+    jl      .loop_right
+    add     _err, cx            ; err += dy
+
+    ; MAGIE : Glissement du masque vers la DROITE
+    shr     ah, 1               ; On décale le bit.
+    jnz     .loop_right         ; S'il n'est pas zéro, on reste dans le même octet !
+    mov     ah, 0x80            ; Le bit est sorti : on le remet tout à gauche...
+    inc     di                  ; ... et on avance l'adresse VRAM d'un octet !
+    jmp     .loop_right
+
+    ; ==========================================================
+    ; BOUCLE DE TRACÉ VERS LA GAUCHE
+    ; ==========================================================
+	.loop_left:
+    ; A. Dessiner le pixel
+    mov     al, 0x08
+    out     dx, ax
+    mov     al, [es:di]
+    mov     cl, byte .color
+    mov     [es:di], cl
+
+    ; B. Vérifier la fin
+    dec     word _count
+    jz      .exit_line
+
+    ; C. Mise à jour Bresenham
+    mov     bx, _err
+    shl     bx, 1               ; e2 = 2 * err
+
+    ; Pas sur Y ?
+    mov     cx, _dx
+    cmp     bx, cx
+    jg      .check_x_left
+    add     _err, cx
+    add     di, _sy_offset
+
+	.check_x_left:
+    ; Pas sur X ?
+    mov     cx, _dy
+    cmp     bx, cx
+    jl      .loop_left
+    add     _err, cx
+
+    ; MAGIE : Glissement du masque vers la GAUCHE
+    shl     ah, 1               ; On décale le bit vers la gauche.
+    jnz     .loop_left          ; S'il n'est pas zéro, tout va bien.
+    mov     ah, 0x01            ; Le bit est sorti : on le remet tout à droite...
+    dec     di                  ; ... et on recule l'adresse VRAM d'un octet !
+    jmp     .loop_left
+
+    ; ==========================================================
+
+	.exit_line:
+    ; --- NETTOYAGE VGA ---
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0x0005          ; Reset Mode 0
+    out     dx, ax
+    mov     ax, 0xFF08          ; Reset Bit Mask
+    out     dx, ax
+    mov     ax, 0x0003          ; Reset Function
+    out     dx, ax
+
+    pop     es
+    popa
+    leave
+    ret
+    ; clean defs
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .color
+	%undef  _dx
+	%undef  _dy
+	%undef  _err
+	%undef  _sy_offset
+	%undef  _count
+
+; ------------------------------------------------------------
 ; vga_line_horizontal (y, x1, x2, color)
 %define .y      word [bp+4]
 %define .x1     word [bp+6]
 %define .x2     word [bp+8]
 %define .color  word [bp+10]
-
+; ------------------------------------------------------------
 vga_line_horizontal:
     push    bp
     mov     bp, sp
+    sub     sp, 4
+    %define .oft_end     word [bp-2]
+
     pusha
     push    es
 
-    ; Trier x1 et x2
+	call    vga_mouse_hide      ; Protection souris
+
+    ; Trier x1 et x2 (Garantir que x1 <= x2)
     mov     ax, .x1
     mov     bx, .x2
     cmp     ax, bx
-    jbe     .skip_swap
-    xchg    ax, bx
-	.skip_swap:
-    ; AX = x-start, BX = x-end
+    jbe     .sorted
+    mov     .x1, bx
+    mov     .x2, ax
+	.sorted:
 
-    ; Configurer VGA Mode 0 avec Bit Mask
-    mov     dx, EGAVGA_CONTROLLER
-    mov     ax, 0x0005      ; Write Mode 0
-    out     dx, ax
-    mov     ax, 0x0003      ; Function Replace
-    out     dx, ax
-
-    ; Activer Set/Reset pour la couleur
-    mov     ax, 0x0F01      ; Enable Set/Reset
-    out     dx, ax
-    mov     al, 0x00        ; Index 0: Set/Reset Color
-    mov     ah, byte .color
-    out     dx, ax
-
+    ; Calculer l'adresse pour x1
     mov     dx, .y
-    mov     cx, ax          ; CX = x1 pour calc_addr
-    call    vga_calc_addr   ; DI = offset, CL = shift (non utilisé ici)
+    mov     cx, .x1
+    call    vga_calc_addr   ; DI = offset de départ (on suppose que vga_calc_addr préserve les registres)
 
-    mov     ax, SEG_VIDEO
+    ; Calculer l'offset de fin CORRECTEMENT
+    mov     ax, .x2
+    shr     ax, 3           ; x2 divisé par 8 (octet de fin)
+    mov     bx, .x1
+    shr     bx, 3           ; x1 divisé par 8 (octet de début)
+    sub     ax, bx          ; Distance en octets absolus
+    add     ax, di          ; On ajoute l'offset de départ
+    mov     .oft_end, ax    ; Sauvegarde de l'offset de fin réel
+
+    ; Setup VGA (Write Mode 2)
+    mov     ax, SEG_VIDEO   ; ex: 0xA000
     mov     es, ax
+    mov     bh, byte .color
 
-    ; Boucle simple pixel par pixel (optimisation octet par octet possible ici)
-	.pixel_loop:
-    push    bx
-    push    cx
-    ; Utilisation du Bit Mask pour le pixel individuel (plus simple que le mode planaire manuel)
-    mov     bx, cx
-    and     bx, 7           ; x % 8
-    mov     ah, 0x80
-    shr     ah, cl          ; Bit mask pour le pixel
-    mov     al, 0x08        ; Index 8
-    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0x0205      ; Index 5, Val 2 (Write Mode 2)
+    mov     dx, EGAVGA_CONTROLLER ; 0x03CE
     out     dx, ax
 
-    mov     al, [es:di]     ; Load latches
-    mov     [es:di], al     ; Write (la couleur est dans Set/Reset)
+    ; Cas où x1 et x2 sont strictement dans le MÊME octet
+    mov     cx, .oft_end
+    cmp     di, cx          ; Comparer offset départ (DI) et fin (CX)
+    je      .single_byte
 
-    pop     cx
-    pop     bx
+    ; --- BORD GAUCHE ---
+    mov     cl, byte .x1
+    and     cl, 7           ; CL = x1 % 8
+    mov     ah, 0xFF
+    shr     ah, cl          ; Masque : les bits à droite du shift
+    mov     al, 0x08        ; Index du registre Bit Mask
+    out     dx, ax          ; DX = 0x03CE
 
-    inc     cx
-    test    cx, 7
-    jnz     .no_inc_di
+    mov     al, [es:di]     ; Latch load (lire pour charger les loquets VGA)
+    mov     [es:di], bh     ; Écrire la couleur (Write Mode 2 applique le masque)
     inc     di
-	.no_inc_di:
-    cmp     cx, bx
-    jbe     .pixel_loop
 
-    ; Nettoyage Set/Reset
-    mov     dx, EGAVGA_CONTROLLER
-    mov     ax, 0x0001
+    ; --- MILIEU (Octets complets) ---
+    mov     ax, 0xFF08      ; Masque plein (0xFF)
+    out     dx, ax
+	.middle_loop:
+    cmp     di, .oft_end    ; Compare l'offset actuel avec l'offset de fin
+    jae     .right_edge     ; Si on a atteint le dernier octet, on sort
+    mov     al, [es:di]
+    mov     [es:di], bh
+    inc     di
+    jmp     .middle_loop
+
+	.right_edge:
+    ; --- BORD DROIT ---
+    mov     cl, 7
+    mov     bl, byte .x2
+    and     bl, 7           ; BL = x2 % 8
+    sub     cl, bl          ; CL = 7 - (x2 % 8)
+    mov     ah, 0xFF
+    shl     ah, cl          ; Masque : les bits à gauche
+    mov     al, 0x08
     out     dx, ax
 
+    mov     al, [es:di]
+    mov     [es:di], bh
+    jmp     .done
+
+	.single_byte:
+    ; --- UN SEUL OCTET ---
+    ; On génère le masque gauche
+    mov     cl, byte .x1
+    and     cl, 7
+    mov     ah, 0xFF
+    shr     ah, cl          ; AH = Masque gauche
+
+    ; On génère le masque droit
+    mov     cl, 7
+    mov     bl, byte .x2
+    and     bl, 7
+    sub     cl, bl
+    mov     al, 0xFF
+    shl     al, cl          ; AL = Masque droit
+
+    ; On fusionne les deux masques
+    and     ah, al          ; AH = Intersection des deux masques
+    mov     al, 0x08
+    out     dx, ax
+
+    mov     al, [es:di]
+    mov     [es:di], bh
+
+	.done:
+	call    vga_mouse_show
+    ; Reset VGA
+    mov     ax, 0x0005      ; Mode 0 (Index 5, Val 0)
+    out     dx, ax
+    mov     ax, 0xFF08      ; Bitmask reset (Index 8, Val 0xFF)
+    out     dx, ax
     pop     es
     popa
     leave
     ret
-; clean defs
-%undef  .y
-%undef  .x1
-%undef  .x2
-%undef  .color
+	; clean defs
+	%undef  .y
+	%undef  .x1
+	%undef  .x2
+	%undef  .color
 
+; ------------------------------------------------------------
 ; vga_line_vertical (x, y1, y2, color)
 %define .x      word [bp+4]
 %define .y1     word [bp+6]
 %define .y2     word [bp+8]
 %define .color  word [bp+10]
-; vga_line_vertical (x, y1, y2, color)
+; ------------------------------------------------------------
 vga_line_vertical:
     push    bp
     mov     bp, sp
+	sub     sp, 2           ; Allocation d'une variable locale (2 octets)
+    %define .height 	word [bp-2]
     pusha
+	push	es
 
+	call 	vga_mouse_hide
     ; --- Trier Y ---
     mov     ax, .y1
     mov     bx, .y2
     cmp     ax, bx
     jbe     .y_ok
-    xchg    ax, bx
+	xchg    ax, bx          ; inverser y1 et y2
 	.y_ok:
-    ; AX = Y-start, BX = Y-end
 
     ; --- Calculer le nombre de pixels (Hauteur) ---
     mov     cx, bx
     sub     cx, ax
     inc     cx              ; CX = Nombre de lignes à tracer
+    mov     .height, cx     ; On SAUVEGARDE dans la pile, on garde CX propre !
 
     ; --- Calculer l'adresse initiale ---
-    push    cx              ; Sauver la hauteur
     mov     dx, ax          ; DX = Y-start
-    mov     cx, .x         	; CX = X
-    call    vga_calc_addr   ; DI = offset VRAM, CL = bit shift
-    pop     cx              ; Restaurer la hauteur dans CX
+    mov     cx, .x          ; CX = X
+    call    vga_calc_addr   ; DI = offset VRAM, CL = bit shift (X % 8)
 
     ; --- Configurer le GPU (Mode 2) ---
-    mov     dx, EGAVGA_CONTROLLER
-    mov     ax, 0x0205      ; Write Mode 2
+    mov     dx, EGAVGA_CONTROLLER ; 0x03CE
+    mov     ax, 0x0205      ; Write Mode 2 (Index 5, Val 2)
     out     dx, ax
 
-    mov     ah, 0x80        ; Bit Mask : 1 pixel
-    shr     ah, cl          ; Aligner sur le X
+	mov		cx, .x
+	and 	cl, 0x07
+    mov     ah, 0x80        ; Bit Mask : 1 pixel (le bit de poids fort)
+    shr     ah, cl          ; CL n'a pas été écrasé, l'alignement est parfait !
     mov     al, 0x08        ; Index 8
     out     dx, ax
 
-    mov     ax, SEG_VIDEO
+    mov     ax, SEG_VIDEO   ; 0xA000
     mov     es, ax
     mov     al, byte .color ; AL = Couleur pour le Mode 2
 
+    mov     cx, .height     ; On restaure la hauteur depuis la variable locale
 	.v_loop:
     mov     ah, [es:di]     ; LATCH LOAD
     mov     [es:di], al     ; WRITE COLOR
-    add     di, 80          ; Scanline suivante
+    add     di, 80          ; Scanline suivante (VGA 640x480 = 80 octets par ligne)
     loop    .v_loop         ; Répéter CX fois
 
     ; --- Reset ---
@@ -839,26 +1098,28 @@ vga_line_vertical:
     mov     ax, 0xFF08      ; Reset Mask
     out     dx, ax
 
+	call 	vga_mouse_show
+    pop     es
     popa
-    leave
+    leave                   ; Nettoie la variable locale (mov sp, bp / pop bp)
     ret
-; clean defs
-%undef  .x
-%undef  .y1
-%undef  .y2
-%undef	.color
+	; clean defs
+	%undef  .x
+	%undef  .y1
+	%undef  .y2
+	%undef  .color
+	%undef  .height
 
 ; ------------------------------------------------------------
 ; vga_draw_rect
 ; Dessine un rectangle vide (contour)
 ; Entrée : x1, y1, x2, y2, color
-; ------------------------------------------------------------
-; Arguments
 %define .x1     word [bp+4]
 %define .y1     word [bp+6]
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .color  word [bp+12] ; word pour l'alignement pile (mais on utilise byte)
+; ------------------------------------------------------------
 vga_draw_rect:
 	push    bp
 	mov     bp, sp
@@ -900,30 +1161,30 @@ vga_draw_rect:
 	popa
 	leave
 	ret
-; clean defs
-%undef  .x1
-%undef  .y1
-%undef  .x2
-%undef  .y2
-%undef  .color
+	; clean defs
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .color
 
 ; ------------------------------------------------------------
 ; cga_draw_rounded_frame
 ; dessiner un cadre arrondi
 ; Entrée : AX=x1, BX=y1, CX=x2, DX=y2
-; ------------------------------------------------------------
 %define .x1     word [bp+4]
 %define .y1     word [bp+6]
 %define .x2     word [bp+8]
 %define .y2     word [bp+10]
 %define .color  word [bp+12]
-; Variable locale pour l'index du motif (y % 8)
-%define .coord1 word [bp-2]
-%define .coord2 word [bp-4]
+; ------------------------------------------------------------
 vga_draw_rounded_frame:
 	push    bp
 	mov     bp, sp
 	sub     sp, 4           ; Reserve espace pour .coord1 et .coord2
+	; Variable locale pour l'index du motif (y % 8)
+	%define .coord1 word [bp-2]
+	%define .coord2 word [bp-4]
 	pusha
 
 	call    vga_mouse_hide
@@ -978,17 +1239,430 @@ vga_draw_rounded_frame:
 	popa
 	leave
 	ret
-%undef  .x1
-%undef  .y1
-%undef  .x2
-%undef  .y2
-%undef  .color
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .color
+
+; ------------------------------------------------------------
+; vga_fill_rect
+; Dessine un rectangle plein avec un motif (Pattern)
+; Entrée : x1, y1, x2, y2, pattern_offset
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .pat_id word [bp+12]   ; offset du pattern 8x8 bits
+; ------------------------------------------------------------
+vga_fill_rect:
+    push    bp
+    mov     bp, sp
+    sub     sp, 6
+    %define _left_mask  byte [bp-2]
+    %define _right_mask byte [bp-4]
+    %define _width      word [bp-6] ; Largeur en octets VRAM
+
+    pusha
+    push    es
+
+    ; --- 1. Trier Y1 et Y2 ---
+    mov     ax, .y1
+    mov     bx, .y2
+    cmp     ax, bx
+    jbe     .y_ok
+    xchg    ax, bx
+    mov     .y1, ax
+    mov     .y2, bx
+	.y_ok:
+
+    ; --- 2. Trier X1 et X2 ---
+    mov     ax, .x1
+    mov     bx, .x2
+    cmp     ax, bx
+    jbe     .x_ok
+    xchg    ax, bx
+    mov     .x1, ax
+    mov     .x2, bx
+	.x_ok:
+
+    ; --- 3. Préparer les Masques (Gauches et Droits) ---
+    ; Masque Gauche
+    mov     cx, .x1
+    and     cl, 7
+    mov     ah, 0xFF
+    shr     ah, cl
+    mov     _left_mask, ah
+
+    ; Masque Droit
+    mov     cx, .x2
+    and     cl, 7
+    mov     ah, 0xFF
+    mov     ch, 7
+    sub     ch, cl
+    mov     cl, ch
+    shl     ah, cl
+    mov     _right_mask, ah
+
+    ; Calcul du nombre d'octets d'écart entre X1 et X2
+    mov     ax, .x2
+    shr     ax, 3
+    mov     bx, .x1
+    shr     bx, 3
+    sub     ax, bx
+    mov     _width, ax          ; Nombre d'octets à traverser
+
+    ; Si X1 et X2 sont dans le même octet (Width = 0)
+    cmp     ax, 0
+    jne     .mask_ok
+    mov     al, _left_mask
+    and     al, _right_mask
+    mov     _left_mask, al      ; On fusionne les deux masques
+	.mask_ok:
+
+    ; --- 4. Configuration VGA ---
+    mov     dx, EGAVGA_CONTROLLER ; 0x03CE
+    mov     ax, 0x0005          ; Write Mode 0 (Écriture directe)
+    out     dx, ax
+
+    mov     ax, SEG_VIDEO
+    mov     es, ax
+
+    ; --- 5. Initialisation du point de départ ---
+    mov     dx, .y1
+    mov     cx, .x1
+    call    vga_calc_addr       ; DI = Offset de départ (en haut à gauche)
+
+    mov     bx, .y1             ; BX va nous servir de compteur Y
+
+    ; ==========================================================
+    ; BOUCLE PRINCIPALE (LIGNE PAR LIGNE)
+    ; ==========================================================
+	.y_loop:
+    push    di                  ; Sauver l'offset VRAM du début de ligne
+
+    ; Récupérer la ligne du pattern correspondant au Y actuel
+    mov     si, bx
+    and     si, 7               ; SI = Y % 8
+    add     si, .pat_id         ; SI = Adresse exacte de l'octet dans le pattern
+    mov     ch, byte [si]       ; CH = La donnée du pattern à dessiner
+
+    ; --- BORD GAUCHE ---
+    mov     dx, EGAVGA_CONTROLLER
+    mov     al, 0x08            ; Index du Bit Mask
+    mov     ah, _left_mask
+    out     dx, ax
+
+    mov     al, [es:di]         ; Latch
+    mov     [es:di], ch         ; Write (Le VGA applique le masque automatiquement)
+
+    ; Si on est dans un seul octet, on passe directement à la ligne suivante
+    cmp     word _width, 0
+    je      .next_line
+
+    inc     di                  ; Avancer d'un octet
+
+    ; --- MILIEU (Octets complets) ---
+    mov     cx, _width
+    dec     cx                  ; CX = Nombre d'octets pleins
+    jz      .right_edge         ; S'il n'y a pas de milieu, on saute au bord droit
+
+    mov     ax, 0xFF08          ; Masque 100% plein (0xFF)
+    out     dx, ax
+	.mid_loop:
+    mov     al, [es:di]
+    mov     [es:di], ch         ; Dessine le pattern plein
+    inc     di
+    dec     cx
+    jnz     .mid_loop
+
+	.right_edge:
+    ; --- BORD DROIT ---
+    mov     al, 0x08
+    mov     ah, _right_mask
+    out     dx, ax
+
+    mov     al, [es:di]
+    mov     [es:di], ch
+
+	.next_line:
+    pop     di                  ; Restaurer l'offset du début de ligne
+    add     di, 80              ; Descendre d'une ligne (+80 octets)
+
+    inc     bx                  ; Y++
+    cmp     bx, .y2
+    jle     .y_loop
+
+    ; --- 6. Nettoyage VGA ---
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0xFF08          ; Reset Bit Mask
+    out     dx, ax
+
+    pop     es
+    popa
+    leave
+    ret
+
+    ; Clean defs
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .pat_id
+	%undef  _left_mask
+	%undef  _right_mask
+	%undef  _width
 
 
-; Entrée: AX = X (0-639), BX = Y (0-479), CL = Couleur (0-15)
+
+; ------------------------------------------------------------
+; vga_fill_rect_32
+; Dessine un rectangle plein avec un motif (Pattern 8x8) en 2 couleurs
+; Entrée : x1, y1, x2, y2, pat_id, fg_col, bg_col
+%define .x1     word [bp+4]
+%define .y1     word [bp+6]
+%define .x2     word [bp+8]
+%define .y2     word [bp+10]
+%define .pat_id word [bp+12]
+%define .fg_col word [bp+14]
+%define .bg_col word [bp+16]
+; ------------------------------------------------------------
+vga_fill_rect_32:
+    push    bp
+    mov     bp, sp
+    sub     sp, 8
+    %define _left_mask  byte [bp-2]
+    %define _right_mask byte [bp-4]
+    %define _width      word [bp-6]
+	%define _patofst	word [bp-8]
+
+    pushad
+    push    es
+	push	fs
+
+	push	cs
+	pop		fs
+
+	; calcul de l'offset du pattern
+	mov		ax, .pat_id
+	shl		ax, 3
+	add		ax, pattern_8x8
+	mov		_patofst, ax
+
+    ; --- Trier Y ---
+    mov     ax, .y1
+    mov     bx, .y2
+    cmp     ax, bx
+    jbe     .y_ok
+    xchg    ax, bx
+    mov     .y1, ax
+    mov     .y2, bx
+	.y_ok:
+
+    ; --- Trier X ---
+    mov     ax, .x1
+    mov     bx, .x2
+    cmp     ax, bx
+    jbe     .x_ok
+    xchg    ax, bx
+    mov     .x1, ax
+    mov     .x2, bx
+	.x_ok:
+
+    ; --- 3. Préparer les Masques de Bords ---
+    mov     cl, byte .x1
+    and     cl, 7
+    mov     ah, 0xFF
+    shr     ah, cl
+    mov     _left_mask, ah
+
+    mov     cl, byte .x2
+    and     cl, 7
+    mov     ch, 7
+    sub     ch, cl
+    mov     cl, ch
+    mov     ah, 0xFF
+    shl     ah, cl
+    mov     _right_mask, ah
+
+    mov     ax, .x2
+    shr     ax, 3
+    mov     bx, .x1
+    shr     bx, 3
+    sub     ax, bx
+    mov     _width, ax          ; Largeur en octets pleins
+
+    jnz     .mask_ok
+    mov     al, _left_mask
+    and     al, _right_mask
+    mov     _left_mask, al      ; Fusion si tout tient dans 1 seul octet
+	.mask_ok:
+
+    ; --- 4. Setup VRAM ---
+    mov     ax, SEG_VIDEO
+    mov     es, ax
+
+    mov     dx, .y1
+    mov     cx, .x1
+    call    vga_calc_addr       ; DI = Offset de départ
+    mov     bx, .y1             ; BX = Compteur Y
+
+    ; ==========================================================
+    ; BOUCLE PRINCIPALE (Y)
+    ; ==========================================================
+	.y_loop:
+    push    di                  ; Sauver l'offset pour la passe FG
+
+    ; ----------------------------------------------------------
+    ; ETAPE 1 : PASSE DE FOND (SOLID BACKGROUND)
+    ; ----------------------------------------------------------
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0x0005          ; Write Mode 0
+    out     dx, ax
+    mov     ax, 0x0F01          ; Enable Set/Reset (Toutes les planches activées)
+    out     dx, ax
+    mov     ah, byte .bg_col    ; AH = Couleur de fond
+    mov     al, 0x00            ; Index 0 : Set/Reset Register
+    out     dx, ax
+
+    ; -- Bord Gauche (BG) --
+    mov     ah, _left_mask
+    mov     al, 0x08
+    out     dx, ax              ; Application du Bit Mask
+    test    byte [es:di], 0xFF  ; LATCH READ Magique (ne modifie aucun registre)
+    mov     byte [es:di], 0xFF  ; WRITE (Remplissage solide contraint par le masque)
+    cmp     word _width, 0
+    je      .do_fg              ; Si pas d'autres octets, on saute à la passe FG
+    inc     di
+
+    ; -- Milieu (BG) --
+    mov     cx, _width
+    dec     cx
+    jz      .bg_right
+    mov     ax, 0xFF08          ; Masque 100%
+    out     dx, ax
+
+    mov     eax, 0xFFFFFFFF     ; Remplissage solide 32 bits
+    push    cx
+    mov     dx, cx
+    shr     cx, 2
+    rep     stosd               ; Remplit 4 octets d'un coup
+    mov     cx, dx
+    and     cx, 3
+    rep     stosb               ; Remplit le reste
+    pop     cx
+    mov     dx, EGAVGA_CONTROLLER
+
+	.bg_right:
+    ; -- Bord Droit (BG) --
+    mov     ah, _right_mask
+    mov     al, 0x08
+    out     dx, ax
+    test    byte [es:di], 0xFF  ; LATCH
+    mov     byte [es:di], 0xFF  ; WRITE
+
+	.do_fg:
+    ; ----------------------------------------------------------
+    ; ETAPE 2 : PASSE DE FORME (FOREGROUND PATTERN)
+    ; ----------------------------------------------------------
+    pop     di                  ; Retour au début de la ligne
+    push    di                  ; Sauvegarde pour la descente Y
+
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0x0305          ; Write Mode 3 (Transforme le Pattern CPU en Masque)
+    out     dx, ax
+    mov     ah, byte .fg_col    ; AH = Couleur du motif
+    mov     al, 0x00            ; Index Set/Reset
+    out     dx, ax
+
+    ; -- Préparation du Pattern --
+    mov     si, bx
+    and     si, 7
+    add     si, _patofst
+    movzx   esi, byte [fs:si]   ; ESI = l'octet de la ligne du pattern
+    imul    esi, esi, 0x01010101; ESI = 0xPPPPPPPP (Broadcast sur 32 bits)
+
+    ; -- Bord Gauche (FG) --
+    mov     ah, _left_mask
+    mov     al, 0x08
+    out     dx, ax
+    test    byte [es:di], 0xFF  ; LATCH
+    mov     eax, esi            ; EAX = Pattern complet
+    mov     [es:di], al         ; WRITE (En Mode 3, AL = le Pattern de masquage)
+    cmp     word _width, 0
+    je      .next_line
+    inc     di
+
+    ; -- Milieu (FG) --
+    mov     cx, _width
+    dec     cx
+    jz      .fg_right
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0xFF08          ; Masque 100%
+    out     dx, ax
+
+    ; TRICK : On charge le loquet avec la couleur de fond qu'on vient d'écrire
+    test    byte [es:di], 0xFF
+
+    mov     eax, esi            ; EAX = 0xPPPPPPPP
+    push    cx
+    mov     dx, cx
+    shr     cx, 2
+    rep     stosd               ; Applique le pattern par blocs de 32 pixels !
+    mov     cx, dx
+    and     cx, 3
+    rep     stosb
+    pop     cx
+    mov     dx, EGAVGA_CONTROLLER
+
+	.fg_right:
+    ; -- Bord Droit (FG) --
+    mov     ah, _right_mask
+    mov     al, 0x08
+    out     dx, ax
+    test    byte [es:di], 0xFF  ; LATCH
+    mov     eax, esi
+    mov     [es:di], al         ; WRITE
+
+	.next_line:
+    pop     di
+    add     di, 80              ; VRAM Scanline pitch (+80)
+    inc     bx                  ; Y++
+    cmp     bx, .y2
+    jle     .y_loop
+
+    ; --- 5. Reset VGA ---
+    mov     dx, EGAVGA_CONTROLLER
+    mov     ax, 0xFF08          ; Reset Bit Mask
+    out     dx, ax
+    mov     ax, 0x0005          ; Reset Mode 0
+    out     dx, ax
+    mov     ax, 0x0001          ; Reset Enable Set/Reset
+    out     dx, ax
+
+	pop		fs
+    pop     es
+    popad
+    leave
+    ret
+
+    ; Clean defs
+	%undef  .x1
+	%undef  .y1
+	%undef  .x2
+	%undef  .y2
+	%undef  .pat_id
+	%undef  .fg_col
+	%undef  .bg_col
+	%undef  _left_mask
+	%undef  _right_mask
+	%undef  _width
+; ------------------------------------------------------------
+; vga_putpixel
 %define .x      word [bp+4]
 %define .y      word [bp+6]
 %define .color  byte [bp+8]
+; ------------------------------------------------------------
 vga_putpixel:
 	push    bp
 	mov     bp, sp
@@ -1038,11 +1712,10 @@ vga_putpixel:
 	popa
 	leave
 	ret
-; clean defs
-%undef  .x
-%undef  .y
-%undef  .color
-
+	; clean defs
+	%undef  .x
+	%undef  .y
+	%undef  .color
 
 ; ------------------------------------------------------------
 ; GESTION DU CURSEUR
@@ -1259,7 +1932,6 @@ vga_cursor_restorebg:
 ; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
 ; ============================================================
 %define     BYTES_SHIFT     3
-
 vga_cursor_draw:
 	push    bp
 	mov     bp, sp
@@ -1422,8 +2094,7 @@ vga_cursor_draw:
 	pop     ds
 	popad
 	leave
+	ret
 	%undef  .height
 	%undef  .bit_ofs
 	%undef  .mask
-	ret
-

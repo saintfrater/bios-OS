@@ -107,10 +107,10 @@ entrycode:
  	GFX		MOUSE_SHOW
 
 
-	call    main_testing
+	call    main_loop
 	.loops:
 		hlt
-	;jmp     .loops
+	jmp     .loops
 
 ; --- Callbacks (Fonctions appelées par le moteur) ---
 on_click_quit:
@@ -122,9 +122,10 @@ on_click_hello:
 	ret
 
 
+main_test:
+	GFX		RECTANGLE_FILL, 10,10,50,20, PATTERN_WHITE, 15, 0
 
-main_testing:
-	GFX 	LINE,10,10,10,67, 15
+
 	ret
 
 %define     .oldval     	word [bp-2]
@@ -137,14 +138,8 @@ main_loop:
 
 	push	cs
 	pop		ds
-
-	DEBUG	1
-	ISADBG	ISA_LEFT, 1
-
 	; Init du système GUI
 	call    gui_init_system
-	DEBUG	2
-	ISADBG	ISA_LEFT, 2
 
 	; --- CRÉATION DYNAMIQUE DES BOUTONS ---
 
