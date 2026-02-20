@@ -32,7 +32,7 @@ The project is intentionally educational, experimental, and minimalist.
   - ROM is responsible for full system initialization
 
 - **Provide a minimalist graphical interface**
-  - Graphics mode: **CGA High-Resolution Monochrome (640×200)**
+  - Graphics mode: **CGA High-Resolution Monochrome (640×200)** and **VGA High-Resolution 16 colors (640×480)**
   - Direct video memory access
   - Custom cursor and basic UI primitives
 
@@ -116,7 +116,7 @@ You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
   - La ROM initialise entièrement la machine
 
 - **Fournir une interface graphique minimaliste**
-  - Mode graphique : **CGA Hi-Res Monochrome (640×200)**
+  - Mode graphique : **CGA Hi-Res Monochrome (640×200)** et **VGA Hi-Res 16 couleurs (640×480)**
   - Accès direct à la mémoire vidéo
   - Curseur personnalisé et primitives graphiques simples
 
