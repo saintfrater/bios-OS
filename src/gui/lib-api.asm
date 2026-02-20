@@ -24,7 +24,7 @@
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
 ; Dimensions
-%define GUI_CHECKBOX_SIZE 	10			;
+%define GUI_CHECKBOX_SIZE 	10			; 10x10 pixels
 
 ; --- Drapeaux & États ---
 %define GUI_STATE_FREE      0           ; Le slot est vide (mémoire dispo)

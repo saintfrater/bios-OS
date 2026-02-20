@@ -392,18 +392,17 @@ draw_checkbox:
 	add		ax, 4
 	mov     bx, [gs:si + widget.y]
 
+	; centrage vertical
 	mov     cx, [gs:si + widget.h]
-	mov		dx, [gs:si + widget.w]
-
 	sub     cx, GUI_CHECKBOX_SIZE
 	shr     cx, 1
-	add     bx, cx              ; Y1
+	add     bx, cx              			; bx = Y1 + (h/2)
 
-	mov     cx, ax
-	add     cx, GUI_CHECKBOX_SIZE         ; X2
+	mov     cx, ax							; x
+	add     cx, GUI_CHECKBOX_SIZE         	; cx = X2
 
 	mov     dx, bx
-	add     dx, GUI_CHECKBOX_SIZE         ; Y2
+	add     dx, GUI_CHECKBOX_SIZE         	; Y2
 
 	; Sauvegarde coords pour le X
 	push    ax
@@ -415,9 +414,15 @@ draw_checkbox:
 	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 	GFX     RECTANGLE, ax, bx, cx, dx, 0
 
+	pop     dx
+	pop     cx
+	pop     bx
+	pop     ax
+
 	; Check if checked
 	cmp     word [gs:si + widget.thumb_pos], 0
 	je      .draw_label
+
 
 	; Dessin du X (Diagonales)
 	add     ax, 2
@@ -433,10 +438,7 @@ draw_checkbox:
 	GFX     LINE, ax, dx, cx, bx, 0
 
 	.draw_label:
-	pop     dx
-	pop     cx
-	pop     bx
-	pop     ax
+
 
 	; Dessin du texte à droite (BoxX2 + 6)
 	add     cx, 6
