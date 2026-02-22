@@ -24,9 +24,9 @@
 ; https://wiki.nox-rhea.org/back2root/ibm-pc-ms-dos/hardware/informations/bios_data_area
 ;
 
-%define BDA_SEGMENT		    0x0040			    ; segment BDA (historically)
+%define SEG_BDA		   		0x0040			    ; segment BDA (historically)
 %define SEG_BDA_CUSTOM	    0x0050              ; custom data (mouse, gfx cursor, etc..)
-%define BDA_GUI_WIDGET      0x0070              ; Segment de données UI (Safe: après Stack, avant Heap)
+%define SEG_GUI     		0x0070              ; Segment de données UI (Safe: après Stack, avant Heap)
 
 %define PTR_MOUSE           0x0000
 %define PTR_GFX             (PTR_MOUSE + mouse_size)

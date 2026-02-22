@@ -16,7 +16,7 @@ gui_process_all:
 	push    ds
 	push    gs
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     gs, ax
 
 	; Charger l'état de la souris pour toute la passe
@@ -87,7 +87,7 @@ gui_update_logic:
 
 	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
-	mov		ax, BDA_GUI_WIDGET
+	mov		ax, SEG_GUI
 	mov		gs, ax
 
 	mov     al, byte [gs:si + widget.state]
@@ -520,7 +520,7 @@ gui_logic_checkbox:
 	jne     .hover
 
 	; Clic validé ! Toggle value
-	xor     word [gs:si + widget.thumb_pos], 1
+	xor     word [gs:si + widget.attr_val], 1
 	mov     byte [gs:si + widget.oldstate], 255 ; Force redraw
 
 	mov     al, 1

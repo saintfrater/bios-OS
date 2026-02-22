@@ -137,10 +137,11 @@ endstruc
 gui_api_slider_attr:
 	push    bp
 	mov     bp, sp
+	push    gs
 	push	ax
 
-	push	.id         ; ID
-	call    gui_get_widget_ptr
+	mov		ax, .id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	mov		ax, .min
@@ -156,6 +157,7 @@ gui_api_slider_attr:
 
 	.err:
 	pop		ax
+	pop     gs
 	leave
 	ret
 %undef     .id
@@ -169,16 +171,18 @@ gui_api_slider_attr:
 gui_api_set_mode:
 	push    bp
 	mov     bp, sp
+	push    gs
 	push	ax
 
-	push	.id
-	call    gui_get_widget_ptr
+	mov		ax, .id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	mov		ax, .mode
 	mov		byte [gs:si + widget.attr_mode], al
 
 	.err:
+	pop     gs
 	pop		ax
 	leave
 	ret
@@ -194,10 +198,11 @@ gui_api_set_mode:
 gui_api_set_text:
 	push    bp
 	mov     bp, sp
+	push    gs
 	push	ax
 
-	push	.id
-	call    gui_get_widget_ptr
+	mov 	ax, .id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	mov		ax, .segmt
@@ -206,6 +211,7 @@ gui_api_set_text:
 	mov		word [gs:si + widget.text_ofs], ax
 
 	.err:
+	pop     gs
 	pop		ax
 	leave
 	ret
@@ -231,7 +237,7 @@ gui_api_create:
 	mov     bp, sp
 	push    gs
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     gs, ax
 	call    gui_alloc_widget        ; Returns GS:SI
 	mov     ax, -1
@@ -275,9 +281,10 @@ gui_api_create:
 gui_api_get_state:
 	push    bp
 	mov     bp, sp
+	push    gs
 
-	mov     ax, .id         ; ID
-	call    gui_get_widget_ptr
+	mov 	ax, .id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	xor     ax, ax
@@ -287,6 +294,7 @@ gui_api_get_state:
 .err:
 	mov     ax, -1
 .done:
+	pop     gs
 	leave
 	ret
 %undef .id
@@ -300,9 +308,10 @@ gui_api_get_state:
 gui_api_get_type:
 	push    bp
 	mov     bp, sp
+	push    gs
 
-	mov     ax, .id         ; ID
-	call    gui_get_widget_ptr
+	mov		ax,.id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	xor     ax, ax
@@ -312,6 +321,7 @@ gui_api_get_type:
 .err:
 	mov     ax, -1
 .done:
+	pop     gs
 	leave
 	ret
 %undef .id
@@ -325,9 +335,11 @@ gui_api_get_type:
 gui_api_get_val:
 	push    bp
 	mov     bp, sp
+	push    gs
 
-	call    gui_get_widget_ptr
-	;jc      .err
+	mov		ax,.id
+	call    gui_get_widget_ptr_internal
+	jc      .err
 
 	call    gui_slider_update_value
 	mov     ax, [gs:si + widget.attr_val]
@@ -336,6 +348,7 @@ gui_api_get_val:
 .err:
 	mov     ax, -1
 .done:
+	pop     gs
 	leave
 	ret
 %undef .id
@@ -350,15 +363,17 @@ gui_api_get_val:
 gui_api_set_val:
 	push    bp
 	mov     bp, sp
+	push    gs
 
-	mov     ax, .id         ; ID
-	call    gui_get_widget_ptr
+	mov		ax,.id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	mov     ax, .val
 	mov     [gs:si + widget.thumb_pos], ax
 
 .err:
+	pop     gs
 	leave
 	ret
 %undef .id
@@ -374,9 +389,10 @@ gui_api_set_val:
 gui_api_destroy:
 	push    bp
 	mov     bp, sp
+	push    gs
 
-	mov     ax, .id         ; ID
-	call    gui_get_widget_ptr
+	mov		ax,.id
+	call    gui_get_widget_ptr_internal
 	jc      .err
 
 	call    gui_free_widget
@@ -386,6 +402,7 @@ gui_api_destroy:
 .err:
 	mov     ax, -1
 .done:
+	pop     gs
 	leave
 	ret
 %undef .id
@@ -393,17 +410,29 @@ gui_api_destroy:
 ; -----------------------------------------------------------------------------
 ; gui_get_widget_ptr
 ; Helper interne : Convertit ID en Pointeur
-; In: ID
 ; Out: GS:SI = Ptr, CF=1 if error
-; -----------------------------------------------------------------------------
 %define .id word [bp+4]
+; -----------------------------------------------------------------------------
 gui_get_widget_ptr:
 	push    bp
 	mov     bp, sp
 	push    ax
-    push    cx
-
 	mov		ax, .id
+	call    gui_get_widget_ptr_internal
+	pop		ax
+	leave
+	ret
+%undef .id
+
+; -----------------------------------------------------------------------------
+; gui_get_widget_ptr_internal
+; Helper interne : Convertit ax en Pointeur
+; Out: GS:SI = Ptr, CF=1 if error
+; -----------------------------------------------------------------------------
+gui_get_widget_ptr_internal:
+    push    cx
+	push	dx
+
 	cmp     ax, GUI_MAX_WIDGETS
 	jae   	.error
 
@@ -412,7 +441,7 @@ gui_get_widget_ptr:
 	mul     cx              ; AX = Offset
 	mov     si, ax
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     gs, ax
 
 	clc
@@ -420,12 +449,9 @@ gui_get_widget_ptr:
 	.error:
 	stc
 	.done:
+	pop		dx
 	pop		cx
-	pop		ax
-	leave
 	ret
-%undef .id
-
 
 ; =============================================================================
 ;  SECTION : GESTION MÉMOIRE (ALLOCATION / LIBÉRATION)
@@ -434,7 +460,7 @@ gui_get_widget_ptr:
 ; -----------------------------------------------------------------------------
 ; gui_init_system
 ; Initialise toute la mémoire des widgets à 0 (Libre)
-; Entrée : DS doit pointer vers BDA_GUI_WIDGET
+; Entrée : DS doit pointer vers SEG_GUI
 ; -----------------------------------------------------------------------------
 gui_init_system:
 	push    eax
@@ -442,7 +468,7 @@ gui_init_system:
 	push    es
 	push    di
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     es, ax
 
 	cld
@@ -468,8 +494,9 @@ gui_alloc_widget:
 	push    ax
 	push    cx
 	push    bx
+	push    gs
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     gs, ax
 
 	mov     si, 0                   ; Début du pool
@@ -496,9 +523,12 @@ gui_alloc_widget:
 	mov     word [gs:si + widget.event_click], 0
 	mov     word [gs:si + widget.event_drag], 0
 	mov     byte [gs:si + widget.thumb_pct], 10     		; 10% par défaut
+	mov     word [gs:si + widget.thumb_pos], 0
+	mov     word [gs:si + widget.attr_val], 0
 
 	clc                             						; Clear Carry Flag
 	.done:
+	pop     gs
 	pop     bx
 	pop     cx
 	pop     ax
@@ -513,15 +543,15 @@ gui_free_widget:
 	push    eax
 	push    es
 
-	mov     ax, BDA_GUI_WIDGET
+	mov     ax, SEG_GUI
 	mov     es, ax
 
 	cld
 	mov     di, si
 	mov     cx, (widget_size)
-	shr     cx, 2           ; cx / 4
-	xor     eax, eax
-	rep     stosd          ; Remplit tout de 0
+	shr     cx, 1           ; cx / 4
+	xor     ax, ax
+	rep     stosw          ; Remplit tout de 0
 
 	; On efface le widget
 	mov     byte [es:si + widget.state], GUI_STATE_FREE

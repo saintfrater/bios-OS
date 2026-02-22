@@ -121,8 +121,6 @@ themes:
 	db 	0,4,12,15				; HELL
 	db	0,3,11,15				; Hi Sky
 
-
-
 ; ------------------------------------------------------------
 ; dummy function
 ;
@@ -151,6 +149,7 @@ vga_init:
 	PATTERN_PTR PATTERN_GRAY_LIGHT
 	mov     bl, 15
  	call	vga_background
+
 	ret
 
 ; ------------------------------------------------------------
@@ -289,8 +288,9 @@ vga_set_writemode:
 	pop     ax
 	pop     fs
 	leave
-	ret
 	%undef  .mode
+	ret
+
 
 ; ---------------------------------------------------------------------------
 ; gfx_set_charpos (x,y)
@@ -330,10 +330,10 @@ vga_set_charpos:
 
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .x
 	%undef  .y
+	ret
 
 ; ---------------------------------------------------------------------------
 ; vga_putc_unalign (car)
@@ -472,10 +472,10 @@ vga_putc:
 	pop     gs
 	popa
 	leave
-	ret
 	; clean defs
 	%undef	.cpt
 	%undef	.glyph_row
+	ret
 
 ; ---------------------------------------------------------------------------
 ; write string from [DS:SI] to screen
@@ -499,16 +499,16 @@ vga_write:
 	je      .done
 	push    ax
 	call    vga_putc
-	; pop		ax
+	pop		ax
 	jmp     .loops
 
 	.done:
 	pop     ds
 	pop     ax
 	leave
-	ret
 	%undef  .txt_seg
 	%undef  .txt_ofs
+	ret
 
 ; ------------------------------------------------------------
 ; vga_line (x1, y1, x2, y2, color)
@@ -577,13 +577,13 @@ vga_line:
 	call    vga_mouse_show
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .x1
 	%undef  .y1
 	%undef  .x2
 	%undef  .y2
 	%undef  .color
+	ret
 
 %ifdef ____CLASSIC_LINE_____
 ; ------------------------------------------------------------
@@ -709,7 +709,7 @@ vga_line_bresenham:
 	pop     es
 	popa
 	leave
-	ret
+	; clean defs
 	%undef  .x1
 	%undef  .y1
 	%undef  .x2
@@ -721,7 +721,7 @@ vga_line_bresenham:
 	%undef  _sy
 	%undef  _err
 	%undef  _e2
-	; clean defs
+	ret
 %endif
 
 ; ------------------------------------------------------------
@@ -902,7 +902,6 @@ vga_line_fast:
 	pop     es
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .x1
 	%undef  .y1
@@ -914,6 +913,7 @@ vga_line_fast:
 	%undef  _err
 	%undef  _sy_offset
 	%undef  _count
+	ret
 
 ; ------------------------------------------------------------
 ; vga_line_horizontal (y, x1, x2, color)
@@ -1042,12 +1042,12 @@ vga_line_horizontal:
 	pop     es
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .y
 	%undef  .x1
 	%undef  .x2
 	%undef  .color
+	ret
 
 ; ------------------------------------------------------------
 ; vga_line_vertical (x, y1, y2, color)
@@ -1118,13 +1118,13 @@ vga_line_vertical:
 	pop     es
 	popa
 	leave                   ; Nettoie la variable locale (mov sp, bp / pop bp)
-	ret
 	; clean defs
 	%undef  .x
 	%undef  .y1
 	%undef  .y2
 	%undef  .color
 	%undef  .height
+	ret
 
 ; ------------------------------------------------------------
 ; vga_draw_rect
@@ -1176,13 +1176,13 @@ vga_draw_rect:
 	call    vga_mouse_show
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .x1
 	%undef  .y1
 	%undef  .x2
 	%undef  .y2
 	%undef  .color
+	ret
 
 ; ------------------------------------------------------------
 ; cga_draw_rounded_frame
@@ -1254,12 +1254,14 @@ vga_draw_rounded_frame:
 
 	popa
 	leave
-	ret
 	%undef  .x1
 	%undef  .y1
 	%undef  .x2
 	%undef  .y2
 	%undef  .color
+	%undef	.coord1
+	%undef	.coord2
+	ret
 
 ; ------------------------------------------------------------
 ; vga_fill_rect
@@ -1281,6 +1283,8 @@ vga_fill_rect:
 
 	pusha
 	push    es
+
+	call	vga_mouse_hide
 
 	; --- 1. Trier Y1 et Y2 ---
 	mov     ax, .y1
@@ -1414,11 +1418,11 @@ vga_fill_rect:
 	mov     ax, 0xFF08          ; Reset Bit Mask
 	out     dx, ax
 
+	call	vga_mouse_show
+
 	pop     es
 	popa
 	leave
-	ret
-
 	; Clean defs
 	%undef  .x1
 	%undef  .y1
@@ -1428,8 +1432,7 @@ vga_fill_rect:
 	%undef  _left_mask
 	%undef  _right_mask
 	%undef  _width
-
-
+	ret
 
 ; ------------------------------------------------------------
 ; vga_fill_rect_32
@@ -1456,10 +1459,12 @@ vga_fill_rect_32:
 	push    es
 	push	fs
 
-	push	cs
-	pop		fs
+	call	vga_mouse_hide
 
-	; calcul de l'offset du pattern
+	push	cs
+	pop		fs					; fs = CS
+
+		; calcul de l'offset du pattern
 	mov		ax, .pat_id
 	shl		ax, 3
 	add		ax, pattern_8x8
@@ -1656,12 +1661,12 @@ vga_fill_rect_32:
 	mov     ax, 0x0001          ; Reset Enable Set/Reset
 	out     dx, ax
 
+	call	vga_mouse_show
+
 	pop		fs
 	pop     es
 	popad
 	leave
-	ret
-
 	; Clean defs
 	%undef  .x1
 	%undef  .y1
@@ -1673,6 +1678,8 @@ vga_fill_rect_32:
 	%undef  _left_mask
 	%undef  _right_mask
 	%undef  _width
+	ret
+
 ; ------------------------------------------------------------
 ; vga_putpixel
 %define .x      word [bp+4]
@@ -1727,11 +1734,11 @@ vga_putpixel:
 	pop     es
 	popa
 	leave
-	ret
 	; clean defs
 	%undef  .x
 	%undef  .y
 	%undef  .color
+	ret
 
 ; ------------------------------------------------------------
 ; GESTION DU CURSEUR
@@ -1805,6 +1812,7 @@ vga_mouse_cursor_move:
 	pusha
 	push 	ds
 	push 	es
+	cld
 
 	; BDA Data Segment
 	mov		ax, SEG_BDA_CUSTOM
@@ -1837,6 +1845,7 @@ vga_cursor_savebg:
 	push    es
 	mov     ax, SEG_VIDEO
 	mov     es, ax
+	cld
 
 	; Calculer l'adresse de départ (y * 80 + x / 8)
 	mov     cx, [PTR_MOUSE + mouse.x]
@@ -1889,6 +1898,7 @@ vga_cursor_restorebg:
 	push    es
 	mov     ax, SEG_VIDEO
 	mov     es, ax
+	cld
 
 	mov     di, [PTR_MOUSE + mouse.cur_addr_start]
 	lea     si, [PTR_MOUSE + mouse.bkg_buffer]
@@ -1945,7 +1955,7 @@ vga_cursor_restorebg:
 
 ; ============================================================
 ; vga_cursor_draw
-; Détruit: registres sauvegardés/restaurés (PUSHA/POPA)
+; Détruit: registres sauvegardés/restaurés (PUSHAD/POPAD)
 ; ============================================================
 %define     BYTES_SHIFT     3
 vga_cursor_draw:
@@ -1961,9 +1971,8 @@ vga_cursor_draw:
 	push    ds
 	push    es
 	push	gs
-	; Note: pushad sauvegarde déjà tous les registres généraux (EAX...EDI)
-
 	cld                             ; Sécurité : Direction avant
+
 	mov     ax, SEG_BDA_CUSTOM
 	mov     ds, ax
 	mov     ax, SEG_VIDEO
@@ -2110,7 +2119,7 @@ vga_cursor_draw:
 	pop     ds
 	popad
 	leave
-	ret
 	%undef  .height
 	%undef  .bit_ofs
 	%undef  .mask
+	ret

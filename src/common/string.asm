@@ -39,20 +39,20 @@ strcpy:
 %undef .src_seg
 %undef .src_ofs
 
-
 ; -----------------------------------------------------------------------------
 ; strlen
 ; Calcule la longueur d'une chaine [es:di]
-; Out: CX = Length
+; Out: AX = Length
 ; -----------------------------------------------------------------------------
 %define .str_seg word [bp+4]
 %define .str_ofs word [bp+6]
 strlen:
     push    bp
 	mov     bp, sp
-    push    ax
+	push    ax
     push    es
     push    di
+
 	xor     cx, cx
     mov     ax, .str_seg
     mov     es, ax
@@ -68,7 +68,7 @@ strlen:
 .done:
 	pop     di
     pop     es
-    pop     ax
+	pop		ax
 	leave
 	ret
 %undef .str_seg

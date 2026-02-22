@@ -37,10 +37,11 @@
 gui_draw_single_widget:
 	pusha
 	push	es
+	push    gs
 
 	GFX     MOUSE_HIDE              ; On cache la souris AVANT de commencer le dessin du widget
 
-	mov		ax, BDA_GUI_WIDGET
+	mov		ax, SEG_GUI
 	mov		gs, ax
 
 	mov     al, [gs:si + widget.state]
@@ -98,6 +99,7 @@ gui_draw_single_widget:
 
 	.done:
 	GFX     MOUSE_SHOW              ; On réaffiche la souris APRES, capturant le widget fini
+	pop     gs
 	pop		es
 	popa
 	ret
@@ -447,7 +449,7 @@ draw_checkbox:
 	GFX     RECTANGLE, ax, bx, cx, dx, 0
 
 	; Check if checked
-	cmp     word [gs:si + widget.thumb_pos], 0
+	cmp     word [gs:si + widget.attr_val], 0
 	je      .draw_label
 
 	push	ax
@@ -509,7 +511,6 @@ draw_text:
 	; --- Centrage Texte ---
 	mov     es, [gs:si + widget.text_seg]
 	mov     di, [gs:si + widget.text_ofs]
-	xor     cx, cx
 
 	push	di
 	push	es
