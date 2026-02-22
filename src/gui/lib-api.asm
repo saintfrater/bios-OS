@@ -23,6 +23,13 @@
 ; --- Configuration ---
 %define GUI_MAX_WIDGETS     32          ; Nombre max de widgets simultanés
 
+; commenter cette ligne fait passer le GUI en B/W uniquement si EGA ou VGA
+; %define COLOR_GUI	    	1
+
+%if GFX_DRIVERS == 'CGA'
+	%undef	COLOR_GUI
+%endif
+
 ; Dimensions
 %define GUI_CHECKBOX_SIZE 	10			; 10x10 pixels
 

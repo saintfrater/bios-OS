@@ -24,6 +24,15 @@
 ; https://github.com/buserror/libmui
 ;
 
+%macro RECT_3D 6
+	; %1 = x1, %2 = y1, %3 = x2, %4 = y2, %5 = c1, %6 = c2
+	GFX		LINE, %1, %2, %3, %2, %5		; haut
+	GFX		LINE, %1, %2, %1, %4, %5		; gauche
+
+	GFX		LINE, %1, %4, %3, %4, %6		; bas
+	GFX		LINE, %3, %2, %3, %4, %6		; droite
+%endmacro
+
 ; Dessine le widget pointé par SI
 gui_draw_single_widget:
 	pusha
@@ -293,23 +302,31 @@ draw_button:
 	.draw_default_style:
 		; Bordure extérieure épaisse (2px)
 		;GFX     RECTANGLE, ax, bx, cx, dx, 0
-		inc     ax
-		inc     bx
-		dec     cx
-		dec     dx
+		;inc     ax
+		;inc     bx
+		;dec     cx
+		;dec     dx
 		;GFX     RECTANGLE, ax, bx, cx, dx, 0
-
+%ifndef COLOR_GUI
 		; Bordure intérieure fine (après un gap de 1px blanc)
-		add     ax, 2
-		add     bx, 2
-		sub     cx, 2
-		sub     dx, 2
+		add     ax, 1
+		add     bx, 1
+		sub     cx, 1
+		sub     dx, 1
 		GFX     RECTANGLE, ax, bx, cx, dx, 0
+%else
+		RECT_3D ax, bx, cx, dx, 8, 7
+%endif
 		jmp		.done
 
 	.paint_hover:
+%ifndef COLOR_GUI
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT, 15, 0
 		GFX     RECTANGLE, ax, bx, cx, dx, 0
+%else
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 7, 0
+		RECT_3D ax, bx, cx, dx, 7,8
+%endif
 		jmp     .done
 
 	.paint_pressed:
@@ -337,26 +354,47 @@ draw_round_button:
 	je      .paint_hover
 
 	.paint_normal:
+%ifndef	COLOR_GUI
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 		mov     di, 0                       ; Couleur Noire
 		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+%else
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 7, 0
+		RECT_3D ax, bx, cx, dx, 15,8
+%endif
 		jmp     .draw_text_now
 
 	.paint_hover:
+%ifndef	COLOR_GUI
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
 		GFX     RECTANGLE_ROUND, ax, bx, cx, dx, 0
 		; GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE_LIGHT
 		mov     di, 0                       ; Couleur Noire
 		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
+%else
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 7, 0
+		RECT_3D ax, bx, cx, dx, 15,8
+		add		ax, 2
+		add		bx, 2
+		sub		cx, 2
+		sub		dx, 2
+		RECT_3D ax, bx, cx, dx, 15,8
+
+%endif
 		jmp     .draw_text_now
 
 	.paint_pressed:
+%ifndef	COLOR_GUI
 		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_BLACK, 15, 0
 		mov     di, 1                       ; Bordure Blanche sur fond noir
 		call    draw_round_borders
 		GFX     TXT_MODE, GFX_TXT_WHITE_TRANSPARENT
+%else
+		GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 7, 0
+		RECT_3D ax, bx, cx, dx, 8, 15
+%endif
 		jmp     .draw_text_now
 
 	.draw_text_now:
@@ -412,24 +450,31 @@ draw_checkbox:
 	cmp     word [gs:si + widget.thumb_pos], 0
 	je      .draw_label
 
-	; Dessin du X (Diagonales)
-	add     ax, 2
-	add     bx, 2
-	sub     cx, 2
-	sub     dx, 2
+	push	ax
+	push	bx
+	push 	cx
+	push 	dx
 
+	; Dessin du X (Diagonales)
+	add     ax, 2		; x1
+	add     bx, 2		; y1
+	sub     cx, 2		; x2
+	sub     dx, 2		; y2
 	; Optimisation : Utilisation de LINE au lieu de PUTPIXEL en boucle
 	; Diagonale 1 : (ax, bx) -> (cx, dx)
 	GFX     LINE, ax, bx, cx, dx, 0
-
 	; Diagonale 2 : (ax, dx) -> (cx, bx)
 	GFX     LINE, ax, dx, cx, bx, 0
 
+	pop		dx
+	pop		cx
+	pop		bx
+	pop		ax
+
 	.draw_label:
 
-
 	; Dessin du texte à droite (BoxX2 + 6)
-	add     cx, 6
+	add     cx, (GUI_CHECKBOX_SIZE/2) + 1
 
 	; Y = Centré par rapport au widget
 	mov     bx, [gs:si + widget.y]

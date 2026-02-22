@@ -123,8 +123,41 @@ on_click_hello:
 
 
 main_test:
-	GFX		RECTANGLE_FILL, 10,10,50,20, PATTERN_WHITE, 15, 0
+	; GFX		RECTANGLE_FILL, 10,10,50,20, PATTERN_WHITE, 15, 0
 
+
+
+	; GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15
+	mov     ax, 200
+	add		ax, 4
+	mov     bx, 50
+
+	; centrage vertical
+	mov     cx, 15
+	sub     cx, GUI_CHECKBOX_SIZE
+	shr     cx, 1
+	add     bx, cx              			; bx = Y1 + (h/2)
+
+	mov     cx, ax							; x
+	add     cx, GUI_CHECKBOX_SIZE         	; cx = X2
+
+	mov     dx, bx
+	add     dx, GUI_CHECKBOX_SIZE         	; Y2
+
+	; Fond blanc + Bordure noire
+	GFX     RECTANGLE_FILL, ax, bx, cx, dx, PATTERN_WHITE, 15, 0
+	GFX     RECTANGLE, ax, bx, cx, dx, 0
+
+; Dessin du X (Diagonales)
+	add     ax, 2		; x1
+	add     bx, 2		; y1
+	sub     cx, 2		; x2
+	sub     dx, 2		; y2
+	; Optimisation : Utilisation de LINE au lieu de PUTPIXEL en boucle
+	; Diagonale 1 : (ax, bx) -> (cx, dx)
+	GFX     LINE, ax, bx, cx, dx, 0
+	; Diagonale 2 : (ax, dx) -> (cx, bx)
+	GFX     LINE, ax, dx, cx, bx, 0
 
 	ret
 
@@ -160,9 +193,6 @@ main_loop:
     GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50+16*2, 100, 15
 	GUI     OBJ_SET_TEXT, ax, cs, str_option3
 
-	DEBUG	3
-	ISADBG	ISA_LEFT, 3
-
     ; Créer Slider (Drag)
     GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
 	GUI		OBJ_SET_MODE, ax, SLIDER_HORIZONTAL
@@ -177,10 +207,7 @@ main_loop:
     mov     .oldval, 0x1256
 	mov		.value, 0xFADE
 
-	DEBUG	4
-	ISADBG	ISA_LEFT, 4
-
-    .loop:
+	.loop:
 		call    gui_process_all
  		GUI		OBJ_GET_VAL, .my_slider
 		mov		.value, ax
@@ -189,12 +216,12 @@ main_loop:
     	je      .loop
 
 		; debug
-    	mov     .oldval, ax
-    	GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
-		GFX		GOTOXY, 8, 150
+    	;mov     .oldval, ax
+    	;GFX     RECTANGLE_FILL,0,148,50,166, PATTERN_WHITE
+		;GFX		GOTOXY, 8, 150
 
-		mov		ax, .value
-		call	print_word_hex
+		;mov		ax, .value
+		;call	print_word_hex
 		; end debug
 
 		; change palette...
