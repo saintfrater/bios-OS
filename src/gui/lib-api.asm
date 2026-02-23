@@ -72,7 +72,6 @@
 
 %define OBJ_SLIDER_SET_ATTR			9
 
-
 gui_api_table:
 	dw gui_api_create
 	dw gui_api_destroy
