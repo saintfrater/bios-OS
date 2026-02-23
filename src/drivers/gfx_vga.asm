@@ -37,10 +37,10 @@
 ;  E     : text transparent
 ;  F     : background transparent
 ;
-%define GFX_TXT_WHITE_TRANSPARENT   0x0F
-%define GFX_TXT_BLACK_TRANSPARENT   0x00
-%define GFX_TXT_WHITE               0xF0
-%define GFX_TXT_BLACK               0x0F
+%define GFX_TXT_WHITE_TRANSPARENT   0x800F
+%define GFX_TXT_BLACK_TRANSPARENT   0x80F0
+%define GFX_TXT_WHITE               0x00F0
+%define GFX_TXT_BLACK               0x000F
 
 %define GFX_TXT_TRANSPARENT_BKG     0x8000
 %define GFX_TXT_TRANSPARENT_TEXT    0x4000
@@ -160,14 +160,14 @@ vga_init:
 get_glyph_offset:
 	cmp     al, 0x20
 	jb      .qmark              ; al < 20h (' '
-	cmp     al, 0x7E
+	cmp     al, 0x7e
 	ja      .qmark              ; al > 7Eh ('~')
-	sub     al, 0x20
+	sub     al, ' '
 	jmp     .ok
 
 	.qmark:
 	mov     al, '?'
-	sub     al, 0x20
+	sub     al, ' '
 
 	.ok:
 	xor     ah, ah
@@ -383,6 +383,7 @@ vga_putc:
 	mov     bl, al              ; BL = Couleur texte (low nibble)
 	and     bl, 0x0F
 	mov     bh, al              ; BH = Couleur fond (high nibble)
+	and 	bh, 0xf0
 	shr     bh, 4
 
 	mov     .cpt, 8
@@ -394,11 +395,9 @@ vga_putc:
 	mov     .glyph_row, ax      ; Image 16 bits du glyphe non décalé
 
 	; --- PASSE 1 : DESSIN DU FOND (SI OPAQUE) ---
-	mov     ax, [fs:PTR_GFX + gfx.cur_mode]
-	test    ax, GFX_TXT_TRANSPARENT_BKG
-	jz	    .skip_bkg
+	test    word [fs:PTR_GFX + gfx.cur_mode], GFX_TXT_TRANSPARENT_BKG
+	jnz	    .skip_bkg
 
-	mov     ax, .glyph_row
 	not     al                  ; Inverser le glyphe pour le fond
 	ror     ax, cl              ; Aligner le fond sur les octets VRAM
 
@@ -422,8 +421,7 @@ vga_putc:
 	.skip_bkg:
 
 	; --- PASSE 2 : DESSIN DU TEXTE ---
-	mov     ax, [fs:PTR_GFX + gfx.cur_mode]
-	test    ax, GFX_TXT_TRANSPARENT_TEXT
+	test    word [fs:PTR_GFX + gfx.cur_mode], GFX_TXT_TRANSPARENT_TEXT
 	jnz     .next_line
 
 	mov     ax, .glyph_row

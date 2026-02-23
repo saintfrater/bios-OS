@@ -486,14 +486,7 @@ gui_logic_slider:
 	je      .no_change
 	mov     [gs:si + widget.thumb_pos], ax
 
-	; Appel du callback on_drag
-	cmp     word [gs:si + widget.event_drag], 0
-	je      .force_redraw
-	pusha
-	call    word [gs:si + widget.event_drag]
-	popa
-
-	.force_redraw:
+.force_redraw:
 	mov     byte [gs:si + widget.oldstate], 255 ; Force le redessin
 
 	.no_change:

@@ -85,33 +85,39 @@ gui_api_table:
 	dw gui_get_widget_ptr
 	dw gui_api_slider_attr
 
-
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
+	.header		resw 1 				; HEADER
 	.state      resb 1      		; État (0=libre, >0=utilisé)
 	.type       resb 1      		; Type (0=Button, 1=Slider...)
 	.oldstate   resb 1      		; widget a-t-il été modifié ?
 	.user_id    resb 1      		; ID unique utilisateur
-	.x          resw 1      		; Position X
+	.x          resw 1      		; Position Xevent_drag
 	.y          resw 1      		; Position Y
-	.x2         resw 1      		; Position X2 calculée
-	.y2         resw 1      		; Position Y2 calculée
 	.w          resw 1      		; Largeur
 	.h          resw 1      		; Hauteur
+	; texte du widget
 	.text_ofs   resw 1      		; Offset du texte
 	.text_seg   resw 1      		; Segment du texte
-	.event_click    resw 1      	; adresse de la fonction "on click"
-	.event_drag     resw 1      	; adresse de la fonction "on drag"
 
+	; global attributes
 	.attr_mode      resb 1      	; 0=None, 1=Horiz, 2=Vert
+	.attr_free		resb 1			; free
 	.attr_min       resw 1      	; Valeur/Position Min
 	.attr_max       resw 1      	; Valeur/Position Max
 	.attr_val    	resw 1 			; Valeur/Position Actuelle
 
+	; internal values
+	.x2			resw 1      		; Position X2 calculée
+	.y2			resw 1      		; Position Y2 calculée
+
+	; slider only
 	.thumb_pos      resw 1      	; Valeur/Position Actuelle en pixel pour le dessin.
 	.thumb_pct      resb 1      	; Taille du curseur en % (1-100)
-
 	.attr_anchor    resw 1      	; interne Offset pour le drag
+
+	; event handler
+	.event_click    resw 1      	; adresse de la fonction "on click"
 	alignb      2           		; Alignement mémoire pour performance
 endstruc
 ; actuellement 34 octets
@@ -226,12 +232,12 @@ gui_api_set_text:
 ;
 ; parameters : type, x, y, w, h, text_ofs, text_seg
 ;
-; -----------------------------------------------------------------------------
 %define     .type       word [bp+4]
 %define     .x          word [bp+6]
 %define     .y	        word [bp+8]
 %define     .w          word [bp+10]
 %define     .h          word [bp+12]
+; -----------------------------------------------------------------------------
 gui_api_create:
 	push    bp
 	mov     bp, sp
@@ -239,8 +245,8 @@ gui_api_create:
 
 	mov     ax, SEG_GUI
 	mov     gs, ax
-	call    gui_alloc_widget        ; Returns GS:SI
 	mov     ax, -1
+	call    gui_alloc_widget        ; Returns GS:SI
 	jc      .done
 
 	; ID = SI / widget_size
@@ -248,6 +254,9 @@ gui_api_create:
 	xor     dx, dx
 	mov     cx, widget_size
 	div     cx
+
+	mov		bx, 0xDEAD
+	mov		word [gs:si + widget.header], bx
 
 	mov     bx, .type
 	mov     byte [gs:si + widget.type], bl
@@ -262,15 +271,16 @@ gui_api_create:
 
 	mov     byte [gs:si + widget.state], GUI_STATE_NORMAL
 	mov     byte [gs:si + widget.oldstate], 0
-.done:
+	.done:
 	pop     gs
 	leave
+	%undef     .type
+	%undef     .x
+	%undef     .y
+	%undef     .w
+	%undef     .h
 	ret
-%undef     .type
-%undef     .x
-%undef     .y
-%undef     .w
-%undef     .h
+
 
 ; -----------------------------------------------------------------------------
 ; gui_api_get_state
@@ -430,7 +440,7 @@ gui_get_widget_ptr:
 ; Out: GS:SI = Ptr, CF=1 if error
 ; -----------------------------------------------------------------------------
 gui_get_widget_ptr_internal:
-    push    cx
+	push    cx
 	push	dx
 
 	cmp     ax, GUI_MAX_WIDGETS
@@ -511,6 +521,7 @@ gui_alloc_widget:
 
 	; Pas trouvé (Plein)
 	stc                             ; set Carry Flag : erreur
+	mov     ax, -1
 	jmp     .done
 
 	.found:
@@ -521,7 +532,6 @@ gui_alloc_widget:
 
 	; Reset des champs critiques pour éviter les déchets
 	mov     word [gs:si + widget.event_click], 0
-	mov     word [gs:si + widget.event_drag], 0
 	mov     byte [gs:si + widget.thumb_pct], 10     		; 10% par défaut
 	mov     word [gs:si + widget.thumb_pos], 0
 	mov     word [gs:si + widget.attr_val], 0

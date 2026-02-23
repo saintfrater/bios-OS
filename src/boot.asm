@@ -65,11 +65,11 @@ section     .text
 %include	"./gui/lib-api.asm"
 
 ; --- Données texte ---
-str_quit  db "Quitter", 0
+str_quit  db "Quit", 0
 str_hello db "Hello", 0
-str_option1 db "option 1", 0
-str_option2 db "option 2", 0
-str_option3 db "option 3", 0
+str_option1 db "option A", 0
+str_option2 db "option BA", 0
+str_option3 db "option BBA", 0
 
 entrycode:
 	cli
@@ -80,8 +80,6 @@ entrycode:
 
 	call 	ivt_setup		; configuration d'une table d'interruption "dummy"
 	call	bda_setup		; initialisation du BDA
-
-	ISADBG	ISA_GREEN, 1
 
 	; Install IRQ 0 : timer_isr
 	mov		ax,cs
@@ -106,8 +104,7 @@ entrycode:
 	; on active le mode graphique
 	GFX		INIT
 	call	mouse_init
- 	GFX		MOUSE_SHOW
-
+	GFX		MOUSE_SHOW
 
 	call    main_loop
 	.loops:
@@ -123,12 +120,8 @@ on_click_quit:
 on_click_hello:
 	ret
 
-
 main_test:
 	; GFX		RECTANGLE_FILL, 10,10,50,20, PATTERN_WHITE, 15, 0
-
-
-
 	; GUI     OBJ_CREATE, OBJ_TYPE_CHECKBOX, 200, 50, 100, 15
 	mov     ax, 200
 	add		ax, 4
@@ -197,8 +190,9 @@ main_loop:
 
     ; Créer Slider (Drag)
     GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 10, 100, 150, 12
-	GUI		OBJ_SET_MODE, ax, SLIDER_HORIZONTAL
-	GUI		OBJ_SLIDER_SET_ATTR, ax, 10, 140, 10, 15
+	mov		.my_slider, ax
+	GUI		OBJ_SET_MODE, .my_slider, SLIDER_HORIZONTAL
+	GUI		OBJ_SLIDER_SET_ATTR, .my_slider, 10, 140, 10, 15
 
 	GUI     OBJ_CREATE, OBJ_TYPE_SLIDER, 400, 10, 16, 150
 	mov     .my_slider, ax

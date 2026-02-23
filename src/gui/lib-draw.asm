@@ -487,7 +487,7 @@ draw_checkbox:
 	inc     bx
 
 	GFX     GOTOXY, cx, bx
-	GFX     TXT_MODE, GFX_TXT_BLACK & GFX_TXT_TRANSPARENT_BKG
+	GFX     TXT_MODE, GFX_TXT_BLACK_TRANSPARENT
 	mov     dx, [gs:si + widget.text_seg]
 	mov     ax, [gs:si + widget.text_ofs]
 
