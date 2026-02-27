@@ -27,7 +27,7 @@ gui_process_all:
 	pop     ds
 
 	; Récupérer l'ID de la fenêtre active
-    mov     dl, [wm_active_window_id]
+    mov     dl, [PTR_GUI + gui.wm_active_window_id]
 
 	mov     si, 0                   ; Pointeur début tableau
 	mov     di, GUI_MAX_WIDGETS     ; Compteur

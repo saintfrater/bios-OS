@@ -30,7 +30,9 @@
 
 %define PTR_MOUSE           0x0000
 %define PTR_GFX             (PTR_MOUSE + mouse_size)
+%define PTR_GUI             (PTR_GFX + gfx_size)
 
+;
 ; video related information (compatible with VGA bios)
 %define BDA_VIDEO_CURR_MODE	0x0049
 %define BDA_VIDEO_COLUMNS	0x004A
@@ -76,7 +78,10 @@ struc   gfx
 	.cur_offset     resw    1       ; offset calculé pour le prochain caractère
 	.cur_line_ofs   resw    1       ; "interligne" +2000h ou -2000h
 	.cur_shift      resb    1       ; x&7 (0..7)
+endstruc
 
+struc 	gui
+	.wm_active_window_id    resb    1       ; ID de la fenêtre active
 endstruc
 
 ; -----------------------------------------------------------------------------------
