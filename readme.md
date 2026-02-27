@@ -11,9 +11,11 @@ This project aims to design and implement a **PC-compatible BIOS/ROM from scratc
 Rather than booting an operating system from disk, the PC starts **directly from the ROM** into a **minimalist graphical interface**, using **CGA High-Resolution Monochrome (640×200)** mode.
 
 ![Screenshot 86Box](/doc/assets/Capture-86Box.png)
+
 Screenshot from a CGA Hi res test on 86Box.
 
 ![Screenshot QEMU VGA](/doc/assets/Screenshot-VGA.png)
+
 Screenshot from a VGA Hi res test on QEMU with "italic Font".
 
 You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
@@ -107,9 +109,11 @@ Au lieu de charger un système d’exploitation depuis un disque, le PC **démar
 
 
 ![Screenshot 86Box](/doc/assets/Capture-86Box.png)
+
 Screenshot d'un EcranCGA Hi res test sur 86Box.
 
 ![Screenshot QEMU VGA](/doc/assets/Screenshot-VGA.png)
+
 screenshot d'un ecran VGA Hi res test avec police Italique sur QEMU.
 
 You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
