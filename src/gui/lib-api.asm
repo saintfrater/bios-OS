@@ -198,16 +198,16 @@ gui_api_set_mode:
 	pop		ax
 	pop     gs
 	leave
+	%undef     .id
+	%undef     .mode
 	ret
-%undef     .id
-%undef     .mode
 
 ; -----------------------------------------------------------------------------
 ; gui_api_set_text
-; -----------------------------------------------------------------------------
 %define     .id       	word [bp+4]
 %define     .segmt   	word [bp+6]
 %define     .oft 	 	word [bp+8]
+; -----------------------------------------------------------------------------
 gui_api_set_text:
 	push    bp
 	mov     bp, sp
@@ -229,10 +229,11 @@ gui_api_set_text:
 	pop		ax
 	pop     gs
 	leave
+	%undef     .id
+	%undef     .text_ofs
+	%undef     .text_seg
 	ret
-%undef     .id
-%undef     .text_ofs
-%undef     .text_seg
+
 
 ; -----------------------------------------------------------------------------
 ; gui_api_create
@@ -292,8 +293,8 @@ gui_api_create:
 ; gui_api_get_state
 ; Arg1: ID
 ; Out: AX = State
-; -----------------------------------------------------------------------------
 %define .id word [bp+4]
+; -----------------------------------------------------------------------------
 gui_api_get_state:
 	push    bp
 	mov     bp, sp
@@ -314,15 +315,15 @@ gui_api_get_state:
 	pop		si
 	pop     gs
 	leave
+	%undef .id
 	ret
-%undef .id
 
 ; -----------------------------------------------------------------------------
 ; gui_api_get_type
 ; Arg1: ID
 ; Out: AX = Type
-; -----------------------------------------------------------------------------
 %define .id word [bp+4]
+; -----------------------------------------------------------------------------
 gui_api_get_type:
 	push    bp
 	mov     bp, sp
@@ -350,8 +351,8 @@ gui_api_get_type:
 ; gui_api_get_val
 ; Arg1: ID
 ; Out: AX = Attr Val
-; -----------------------------------------------------------------------------
 %define .id word [bp+4]
+; -----------------------------------------------------------------------------
 gui_api_get_val:
 	push    bp
 	mov     bp, sp
@@ -373,16 +374,17 @@ gui_api_get_val:
 	pop		si
 	pop     gs
 	leave
+	%undef .id
 	ret
-%undef .id
+
 
 ; -----------------------------------------------------------------------------
 ; gui_api_set_val
 ; Arg1: ID
 ; Arg2: Value
-; -----------------------------------------------------------------------------
 %define .id 	word [bp+4]
 %define .val	word [bp+6]
+; -----------------------------------------------------------------------------
 gui_api_set_val:
 	push    bp
 	mov     bp, sp
@@ -400,17 +402,17 @@ gui_api_set_val:
 	pop		si
 	pop     gs
 	leave
+	%undef .id
+	%undef .val
 	ret
-%undef .id
-%undef .val
 
 ; -----------------------------------------------------------------------------
 ; gui_api_destroy
 ; Détruit un widget via son ID
 ; Arg1: ID
 ; Out: AX = 0 (OK), -1 (Error)
-; -----------------------------------------------------------------------------
 %define .id word [bp+4]
+; -----------------------------------------------------------------------------
 gui_api_destroy:
 	push    bp
 	mov     bp, sp
@@ -431,8 +433,9 @@ gui_api_destroy:
 	pop		si
 	pop     gs
 	leave
+	%undef .id
 	ret
-%undef .id
+
 
 ; -----------------------------------------------------------------------------
 ; gui_get_widget_ptr
@@ -448,8 +451,8 @@ gui_get_widget_ptr:
 	call    gui_get_widget_ptr_internal
 	pop		ax
 	leave
+	%undef .id
 	ret
-%undef .id
 
 ; -----------------------------------------------------------------------------
 ; gui_get_widget_ptr_internal

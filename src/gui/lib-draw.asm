@@ -522,7 +522,7 @@ draw_text:
 	push    ax      ; Sauve X original
 	mov     ax, [gs:si + widget.w]
 	sub     ax, cx
-	shr     ax, 1
+	sar     ax, 1
 	pop     dx      ; Récupère X original (poussé depuis AX)
 	add     ax, dx  ; AX = X final centré
 
