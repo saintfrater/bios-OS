@@ -291,6 +291,7 @@ isr_mouse_handler:
 	in  	al, i8042_PS2_DATA   						; lire octet souris
 
 	movzx 	bx, byte [PTR_MOUSE + mouse.idx]
+
 	cmp		bl,0
 	jne		.read_packet
 
@@ -299,6 +300,7 @@ isr_mouse_handler:
 	jz		.done_eoi									; allignement erroné
 
 	.read_packet:
+
 	mov 	byte [PTR_MOUSE + mouse.buffer + bx], al
 	inc		byte [PTR_MOUSE + mouse.idx]
 
@@ -372,7 +374,6 @@ isr_mouse_handler:
 	.done:
 	; update la position du curseur sur l'écran
 	; en ce moment c'est commented out (debug)
-	; call 	cga_mouse_cursor_move
 	GFX		MOUSE_MOVE
 	.done_eoi:
 	mov 	al, 0x20

@@ -37,9 +37,15 @@ gui_process_all:
 	cmp     byte [gs:si + widget.state], GUI_STATE_FREE
 	je      .next_widget
 
+	mov		ax, di
+	ISADBG  ISA_LEFT, al
+
 	; --- Logique Widget ---
 	push    bx                      ; Sauver état boutons souris
+
+	ISADBG  ISA_RIGHT, 0x20  ; Avant logic
 	call    gui_update_logic        ; Vérifier collision/clic
+	ISADBG  ISA_RIGHT, 0x21  ; Avant logic
 
 	; Si AL=1 (Clic relâché validé), exécuter le callback
 	cmp     al, 1
@@ -63,9 +69,14 @@ gui_process_all:
 
 	; Dessiner (si l'état a changé ou pour refresh)
 
+	ISADBG  ISA_RIGHT, 0x22  ; Avant dessin
+
 	cmp     al,ah
 	je      .next_widget            ; Si != 0, le widget est à jour, on passe.
 	call    gui_draw_single_widget
+
+	ISADBG  ISA_RIGHT, 0x23  ; Avant dessin
+
 
 	.next_widget:
 	add     si, widget_size

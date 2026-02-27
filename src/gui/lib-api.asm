@@ -133,17 +133,18 @@ endstruc
 
 ; -----------------------------------------------------------------------------
 ; gui_api_slider_attr
-; -----------------------------------------------------------------------------
 %define     .id      word [bp+4]
 %define     .min	 word [bp+6]
 %define     .max	 word [bp+8]
 %define     .val	 word [bp+10]
 %define     .pct     word [bp+12]
+; -----------------------------------------------------------------------------
 gui_api_slider_attr:
 	push    bp
 	mov     bp, sp
 	push    gs
 	push	ax
+	push	si
 
 	mov		ax, .id
 	call    gui_get_widget_ptr_internal
@@ -161,23 +162,29 @@ gui_api_slider_attr:
 	call	gui_slider_update_pixels
 
 	.err:
+	pop		si
 	pop		ax
 	pop     gs
 	leave
+	%undef     .id
+	%undef     .min
+	%undef     .max
+	%undef     .val
+	%undef     .pct
 	ret
-%undef     .id
-%undef     .mode
+
 
 ; -----------------------------------------------------------------------------
 ; gui_api_set_mode
-; -----------------------------------------------------------------------------
 %define     .id       word [bp+4]
 %define     .mode     word [bp+6]
+; -----------------------------------------------------------------------------
 gui_api_set_mode:
 	push    bp
 	mov     bp, sp
 	push    gs
 	push	ax
+	push	si
 
 	mov		ax, .id
 	call    gui_get_widget_ptr_internal
@@ -187,8 +194,9 @@ gui_api_set_mode:
 	mov		byte [gs:si + widget.attr_mode], al
 
 	.err:
-	pop     gs
+	pop		si
 	pop		ax
+	pop     gs
 	leave
 	ret
 %undef     .id
@@ -205,6 +213,7 @@ gui_api_set_text:
 	mov     bp, sp
 	push    gs
 	push	ax
+	push	si
 
 	mov 	ax, .id
 	call    gui_get_widget_ptr_internal
@@ -216,8 +225,9 @@ gui_api_set_text:
 	mov		word [gs:si + widget.text_ofs], ax
 
 	.err:
-	pop     gs
+	pop		si
 	pop		ax
+	pop     gs
 	leave
 	ret
 %undef     .id
@@ -288,6 +298,7 @@ gui_api_get_state:
 	push    bp
 	mov     bp, sp
 	push    gs
+	push	si
 
 	mov 	ax, .id
 	call    gui_get_widget_ptr_internal
@@ -300,6 +311,7 @@ gui_api_get_state:
 .err:
 	mov     ax, -1
 .done:
+	pop		si
 	pop     gs
 	leave
 	ret
@@ -315,6 +327,7 @@ gui_api_get_type:
 	push    bp
 	mov     bp, sp
 	push    gs
+	push	si
 
 	mov		ax,.id
 	call    gui_get_widget_ptr_internal
@@ -327,6 +340,7 @@ gui_api_get_type:
 .err:
 	mov     ax, -1
 .done:
+	pop		si
 	pop     gs
 	leave
 	ret
@@ -342,6 +356,8 @@ gui_api_get_val:
 	push    bp
 	mov     bp, sp
 	push    gs
+	push	si
+
 
 	mov		ax,.id
 	call    gui_get_widget_ptr_internal
@@ -354,6 +370,7 @@ gui_api_get_val:
 .err:
 	mov     ax, -1
 .done:
+	pop		si
 	pop     gs
 	leave
 	ret
@@ -370,6 +387,7 @@ gui_api_set_val:
 	push    bp
 	mov     bp, sp
 	push    gs
+	push	si
 
 	mov		ax,.id
 	call    gui_get_widget_ptr_internal
@@ -379,6 +397,7 @@ gui_api_set_val:
 	mov     [gs:si + widget.thumb_pos], ax
 
 .err:
+	pop		si
 	pop     gs
 	leave
 	ret
@@ -396,6 +415,7 @@ gui_api_destroy:
 	push    bp
 	mov     bp, sp
 	push    gs
+	push 	si
 
 	mov		ax,.id
 	call    gui_get_widget_ptr_internal
@@ -408,6 +428,7 @@ gui_api_destroy:
 .err:
 	mov     ax, -1
 .done:
+	pop		si
 	pop     gs
 	leave
 	ret
@@ -469,7 +490,7 @@ gui_get_widget_ptr_internal:
 ; Entrée : DS doit pointer vers SEG_GUI
 ; -----------------------------------------------------------------------------
 gui_init_system:
-	push    eax
+	push    ax
 	push    cx
 	push    es
 	push    di
@@ -486,7 +507,7 @@ gui_init_system:
 	pop     di
 	pop     es
 	pop     cx
-	pop     eax
+	pop     ax
 	ret
 
 ; -----------------------------------------------------------------------------

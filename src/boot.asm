@@ -204,12 +204,19 @@ main_loop:
 	mov		.value, 0xFADE
 
 	.loop:
-		call    gui_process_all
- 		GUI		OBJ_GET_VAL, .my_slider
-		mov		.value, ax
 
-    	cmp     ax,.oldval
-    	je      .loop
+		ISADBG ISA_RIGHT, 0x11
+
+		call    gui_process_all
+
+		; --- TRACE 12 : GUI traitée ---
+		ISADBG ISA_RIGHT, 0x12
+
+ 		; GUI		OBJ_GET_VAL, .my_slider
+		;mov		.value, ax
+
+    	;cmp     ax,.oldval
+    	;je      .loop
 
 		; debug
     	;mov     .oldval, ax
@@ -228,9 +235,9 @@ main_loop:
 		;mov		al, 0x00
 		;int 	0x10
 
-		mov		dx, CRTC_COLOR_DATA
-		and		ax, 0x001F
-		out		dx, ax
+		;mov		dx, CRTC_COLOR_DATA
+		;and		ax, 0x001F
+		;out		dx, ax
 
 	jmp     .loop
 	leave
