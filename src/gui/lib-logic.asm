@@ -308,10 +308,10 @@ gui_slider_update_pixels:
 
 	.set_min:
     ; Si la valeur est sous le minimum, on colle au début
-    movzx   ax, word [gs:si + widget.x]
+    mov     ax, word [gs:si + widget.x]
     cmp     byte [gs:si + widget.attr_mode], 2
     jne     .force_store
-    movzx   ax, word [gs:si + widget.y]
+    mov     ax, word [gs:si + widget.y]
 	.force_store:
     mov     [gs:si + widget.thumb_pos], ax
 
