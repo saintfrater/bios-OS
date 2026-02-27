@@ -21,6 +21,17 @@
 ; =============================================================================
 
 font8x8:
-; on importe uniquement les caractères entre ' ' (0x20) et '~' (0x7E)
-incbin  "./assets/FM-T-437.F08", 0x20*8, 0x7e*8
+;
+; https://github.com/viler-int10h/vga-text-mode-fonts
+;
+; Bien que le fichiers F08 définissent les 256 caractères de la table ASCII,
+; on importe uniquement les caractères entre ' ' (0x20) et '~' (0x7E).
+; ce choix est fait pour limiter la taille de la police; de même nous ne gérons
+; qu'une seule police.
+;
+; Si l'on désire augmenter le nombre de caratères ou ajouter plusieurs polices, il faudra
+; adapter les fonctions "putc" en accord.
+;
+incbin  "./assets/8X8ITAL.F08", 0x20*8, 0x7e*8
+; incbin  "./assets/FM-T-437.F08", 0x20*8, 0x7e*8
 ;incbin  "./assets/CGA-TH.F08", 0x20*8, 0x7e*8

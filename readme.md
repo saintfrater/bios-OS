@@ -12,6 +12,12 @@ Rather than booting an operating system from disk, the PC starts **directly from
 
 ![Screenshot 86Box](/doc/assets/Capture-86Box.png)
 
+Screenshot from a CGA Hi res test on 86Box.
+
+![Screenshot QEMU VGA](/doc/assets/Screenshot-VGA.png)
+
+Screenshot from a VGA Hi res test on QEMU with "italic Font".
+
 You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
 
 The project is intentionally educational, experimental, and minimalist.
@@ -64,6 +70,12 @@ To build and run this project, the following tools and components are required:
 - **QEMU VGA BIOS**
   The standard QEMU VGA BIOS (`vgabios.bin`) is required to initialize the VGA hardware, allowing the custom BIOS to rely on a known and stable VGA implementation while focusing on its own core logic.
 
+- **VGA Text Font**
+  You may want to use "custom" font; you can pick any "F08" (8 bytes per character) font from this repo:
+
+  https://github.com/viler-int10h/vga-text-mode-fonts
+
+
 ---
 
 ### API
@@ -97,6 +109,12 @@ Au lieu de charger un système d’exploitation depuis un disque, le PC **démar
 
 
 ![Screenshot 86Box](/doc/assets/Capture-86Box.png)
+
+Screenshot d'un EcranCGA Hi res test sur 86Box.
+
+![Screenshot QEMU VGA](/doc/assets/Screenshot-VGA.png)
+
+screenshot d'un ecran VGA Hi res test avec police Italique sur QEMU.
 
 You may want to get a look at the [Older screenshots](/doc/assets/screenshot.md)
 
@@ -147,6 +165,12 @@ Utilisé comme émulateur PC principal pour tester et déboguer le BIOS personna
 
 - **BIOS VGA de QEMU**
 Le BIOS VGA standard de QEMU (vgabios.bin) est utilisé pour initialiser le matériel vidéo, ce qui permet au projet de se concentrer sur le développement du BIOS sans réimplémenter la logique VGA complète.
+
+- **VGA Text Font**
+  Vous pouvez utiliser des polices de caractères personnalisées. Vous pouvez choisir n'importe quelle police 'F08' (8 octets par caractère) de ce référentiel:
+
+  https://github.com/viler-int10h/vga-text-mode-fonts
+
 
 ----
 

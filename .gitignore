@@ -8,5 +8,4 @@ build/
 gfx/
 roms/
 tools/
-doc/generated
-assets/
+doc/generated/
