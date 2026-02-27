@@ -26,6 +26,9 @@ gui_process_all:
 	mov     bl, [PTR_MOUSE + mouse.status]
 	pop     ds
 
+	; Récupérer l'ID de la fenêtre active
+    mov     dl, [wm_active_window_id]
+
 	mov     si, 0                   ; Pointeur début tableau
 	mov     di, GUI_MAX_WIDGETS     ; Compteur
 

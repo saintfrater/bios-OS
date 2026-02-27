@@ -86,11 +86,11 @@ gui_api_table:
 
 ; --- Structure d'un OBJET (Bouton, etc) ---
 struc widget
-	.header		resw 1 				; HEADER
 	.state      resb 1      		; État (0=libre, >0=utilisé)
 	.type       resb 1      		; Type (0=Button, 1=Slider...)
 	.oldstate   resb 1      		; widget a-t-il été modifié ?
 	.user_id    resb 1      		; ID unique utilisateur
+	.win_id		resb 1				; ID de la fenêtre propriétaire
 	.x          resw 1      		; Position Xevent_drag
 	.y          resw 1      		; Position Y
 	.w          resw 1      		; Largeur
@@ -253,9 +253,6 @@ gui_api_create:
 	xor     dx, dx
 	mov     cx, widget_size
 	div     cx
-
-	mov		bx, 0xDEAD
-	mov		word [gs:si + widget.header], bx
 
 	mov     bx, .type
 	mov     byte [gs:si + widget.type], bl
