@@ -429,6 +429,7 @@ cga_write:
 	je      .done
 	push    ax
 	call    cga_putc
+	add 	sp, 2			; clean stack
 	jmp     .loops
 
 	.done:

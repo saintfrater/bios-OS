@@ -90,15 +90,15 @@ endstruc
 ; -----------------------------------------------------------------------------------
 bda_setup:
 			pusha
-			push        ds
+			push	ds
 
 			mov 	ax, SEG_BDA_CUSTOM
 			mov 	es, ax
 
-			mov 	ax, 0x5F
+			xor 	ax, ax
 			mov 	cx,0xFF
 			xor 	di, di
-			rep         stosb                ; clear BDA area
+			rep		stosb                ; clear BDA area
 
 			pop 	ds
 			popa

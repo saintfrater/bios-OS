@@ -1432,6 +1432,24 @@ vga_fill_rect:
 	%undef  _width
 	ret
 
+
+; ============================================================================
+; PATCH — src/drivers/gfx_vga.asm — fonction vga_fill_rect_32
+;
+; PROBLÈME : vga_fill_rect_32 n'initialisait pas explicitement le Sequencer
+; Map Mask (registre 0x03C4/0x02) avant ses opérations de remplissage.
+; Si un appel précédent (vga_line, vga_putc, etc.) avait laissé le Map Mask
+; dans un état partiel (ex: un seul plan actif), les rep stosd qui suivent
+; n'écrivaient que sur certains plans VGA → artefacts de couleur sous le curseur.
+;
+; La même omission en fin de fonction laissait un état résiduel pour les
+; opérations suivantes (notamment vga_cursor_savebg/draw).
+;
+; CORRECTION :
+;  1) Forcer Map Mask = 0x0F au DÉBUT (avant vga_mouse_hide)
+;  2) Forcer Map Mask = 0x0F à la FIN (dans le bloc Reset VGA)
+; ============================================================================
+
 ; ------------------------------------------------------------
 ; vga_fill_rect_32
 ; Dessine un rectangle plein avec un motif (Pattern 8x8) en 2 couleurs
@@ -1456,6 +1474,14 @@ vga_fill_rect_32:
 	pushad
 	push    es
 	push	fs
+
+	; ── PATCH 1/2 ────────────────────────────────────────────────────────────
+	; Forcer Map Mask = tous les plans (0x0F) avant toute opération VRAM.
+	; Évite d'hériter d'un état partiel laissé par un appel précédent.
+	mov     dx, VGA_SEQUENCER
+	mov     ax, 0x0F02
+	out     dx, ax
+	; ─────────────────────────────────────────────────────────────────────────
 
 	call	vga_mouse_hide
 
@@ -1651,6 +1677,14 @@ vga_fill_rect_32:
 	jle     .y_loop
 
 	; --- 5. Reset VGA ---
+	; ── PATCH 2/2 ────────────────────────────────────────────────────────────
+	; Remettre le Sequencer Map Mask à 0x0F avant de rendre la main.
+	; Sans ça, les opérations suivantes (curseur, texte, lignes) héritent
+	; d'un Map Mask partiel et n'écrivent que sur certains plans → artefacts.
+	mov     dx, VGA_SEQUENCER
+	mov     ax, 0x0F02          ; Map Mask = tous les plans
+	out     dx, ax
+	; ─────────────────────────────────────────────────────────────────────────
 	mov     dx, EGAVGA_CONTROLLER
 	mov     ax, 0xFF08          ; Reset Bit Mask
 	out     dx, ax
@@ -1677,6 +1711,7 @@ vga_fill_rect_32:
 	%undef  _right_mask
 	%undef  _width
 	ret
+
 
 ; ------------------------------------------------------------
 ; vga_putpixel
@@ -1853,9 +1888,20 @@ vga_cursor_savebg:
 
 	lea     si, [PTR_MOUSE + mouse.bkg_buffer]
 
-	mov     dx, EGAVGA_CONTROLLER      ; Graphics Controller Port
-	mov     al, 0x04        ; Read Plane Select Register
-	out     dx, al
+
+
+	mov     dx, EGAVGA_CONTROLLER
+	mov     ax, 0x0005          ; Mode 0
+	out     dx, ax
+	mov     ax, 0x0001          ; Enable Set/Reset = 0 (Important !)
+	out     dx, ax
+	mov     ax, 0xFF08          ; Bit Mask = 0xFF
+	out     dx, ax
+	mov     ax, 0x0004          ; Function = Replace
+	out     dx, ax
+
+;	mov     al, 0x04        ; Read Plane Select Register
+;	out     dx, al
 	inc     dx              ; Point sur Data Port (0x03CF)
 
 	xor     bl, bl          ; BL = Index du plan (0 à 3)
